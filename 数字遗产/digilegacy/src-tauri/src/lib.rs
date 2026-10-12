@@ -3,6 +3,7 @@ mod db;
 mod crypto;
 mod platform_data;
 mod commands;
+mod notify;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,6 +31,7 @@ pub fn run() {
             commands::get_check_in_status,
             commands::set_dead_mans_switch,
             commands::get_dashboard_stats,
+            notify::evaluate_dms,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

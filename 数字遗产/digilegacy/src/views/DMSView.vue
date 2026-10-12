@@ -43,17 +43,31 @@
     <div class="card">
       <div class="card-title mb-16">🔄 三级确认机制</div>
       <div class="dms-stages">
-        <div class="dms-stage dms-stage-1">
+        <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 1 }">
           <span class="dms-stage-num">1️⃣</span>
           <div><strong>第一阶段（到期后3天）</strong><p class="text-muted">发送邮件和短信提醒你本人确认安全</p></div>
         </div>
-        <div class="dms-stage dms-stage-2">
+        <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 2 }">
           <span class="dms-stage-num">2️⃣</span>
           <div><strong>第二阶段（再7天后）</strong><p class="text-muted">通知紧急联系人确认你的状态</p></div>
         </div>
-        <div class="dms-stage dms-stage-3">
+        <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 3 }">
           <span class="dms-stage-num">3️⃣</span>
           <div><strong>第三阶段（再14天后）</strong><p class="text-muted">向遗产执行人发送"数字遗产密钥信封"</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通知记录 -->
+    <div class="card" v-if="dmsEvaluation && dmsEvaluation.notifications.length > 0">
+      <div class="card-title mb-16">📨 通知记录（今日）</div>
+      <div v-for="(n, i) in dmsEvaluation.notifications" :key="i" class="card mb-16" style="padding: 12px 16px;">
+        <div class="flex items-center gap-12">
+          <span class="tag" :class="n.stage >= 3 ? 'tag-danger' : n.stage >= 2 ? 'tag-warning' : 'tag-property'">阶段 {{ n.stage }}</span>
+          <div style="flex: 1;">
+            <div style="font-weight: 600;">{{ n.subject }}</div>
+            <div class="text-muted" style="font-size: 12px;">收件人：{{ n.recipient || '未配置' }} · 渠道：{{ n.channel }} · {{ n.sent_at }}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -71,6 +85,7 @@ const settings = ref({ interval: 30, enabled: true });
 const status = computed(() => dashboard.checkInStatus);
 const lastCheckIn = computed(() => status.value?.last_check_in);
 const daysUntilDue = computed(() => status.value?.days_until_due);
+const dmsEvaluation = computed(() => dashboard.dmsEvaluation);
 
 const dmsState = computed(() => {
   if (!status.value?.dms_enabled) return 'disabled';
@@ -111,7 +126,7 @@ async function saveSettings() {
 }
 
 onMounted(async () => {
-  await dashboard.loadCheckInStatus();
+  await Promise.all([dashboard.loadCheckInStatus(), dashboard.evaluateDms()]);
   if (status.value) {
     settings.value.interval = status.value.interval_days;
     settings.value.enabled = status.value.dms_enabled;
@@ -130,5 +145,6 @@ onMounted(async () => {
 .dms-stage-1 { background: var(--success-light); }
 .dms-stage-2 { background: var(--warning-light); }
 .dms-stage-3 { background: var(--danger-light); }
+.dms-stage-active { outline: 2px solid var(--primary); outline-offset: 2px; }
 .dms-stage-num { font-size: 24px; }
 </style>

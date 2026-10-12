@@ -2,11 +2,12 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-import type { DashboardStats, CheckInStatus, UserProfile, ApiResponse } from '../types';
+import type { DashboardStats, CheckInStatus, UserProfile, ApiResponse, DmsEvaluation } from '../types';
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const stats = ref<DashboardStats | null>(null);
   const checkInStatus = ref<CheckInStatus | null>(null);
+  const dmsEvaluation = ref<DmsEvaluation | null>(null);
   const user = ref<UserProfile | null>(null);
   const loading = ref(false);
 
@@ -21,6 +22,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const res = await invoke<ApiResponse<CheckInStatus>>('get_check_in_status');
     if (res.success && res.data) {
       checkInStatus.value = res.data;
+    }
+  }
+
+  async function evaluateDms() {
+    const res = await invoke<ApiResponse<DmsEvaluation>>('evaluate_dms');
+    if (res.success) {
+      dmsEvaluation.value = res.data || null;
     }
   }
 
@@ -61,7 +69,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function refreshAll() {
     loading.value = true;
     try {
-      await Promise.all([loadStats(), loadCheckInStatus(), loadUser()]);
+      await Promise.all([loadStats(), loadCheckInStatus(), evaluateDms(), loadUser()]);
     } finally {
       loading.value = false;
     }
@@ -70,10 +78,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   return {
     stats,
     checkInStatus,
+    dmsEvaluation,
     user,
     loading,
     loadStats,
     loadCheckInStatus,
+    evaluateDms,
     loadUser,
     checkIn,
     saveUser,

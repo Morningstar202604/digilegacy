@@ -441,3 +441,53 @@ pub fn get_difficulty_stats() -> std::collections::HashMap<String, i64> {
     }
     stats
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_database_has_56_entries() {
+        let platforms = get_all_platforms();
+        assert_eq!(platforms.len(), 56, "平台数据库应包含 56 个平台");
+    }
+
+    #[test]
+    fn all_platforms_have_names() {
+        let platforms = get_all_platforms();
+        for p in &platforms {
+            assert!(!p.name.is_empty(), "平台 id={} 名称为空", p.id);
+            assert!(!p.name_en.is_empty(), "平台 id={} 英文名为空", p.id);
+            assert!(!p.category.is_empty(), "平台 id={} 类别为空", p.id);
+        }
+    }
+
+    #[test]
+    fn all_platforms_have_valid_ids() {
+        let platforms = get_all_platforms();
+        let ids: Vec<i64> = platforms.iter().map(|p| p.id).collect();
+        let unique: std::collections::HashSet<i64> = ids.iter().cloned().collect();
+        assert_eq!(ids.len(), unique.len(), "平台 id 存在重复");
+        assert!(ids.iter().all(|&id| id > 0), "平台 id 必须为正数");
+    }
+
+    #[test]
+    fn categories_are_within_known_set() {
+        let known = [
+            "支付金融", "社交通讯", "游戏", "电商", "内容创作", "知识付费",
+            "金融证券", "出行住宿", "工具订阅", "音视频", "生活服务", "学习与考试",
+            "存储云服务", "政务服务", "生活工具",
+        ];
+        let platforms = get_all_platforms();
+        for p in &platforms {
+            assert!(known.contains(&p.category.as_str()), "未知类别: {}", p.category);
+        }
+    }
+
+    #[test]
+    fn difficulty_stats_sum_matches_total() {
+        let stats = get_difficulty_stats();
+        let sum: i64 = stats.values().sum();
+        assert_eq!(sum, 56, "难度分布总数应为 56");
+    }
+}

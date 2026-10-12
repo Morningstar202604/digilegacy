@@ -93,6 +93,23 @@ export interface CheckInStatus {
   days_until_due: number | null;
 }
 
+export interface DmsNotification {
+  stage: number;
+  recipient: string;
+  subject: string;
+  body: string;
+  sent_at: string;
+  channel: string;
+}
+
+export interface DmsEvaluation {
+  enabled: boolean;
+  overdue: boolean;
+  current_stage: number;
+  days_overdue: number;
+  notifications: DmsNotification[];
+}
+
 // 从 API 调用中安全地解包响应
 export function unwrapResponse<T>(res: unknown): T {
   const r = res as ApiResponse<T>;

@@ -154,7 +154,7 @@ fn seed_platforms(conn: &Connection) -> Result<(), String> {
 }
 
 /// 获取数据库连接
-fn get_conn() -> Result<Connection, String> {
+pub(crate) fn get_conn() -> Result<Connection, String> {
     let path = DB_PATH.lock().unwrap();
     match &*path {
         Some(p) => Connection::open(p).map_err(|e| format!("打开数据库失败: {}", e)),

@@ -14,11 +14,13 @@
       <div class="report-section">
         <div class="report-section-title">一、数字遗产持有人信息</div>
         <table class="asset-table">
-          <tr><td><strong>姓名</strong></td><td>{{ report.user.full_name || '未填写' }}</td></tr>
-          <tr><td><strong>手机</strong></td><td>{{ report.user.phone || '未填写' }}</td></tr>
-          <tr><td><strong>邮箱</strong></td><td>{{ report.user.email || '未填写' }}</td></tr>
-          <tr><td><strong>主要继承人</strong></td><td>{{ report.user.heir_primary_name || '未填写' }} ({{ report.user.heir_primary_relation || '-' }})</td></tr>
-          <tr><td><strong>紧急联系人</strong></td><td>{{ report.user.emergency_contact_name || '未填写' }} ({{ report.user.emergency_contact_relation || '-' }})</td></tr>
+          <tbody>
+            <tr><td><strong>姓名</strong></td><td>{{ report.user.full_name || '未填写' }}</td></tr>
+            <tr><td><strong>手机</strong></td><td>{{ report.user.phone || '未填写' }}</td></tr>
+            <tr><td><strong>邮箱</strong></td><td>{{ report.user.email || '未填写' }}</td></tr>
+            <tr><td><strong>主要继承人</strong></td><td>{{ report.user.heir_primary_name || '未填写' }} ({{ report.user.heir_primary_relation || '-' }})</td></tr>
+            <tr><td><strong>紧急联系人</strong></td><td>{{ report.user.emergency_contact_name || '未填写' }} ({{ report.user.emergency_contact_relation || '-' }})</td></tr>
+          </tbody>
         </table>
       </div>
 

@@ -107,6 +107,7 @@ async function handleCheckIn() {
 
 onMounted(() => {
   dashboard.loadCheckInStatus();
+  dashboard.evaluateDms();
 });
 </script>
 
