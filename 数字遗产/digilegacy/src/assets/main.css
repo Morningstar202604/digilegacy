@@ -521,7 +521,8 @@ html, body {
 .progress-fill.green { background: var(--success); }
 .progress-fill.yellow { background: var(--warning); }
 
-/* ========== Report Styles ========== .report-page {
+/* ========== Report Styles ========== */
+.report-page {
   background: white;
   max-width: 800px;
   margin: 0 auto;

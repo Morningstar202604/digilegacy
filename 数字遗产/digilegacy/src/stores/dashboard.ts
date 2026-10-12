@@ -12,58 +12,89 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const loading = ref(false);
 
   async function loadStats() {
-    const res = await invoke<ApiResponse<DashboardStats>>('get_dashboard_stats');
-    if (res.success && res.data) {
-      stats.value = res.data;
+    try {
+      const res = await invoke<ApiResponse<DashboardStats>>('get_dashboard_stats');
+      if (res.success && res.data) {
+        stats.value = res.data;
+      }
+    } catch (e) {
+      console.error('加载统计数据失败:', e);
     }
   }
 
   async function loadCheckInStatus() {
-    const res = await invoke<ApiResponse<CheckInStatus>>('get_check_in_status');
-    if (res.success && res.data) {
-      checkInStatus.value = res.data;
+    try {
+      const res = await invoke<ApiResponse<CheckInStatus>>('get_check_in_status');
+      if (res.success && res.data) {
+        checkInStatus.value = res.data;
+      }
+    } catch (e) {
+      console.error('加载签到状态失败:', e);
     }
   }
 
   async function evaluateDms() {
-    const res = await invoke<ApiResponse<DmsEvaluation>>('evaluate_dms');
-    if (res.success) {
-      dmsEvaluation.value = res.data || null;
+    try {
+      const res = await invoke<ApiResponse<DmsEvaluation>>('evaluate_dms');
+      if (res.success) {
+        dmsEvaluation.value = res.data || null;
+      }
+    } catch (e) {
+      console.error('评估 DMS 状态失败:', e);
     }
   }
 
   async function loadUser() {
-    const res = await invoke<ApiResponse<UserProfile | null>>('get_user_profile');
-    if (res.success) {
-      user.value = res.data || null;
+    try {
+      const res = await invoke<ApiResponse<UserProfile | null>>('get_user_profile');
+      if (res.success) {
+        user.value = res.data || null;
+      }
+    } catch (e) {
+      console.error('加载用户档案失败:', e);
     }
   }
 
   async function checkIn() {
-    const res = await invoke<ApiResponse<string>>('update_check_in');
-    if (res.success) {
-      await Promise.all([loadStats(), loadCheckInStatus()]);
+    try {
+      const res = await invoke<ApiResponse<string>>('update_check_in');
+      if (res.success) {
+        await Promise.all([loadStats(), loadCheckInStatus(), evaluateDms()]);
+      }
+      return res;
+    } catch (e) {
+      console.error('签到失败:', e);
+      throw e;
     }
-    return res;
   }
 
   async function saveUser(profile: UserProfile) {
-    const res = await invoke<ApiResponse<void>>('set_user_profile', { profile });
-    if (res.success) {
-      user.value = { ...profile, ...user.value };
+    try {
+      const res = await invoke<ApiResponse<void>>('set_user_profile', { profile });
+      if (res.success) {
+        user.value = { ...profile, ...user.value };
+      }
+      return res;
+    } catch (e) {
+      console.error('保存用户档案失败:', e);
+      throw e;
     }
-    return res;
   }
 
   async function configureDms(enabled: boolean, intervalDays: number) {
-    const res = await invoke<ApiResponse<void>>('set_dead_mans_switch', {
-      enabled,
-      intervalDays,
-    });
-    if (res.success) {
-      await loadCheckInStatus();
+    try {
+      const res = await invoke<ApiResponse<void>>('set_dead_mans_switch', {
+        enabled,
+        intervalDays,
+      });
+      if (res.success) {
+        await loadCheckInStatus();
+      }
+      return res;
+    } catch (e) {
+      console.error('配置 DMS 失败:', e);
+      throw e;
     }
-    return res;
   }
 
   async function refreshAll() {

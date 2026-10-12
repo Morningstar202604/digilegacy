@@ -99,25 +99,7 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
 import { usePlatformsStore } from '../stores/platforms';
-import type { ApiResponse } from '../types';
-
-interface DigitalAsset {
-  id?: number;
-  platform_id: number;
-  platform_name: string;
-  account_identifier: string;
-  account_description: string;
-  category: string;
-  estimated_value: number | null;
-  value_currency: string;
-  disposal_method: string;
-  heir_name: string | null;
-  heir_contact: string | null;
-  notes: string;
-  is_confirmed: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import type { ApiResponse, DigitalAsset } from '../types';
 
 interface InheritanceReportData {
   user: {

@@ -110,11 +110,4 @@ export interface DmsEvaluation {
   notifications: DmsNotification[];
 }
 
-// 从 API 调用中安全地解包响应
-export function unwrapResponse<T>(res: unknown): T {
-  const r = res as ApiResponse<T>;
-  if (r && r.success && r.data != null) {
-    return r.data;
-  }
-  throw new Error(r?.message || '请求失败');
-}
+

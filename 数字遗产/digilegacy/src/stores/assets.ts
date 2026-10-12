@@ -36,42 +36,63 @@ export const useAssetsStore = defineStore('assets', () => {
       if (res.success && res.data) {
         assets.value = res.data;
       }
+    } catch (e) {
+      console.error('加载资产列表失败:', e);
     } finally {
       loading.value = false;
     }
   }
 
   async function loadAssetById(id: number) {
-    const res = await invoke<ApiResponse<DigitalAsset | null>>('get_asset_by_id', { id });
-    if (res.success) {
-      currentAsset.value = res.data || null;
+    try {
+      const res = await invoke<ApiResponse<DigitalAsset | null>>('get_asset_by_id', { id });
+      if (res.success) {
+        currentAsset.value = res.data || null;
+      }
+    } catch (e) {
+      console.error('加载资产详情失败:', e);
     }
     return currentAsset.value;
   }
 
   async function addAsset(req: AssetRequest): Promise<number> {
-    const res = await invoke<ApiResponse<number>>('add_asset', { req });
-    if (res.success && res.data != null) {
-      await loadAssets();
-      return res.data;
+    try {
+      const res = await invoke<ApiResponse<number>>('add_asset', { req });
+      if (res.success && res.data != null) {
+        await loadAssets();
+        return res.data;
+      }
+      throw new Error(res.message);
+    } catch (e) {
+      console.error('添加资产失败:', e);
+      throw e;
     }
-    throw new Error(res.message);
   }
 
   async function updateAsset(id: number, req: AssetRequest) {
-    const res = await invoke<ApiResponse<void>>('update_asset', { id, req });
-    if (res.success) {
-      await loadAssets();
+    try {
+      const res = await invoke<ApiResponse<void>>('update_asset', { id, req });
+      if (res.success) {
+        await loadAssets();
+      }
+      return res;
+    } catch (e) {
+      console.error('更新资产失败:', e);
+      throw e;
     }
-    return res;
   }
 
   async function deleteAsset(id: number) {
-    const res = await invoke<ApiResponse<void>>('delete_asset', { id });
-    if (res.success) {
-      await loadAssets();
+    try {
+      const res = await invoke<ApiResponse<void>>('delete_asset', { id });
+      if (res.success) {
+        await loadAssets();
+      }
+      return res;
+    } catch (e) {
+      console.error('删除资产失败:', e);
+      throw e;
     }
-    return res;
   }
 
   return {

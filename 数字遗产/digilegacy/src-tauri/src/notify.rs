@@ -46,7 +46,8 @@ struct DmsConfig {
 }
 
 fn read_config() -> Result<DmsConfig, String> {
-    let conn = db::get_conn()?;
+    let guard = db::get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let enabled: i64 = conn
         .query_row("SELECT enabled FROM dms_config WHERE id=1", [], |r| r.get(0))
         .unwrap_or(0);
@@ -157,6 +158,10 @@ fn smtp_cmd(stream: &mut TcpStream, buf: &mut String, cmd: &str) -> Result<(), S
     stream.write_all(format!("{}\r\n", cmd).as_bytes()).map_err(|e| format!("SMTP 命令发送失败: {}", e))?;
     stream.flush().ok();
     read_smtp_line(stream, buf)?;
+    // EHLO 响应为多行：250- 续行，250 空格 结束
+    while buf.starts_with("250-") {
+        read_smtp_line(stream, buf)?;
+    }
     if !buf.starts_with("250") && !buf.starts_with("354") {
         return Err(format!("SMTP 命令被拒: {} -> {}", cmd, buf.trim()));
     }

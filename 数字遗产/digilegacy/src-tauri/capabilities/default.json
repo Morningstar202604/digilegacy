@@ -6,8 +6,9 @@
     "core:default",
     "dialog:default",
     "fs:default",
-    "fs:allow-write-file",
     "fs:allow-read-file",
-    "fs:allow-exists"
+    "fs:allow-write-file",
+    "fs:allow-exists",
+    "fs:scope"
   ]
 }

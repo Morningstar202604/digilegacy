@@ -9,7 +9,11 @@ use aes_gcm::{
     Aes256Gcm, Key, Nonce,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
+use sha2::Sha256;
+
+const PBKDF2_ITERATIONS: u32 = 100_000;
 
 /// 生成随机12字节nonce
 pub fn generate_nonce() -> [u8; 12] {
@@ -18,31 +22,10 @@ pub fn generate_nonce() -> [u8; 12] {
     nonce
 }
 
-/// 从密码派生密钥
+/// 从密码派生密钥（PBKDF2-SHA256，10万次迭代）
 fn derive_key(password: &str, salt: &[u8]) -> Key<Aes256Gcm> {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    
-    let mut key_material = Vec::new();
-    key_material.extend_from_slice(password.as_bytes());
-    key_material.extend_from_slice(salt);
-    
-    let mut hasher = DefaultHasher::new();
-    key_material.hash(&mut hasher);
-    let hash1 = hasher.finish();
-    
-    key_material.push(1u8);
-    let mut hasher2 = DefaultHasher::new();
-    key_material.hash(&mut hasher2);
-    let hash2 = hasher2.finish();
-    
-    let mut key_bytes = Vec::with_capacity(32);
-    key_bytes.extend_from_slice(&hash1.to_le_bytes());
-    key_bytes.extend_from_slice(&hash2.to_le_bytes());
-    key_bytes.extend_from_slice(&hash1.to_be_bytes());
-    key_bytes.extend_from_slice(&hash2.to_be_bytes());
-    key_bytes.truncate(32);
-    
+    let mut key_bytes = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ITERATIONS, &mut key_bytes);
     *Key::<Aes256Gcm>::from_slice(&key_bytes)
 }
 
@@ -121,5 +104,42 @@ mod tests {
     fn test_wrong_password_fails() {
         let encrypted = encrypt("test", "correct_password").unwrap();
         assert!(decrypt(&encrypted, "wrong_password").is_err());
+    }
+
+    #[test]
+    fn test_deterministic_key_derivation() {
+        let password = "my_secure_password";
+        let salt = [1u8; 16];
+        let key1 = derive_key(password, &salt);
+        let key2 = derive_key(password, &salt);
+        assert_eq!(key1.as_slice(), key2.as_slice(), "相同密码和盐应产生相同密钥");
+    }
+
+    #[test]
+    fn test_different_salts_produce_different_keys() {
+        let password = "my_secure_password";
+        let salt1 = [1u8; 16];
+        let salt2 = [2u8; 16];
+        let key1 = derive_key(password, &salt1);
+        let key2 = derive_key(password, &salt2);
+        assert_ne!(key1.as_slice(), key2.as_slice(), "不同盐应产生不同密钥");
+    }
+
+    #[test]
+    fn test_deterministic_encryption_uses_random_salt() {
+        let password = "test_password";
+        let message = "same message";
+        let encrypted1 = encrypt(message, password).unwrap();
+        let encrypted2 = encrypt(message, password).unwrap();
+        assert_ne!(encrypted1, encrypted2, "相同明文两次加密应产生不同密文（随机盐）");
+    }
+
+    #[test]
+    fn test_unicode_password() {
+        let password = "密码测试123!@#";
+        let message = "敏感数据";
+        let encrypted = encrypt(message, password).unwrap();
+        let decrypted = decrypt(&encrypted, password).unwrap();
+        assert_eq!(message, decrypted);
     }
 }

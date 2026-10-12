@@ -19,6 +19,8 @@ export const usePlatformsStore = defineStore('platforms', () => {
         platforms.value = res.data;
         loaded.value = true;
       }
+    } catch (e) {
+      console.error('加载平台数据失败:', e);
     } finally {
       loading.value = false;
     }

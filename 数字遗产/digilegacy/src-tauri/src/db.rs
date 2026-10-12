@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use once_cell::sync::Lazy;
 use rusqlite::{Connection, params};
 use tauri::{AppHandle, Manager};
@@ -10,6 +10,9 @@ use crate::platform_data::get_all_platforms;
 
 /// 全局数据库连接路径
 static DB_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
+
+/// 全局共享数据库连接（启用 WAL + busy_timeout，避免并发锁死）
+static CONN: Lazy<Mutex<Option<Connection>>> = Lazy::new(|| Mutex::new(None));
 
 /// 初始化数据库
 pub fn init_database(app_handle: &AppHandle) -> Result<(), String> {
@@ -24,9 +27,16 @@ pub fn init_database(app_handle: &AppHandle) -> Result<(), String> {
         let mut path_guard = DB_PATH.lock().unwrap();
         *path_guard = Some(db_path.clone());
     }
-    
+
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
     
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| format!("设置 WAL 模式失败: {}", e))?;
+    conn.pragma_update(None, "busy_timeout", "5000")
+        .map_err(|e| format!("设置 busy_timeout 失败: {}", e))?;
+    conn.pragma_update(None, "foreign_keys", "ON")
+        .map_err(|e| format!("启用外键约束失败: {}", e))?;
+
     create_tables(&conn).map_err(|e| format!("创建表失败: {}", e))?;
     seed_platforms(&conn)?;
     
@@ -34,6 +44,11 @@ pub fn init_database(app_handle: &AppHandle) -> Result<(), String> {
         "INSERT OR IGNORE INTO dms_config (id, enabled, check_in_interval_days, stage1_wait_days, stage2_wait_days, stage3_wait_days, last_check_in) VALUES (1, 0, 30, 3, 7, 14, NULL)",
         [],
     ).map_err(|e| format!("初始化DMS失败: {}", e))?;
+    
+    {
+        let mut conn_guard = CONN.lock().unwrap();
+        *conn_guard = Some(conn);
+    }
     
     Ok(())
 }
@@ -124,7 +139,7 @@ fn seed_platforms(conn: &Connection) -> Result<(), String> {
         .map_err(|e| format!("查询平台数量失败: {}", e))?;
     
     if count > 0 { return Ok(()); }
-    
+
     let platforms = get_all_platforms();
     
     for platform in platforms {
@@ -153,13 +168,13 @@ fn seed_platforms(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-/// 获取数据库连接
-pub(crate) fn get_conn() -> Result<Connection, String> {
-    let path = DB_PATH.lock().unwrap();
-    match &*path {
-        Some(p) => Connection::open(p).map_err(|e| format!("打开数据库失败: {}", e)),
-        None => Err("数据库路径未设置".to_string()),
+/// 获取数据库连接（共享连接，避免并发锁死）
+pub(crate) fn get_conn() -> Result<MutexGuard<'static, Option<Connection>>, String> {
+    let guard = CONN.lock().map_err(|_| "数据库锁中毒".to_string())?;
+    if guard.is_none() {
+        return Err("数据库未初始化".to_string());
     }
+    Ok(guard)
 }
 
 /// 辅助函数：解析 rusqlite 行到 Platform
@@ -205,7 +220,8 @@ fn row_to_asset(row: &rusqlite::Row) -> rusqlite::Result<DigitalAsset> {
 // ========== 平台查询 ==========
 
 pub fn get_all_platforms_db() -> Result<Vec<Platform>, String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare("SELECT id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes FROM platforms ORDER BY category, name")
         .map_err(|e| format!("查询平台失败: {}", e))?;
     
@@ -220,7 +236,10 @@ pub fn get_all_platforms_db() -> Result<Vec<Platform>, String> {
 // ========== 数字资产 CRUD ==========
 
 pub fn add_asset_db(req: &AssetRequest) -> Result<i64, String> {
-    let conn = get_conn()?;
+    validate_category(&req.category)?;
+    validate_disposal(&req.disposal_method)?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     
     conn.execute(
@@ -244,7 +263,10 @@ pub fn add_asset_db(req: &AssetRequest) -> Result<i64, String> {
 }
 
 pub fn update_asset_db(id: i64, req: &AssetRequest) -> Result<(), String> {
-    let conn = get_conn()?;
+    validate_category(&req.category)?;
+    validate_disposal(&req.disposal_method)?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     
     conn.execute(
@@ -268,14 +290,16 @@ pub fn update_asset_db(id: i64, req: &AssetRequest) -> Result<(), String> {
 }
 
 pub fn delete_asset_db(id: i64) -> Result<(), String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     conn.execute("DELETE FROM digital_assets WHERE id=?1", params![id])
         .map_err(|e| format!("删除资产失败: {}", e))?;
     Ok(())
 }
 
 pub fn get_all_assets_db() -> Result<Vec<DigitalAsset>, String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
         "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at 
          FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id ORDER BY a.created_at DESC"
@@ -290,7 +314,8 @@ pub fn get_all_assets_db() -> Result<Vec<DigitalAsset>, String> {
 }
 
 pub fn get_asset_by_id_db(id: i64) -> Result<Option<DigitalAsset>, String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
         "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at 
          FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id WHERE a.id = ?1"
@@ -306,7 +331,8 @@ pub fn get_asset_by_id_db(id: i64) -> Result<Option<DigitalAsset>, String> {
 }
 
 pub fn get_assets_by_category_db(category: &str) -> Result<Vec<DigitalAsset>, String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
         "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at 
          FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id WHERE a.category = ?1 ORDER BY a.estimated_value DESC"
@@ -323,8 +349,9 @@ pub fn get_assets_by_category_db(category: &str) -> Result<Vec<DigitalAsset>, St
 // ========== 用户档案 ==========
 
 pub fn get_user_profile_db() -> Result<Option<UserProfile>, String> {
-    let conn = get_conn()?;
-    let mut stmt = conn.prepare("SELECT * FROM user_profile ORDER BY id DESC LIMIT 1")
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let mut stmt = conn.prepare("SELECT id, full_name, phone, email, id_last4, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, heir_primary_name, heir_primary_phone, heir_primary_relation, check_in_interval_days, last_check_in, dms_enabled, created_at, updated_at FROM user_profile ORDER BY id DESC LIMIT 1")
         .map_err(|e| format!("查询用户档案失败: {}", e))?;
     
     let mut rows = stmt.query([]).map_err(|e| format!("查询执行失败: {}", e))?;
@@ -354,7 +381,8 @@ pub fn get_user_profile_db() -> Result<Option<UserProfile>, String> {
 }
 
 pub fn save_user_profile_db(profile: &UserProfile) -> Result<(), String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     
     match profile.id {
@@ -393,7 +421,8 @@ pub fn save_user_profile_db(profile: &UserProfile) -> Result<(), String> {
 // ========== Check-in / Dead Man's Switch ==========
 
 pub fn record_check_in_db() -> Result<(), String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     
     conn.execute(
@@ -409,13 +438,14 @@ pub fn record_check_in_db() -> Result<(), String> {
     conn.execute(
         "UPDATE user_profile SET last_check_in=?1 WHERE id=(SELECT MAX(id) FROM user_profile)",
         params![now],
-    ).ok();
+    ).map_err(|e| format!("更新用户签到时间失败: {}", e))?;
     
     Ok(())
 }
 
 pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     
     let last_check_in: Option<String> = conn.query_row(
         "SELECT last_check_in FROM dms_config WHERE id=1",
@@ -461,12 +491,13 @@ pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
 }
 
 pub fn set_dms_config_db(enabled: bool, interval_days: i64) -> Result<(), String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     
     conn.execute(
         "INSERT OR IGNORE INTO dms_config (id, enabled, check_in_interval_days, stage1_wait_days, stage2_wait_days, stage3_wait_days, last_check_in) VALUES (1, 0, 30, 3, 7, 14, NULL)",
         [],
-    ).ok();
+    ).map_err(|e| format!("初始化DMS配置失败: {}", e))?;
     
     conn.execute(
         "UPDATE dms_config SET enabled=?1, check_in_interval_days=?2 WHERE id=1",
@@ -477,7 +508,8 @@ pub fn set_dms_config_db(enabled: bool, interval_days: i64) -> Result<(), String
 }
 
 pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
-    let conn = get_conn()?;
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
     
     let total: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets", [], |row| row.get(0))
         .map_err(|e| format!("统计失败: {}", e))?;

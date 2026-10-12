@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 
 // ──────────────────────────────────────────────
 // 领域枚举：用于校验前端传入的合法值
+// ──────────────────────────────────────────────
 
 /// 数字资产类别
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AssetCategory {
@@ -15,17 +15,18 @@ pub enum AssetCategory {
     Mixed,       // 混合型
 }
 
-/// 存储用的键名（不合法值回退到 mixed），预留给输入校验使用
-#[allow(dead_code)]
-pub fn category_key_to_str(cat: &str) -> &str {
-    match cat {
-        "property" | "personality" | "mixed" => cat,
-        _ => "mixed",
+impl AssetCategory {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "property" => Some(Self::Property),
+            "personality" => Some(Self::Personality),
+            "mixed" => Some(Self::Mixed),
+            _ => None,
+        }
     }
 }
 
 /// 处置方式
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum DisposalMethod {
@@ -36,6 +37,37 @@ pub enum DisposalMethod {
     Delete,
     Donate,
     NoAction,
+}
+
+impl DisposalMethod {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "inherit" => Some(Self::Inherit),
+            "liquidate" => Some(Self::Liquidate),
+            "memorialize" => Some(Self::Memorialize),
+            "authorize_view" => Some(Self::AuthorizeView),
+            "delete" => Some(Self::Delete),
+            "donate" => Some(Self::Donate),
+            "no_action" => Some(Self::NoAction),
+            _ => None,
+        }
+    }
+}
+
+/// 校验并规范化资产类别
+pub fn validate_category(cat: &str) -> Result<String, String> {
+    match AssetCategory::from_str(cat) {
+        Some(_) => Ok(cat.to_string()),
+        None => Err(format!("无效的资产类别: {}", cat)),
+    }
+}
+
+/// 校验并规范化处置方式
+pub fn validate_disposal(method: &str) -> Result<String, String> {
+    match DisposalMethod::from_str(method) {
+        Some(_) => Ok(method.to_string()),
+        None => Err(format!("无效的处置方式: {}", method)),
+    }
 }
 
 // ──────────────────────────────────────────────
