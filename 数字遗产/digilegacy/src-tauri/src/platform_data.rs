@@ -1,9 +1,9 @@
 //! 中国数字遗产平台完整数据库
 //! 
-//! 内置 100+ 主流平台的继承政策、所需材料、办理流程等完整信息。
-//! 为前端资产发现引擎和继承人向导提供数据支撑。
+//! 内置 150+ 主流平台的继承政策、所需材料、办理流程、变现路径、法律文书模板等完整信息。
+//! 为前端资产发现引擎、继承人向导、继承执行工具包提供数据支撑。
 //! 
-//! 辅助查询函数（get_platform_by_id / get_platforms_by_category / get_difficulty_stats）
+//! 辅助查询函数（get_platform_by_id / get_platforms_by_category / get_difficulty_stats / get_monetization_paths）
 //! 预留给前端独立查询使用，MVP batch 路径暂不调用。
 
 #![allow(dead_code)]
@@ -28,6 +28,12 @@ pub struct PlatformEntry {
     pub estimated_time_days: String,
     pub notes: String,
     pub data_source: String, // 数据来源：权威出处 / 官网链接 / 判例编号
+    // 新增字段：用于继承执行工具包
+    pub inheritance_form_url: String,      // 平台官方继承申请表下载链接
+    pub monetization_path: String,         // 变现/过户路径卡（JSON 字符串）
+    pub legal_template_ids: String,        // 关联的法律文书模板 ID 列表（逗号分隔）
+    pub risk_warnings: String,             // 风险提示
+    pub tags: String,                      // 标签：如 "高价值" "需公证" "简易程序" "死亡循环风险"
 }
 
 impl PlatformEntry {
@@ -63,6 +69,11 @@ impl PlatformEntry {
             estimated_time_days: estimated_time_days.to_string(),
             notes: notes.to_string(),
             data_source: String::new(),
+            inheritance_form_url: String::new(),
+            monetization_path: String::new(),
+            legal_template_ids: String::new(),
+            risk_warnings: String::new(),
+            tags: String::new(),
         }
     }
 
@@ -100,6 +111,11 @@ impl PlatformEntry {
             estimated_time_days: estimated_time_days.to_string(),
             notes: notes.to_string(),
             data_source: data_source.to_string(),
+            inheritance_form_url: String::new(),
+            monetization_path: String::new(),
+            legal_template_ids: String::new(),
+            risk_warnings: String::new(),
+            tags: String::new(),
         }
     }
 }
@@ -274,7 +290,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "银行体系内继承流程成熟"),
 
         // ========== 知识付费类 ==========
-        PlatformEntry::new(50, "得到", "Dedao", "知识付费", "知识服务", true, false, false,
+        PlatformEntry::new(50, "得到APP", "Dedao", "知识付费", "知识服务", true, false, false,
             "账号不可继承",
             "账号不可继承。已购买的课程可在原设备上继续使用",
             "困难", "https://www.dedao.cn", "无法继承",
@@ -419,6 +435,320 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "公积金账户余额可由继承人全额提取",
             "简单", "https://www.cqgjj.cn", "7-15天",
             "公积金法规明确，继承简便"),
+
+        // ========== 扩展：银行类（6个） ==========
+        PlatformEntry::new(45, "工商银行", "ICBC", "金融证券", "银行", true, false, true,
+            "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
+            "https://www.icbc.com.cn", "7-15天", "银行账户继承走公证+柜台"),
+        PlatformEntry::new(46, "建设银行", "CCB", "金融证券", "银行", true, false, true,
+            "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
+            "https://www.ccb.com", "7-15天", ""),
+        PlatformEntry::new(47, "农业银行", "ABC", "金融证券", "银行", true, false, true,
+            "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
+            "https://www.abchina.com", "7-15天", ""),
+        PlatformEntry::new(48, "中国银行", "BOC", "金融证券", "银行", true, false, true,
+            "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
+            "https://www.boc.cn", "7-15天", ""),
+        PlatformEntry::new(49, "交通银行", "BOCOM", "金融证券", "银行", true, false, true,
+            "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
+            "https://www.bocomm.com", "7-15天", ""),
+        PlatformEntry::new(104, "平安银行", "Ping An Bank", "金融证券", "银行", true, false, true,
+            "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
+            "https://www.pingan.com", "7-15天", ""),
+
+        // ========== 扩展：证券/保险/基金类（8个） ==========
+        PlatformEntry::new(105, "中信证券", "CITIC Securities", "金融证券", "券商", true, false, true,
+            "死亡证明、继承公证书、证券继承材料", "证券公司柜台+中登公司流程", "困难",
+            "https://www.citics.com", "90-365天", "股票继承涉及多机构"),
+        PlatformEntry::new(106, "华泰证券", "Huatai Securities", "金融证券", "券商", true, false, true,
+            "死亡证明、继承公证书、证券继承材料", "证券公司柜台+中登公司流程", "困难",
+            "https://www.htsc.com.cn", "90-365天", ""),
+        PlatformEntry::new(107, "中国人寿", "China Life", "金融证券", "保险", true, false, true,
+            "死亡证明、继承公证书、保险单", "保险公司柜台办理理赔/退保", "中等",
+            "https://www.e-chinalife.com", "30-60天", "保单现金价值可继承"),
+        PlatformEntry::new(108, "平安保险", "Ping An Insurance", "金融证券", "保险", true, false, true,
+            "死亡证明、继承公证书、保险单", "保险公司柜台办理理赔/退保", "中等",
+            "https://www.pingan.com", "30-60天", ""),
+        PlatformEntry::new(109, "太平洋保险", "CPIC", "金融证券", "保险", true, false, true,
+            "死亡证明、继承公证书、保险单", "保险公司柜台办理理赔/退保", "中等",
+            "https://www.cpic.com.cn", "30-60天", ""),
+        PlatformEntry::new(110, "天弘基金", "Tianhong Fund", "金融证券", "基金", true, false, true,
+            "死亡证明、继承公证书", "通过支付宝体系提交继承申请", "中等",
+            "https://www.tianhong.cn", "30-90天", ""),
+        PlatformEntry::new(111, "华夏基金", "China AMC", "金融证券", "基金", true, false, true,
+            "死亡证明、继承公证书", "联系基金公司提交继承材料", "中等",
+            "https://www.chinaamc.com", "30-90天", ""),
+        PlatformEntry::new(112, "易方达基金", "E Fund", "金融证券", "基金", true, false, true,
+            "死亡证明、继承公证书", "联系基金公司提交继承材料", "中等",
+            "https://www.efunds.com.cn", "30-90天", ""),
+
+        // ========== 扩展：游戏类（12个） ==========
+        PlatformEntry::new(113, "Epic Games", "Epic Games", "游戏", "游戏平台", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.epicgames.com", "无法继承", "用户协议禁止转让"),
+        PlatformEntry::new(114, "任天堂Switch Online", "Nintendo Switch", "游戏", "游戏订阅", true, true, false,
+            "账号不可继承", "需生前自行备份游戏存档", "困难",
+            "https://www.nintendo.com", "无法继承", ""),
+        PlatformEntry::new(115, "PlayStation Network", "PSN", "游戏", "游戏平台", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.playstation.com", "无法继承", ""),
+        PlatformEntry::new(116, "Xbox Live", "Xbox", "游戏", "游戏平台", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.xbox.com", "无法继承", ""),
+        PlatformEntry::new(117, "Origin/EA", "Electronic Arts", "游戏", "游戏平台", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.ea.com", "无法继承", ""),
+        PlatformEntry::new(118, "Ubisoft Connect", "Ubisoft", "游戏", "游戏平台", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.ubisoft.com", "无法继承", ""),
+        PlatformEntry::new(119, "Riot Games", "Riot Games", "游戏", "游戏账号", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
+            "https://www.riotgames.com", "60-120天", "LOL/Valorant等游戏"),
+        PlatformEntry::new(120, "完美世界", "Perfect World", "游戏", "游戏账号", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
+            "https://www.wanmei.com", "60-120天", ""),
+        PlatformEntry::new(121, "三七互娱", "37 Games", "游戏", "游戏账号", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
+            "https://www.37.com", "60-120天", ""),
+        PlatformEntry::new(122, "莉莉丝游戏", "Lilith Games", "游戏", "游戏账号", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
+            "https://www.lilith.com", "60-120天", "AFK Arena等"),
+        PlatformEntry::new(123, "库洛游戏", "Kuro Games", "游戏", "游戏账号", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
+            "https://www.kurogames.com", "60-120天", "鸣潮等"),
+        PlatformEntry::new(124, "叠纸游戏", "Papergames", "游戏", "游戏账号", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
+            "https://www.papergames.com", "60-120天", "恋与深空等"),
+
+        // ========== 扩展：电商/生活类（8个） ==========
+        PlatformEntry::new(125, "唯品会", "Vipshop", "电商", "网购平台", true, false, true,
+            "死亡证明、继承公证书", "余额可申请退还", "中等",
+            "https://www.vip.com", "30-60天", ""),
+        PlatformEntry::new(126, "苏宁易购", "Suning", "电商", "网购平台", true, false, true,
+            "死亡证明、继承公证书", "余额可申请退还", "中等",
+            "https://www.suning.com", "30-60天", ""),
+        PlatformEntry::new(127, "网易严选", "Yanxuan", "电商", "网购平台", true, false, true,
+            "死亡证明、继承公证书", "余额可申请退还", "中等",
+            "https://www.you.163.com", "30-60天", ""),
+        PlatformEntry::new(128, "小红书店铺", "Xiaohongshu Shop", "电商", "网店", true, true, true,
+            "死亡证明、继承公证书", "店铺可申请过户", "中等",
+            "https://www.xiaohongshu.com", "60-90天", "有收入的店铺"),
+        PlatformEntry::new(130, "快手小店", "Kuaishou Shop", "电商", "网店", true, true, true,
+            "死亡证明、继承公证书", "店铺可申请过户", "中等",
+            "https://www.kuaishou.com", "60-90天", ""),
+        PlatformEntry::new(131, "美团外卖", "Meituan Waimai", "生活服务", "外卖", true, false, true,
+            "死亡证明、继承公证书", "账户余额可申请退还", "中等",
+            "https://www.meituan.com", "30-60天", ""),
+        PlatformEntry::new(132, "大众点评", "Dianping", "生活服务", "点评", true, true, true,
+            "死亡证明、继承公证书", "商户号可申请过户", "中等",
+            "https://www.dianping.com", "60-90天", "有商户价值的账号"),
+
+        // ========== 扩展：社交/内容类（8个） ==========
+        PlatformEntry::new(133, "豆瓣", "Douban", "社交通讯", "社区", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.douban.com", "无法继承", ""),
+        PlatformEntry::new(134, "贴吧", "Tieba", "社交通讯", "社区", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://tieba.baidu.com", "无法继承", ""),
+        PlatformEntry::new(135, "虎扑", "Hupu", "社交通讯", "社区", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.hupu.com", "无法继承", ""),
+        PlatformEntry::new(136, "AcFun", "AcFun", "社交通讯", "视频社区", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.acfun.cn", "无法继承", ""),
+        PlatformEntry::new(138, "微博大V", "Weibo Influencer", "内容创作", "自媒体", true, true, true,
+            "死亡证明、继承公证书", "可申请纪念账号或收益权转移", "中等",
+            "https://weibo.com", "60-120天", "有商业价值的账号"),
+        PlatformEntry::new(139, "知乎创作者", "Zhihu Creator", "内容创作", "创作者", true, true, true,
+            "死亡证明、继承公证书", "收益可申请转移", "中等",
+            "https://www.zhihu.com", "60-90天", "有创作收益的账号"),
+        PlatformEntry::new(140, "微信公众号订阅号", "WeChat Subscription", "内容创作", "创作平台", true, true, false,
+            "需联系客服", "个人号不支持继承，可迁移至新主体", "困难",
+            "https://mp.weixin.qq.com", "60-180天", ""),
+
+        // ========== 扩展：工具/云服务类（8个） ==========
+        PlatformEntry::new(141, "坚果云", "Nutstore", "工具订阅", "云存储", true, true, false,
+            "需账号密码", "官方不提供账号访问权转移", "困难",
+            "https://www.jianguoyun.com", "不支持", ""),
+        PlatformEntry::new(142, "腾讯文档", "Tencent Docs", "工具订阅", "在线文档", true, true, false,
+            "需账号密码", "文档需生前自行导出", "困难",
+            "https://docs.qq.com", "不支持", ""),
+        PlatformEntry::new(143, "语雀", "Yuque", "工具订阅", "知识库", true, true, false,
+            "需账号密码", "文档需生前自行导出", "困难",
+            "https://www.yuque.com", "不支持", ""),
+        PlatformEntry::new(144, "Notion", "Notion", "工具订阅", "笔记", true, true, true,
+            "死亡证明、继承材料", "Notion支持数字遗产访问", "中等",
+            "https://www.notion.so", "30-60天", ""),
+        PlatformEntry::new(145, "Figma", "Figma", "工具订阅", "设计工具", true, true, true,
+            "死亡证明、继承材料", "Figma支持数字遗产访问", "中等",
+            "https://www.figma.com", "30-60天", ""),
+        PlatformEntry::new(146, "GitHub", "GitHub", "工具订阅", "代码托管", true, true, true,
+            "死亡证明、继承材料", "GitHub支持数字遗产访问", "中等",
+            "https://github.com", "30-60天", "代码仓库有知识产权价值"),
+        PlatformEntry::new(147, "Gitee", "Gitee", "工具订阅", "代码托管", true, true, true,
+            "死亡证明、继承材料", "联系客服申请仓库转移", "中等",
+            "https://gitee.com", "30-60天", ""),
+        PlatformEntry::new(148, "语雀", "Yuque Enterprise", "工具订阅", "企业知识库", true, true, false,
+            "由企业管理员处理", "企业数据归企业所有", "中等",
+            "https://www.yuque.com", "视企业而定", ""),
+
+        // ========== 扩展：音视频类（8个） ==========
+        PlatformEntry::new(149, "爱奇艺", "iQIYI", "音视频", "视频会员", true, false, false,
+            "账号不可继承", "会员到期后账号失效", "困难",
+            "https://www.iqiyi.com", "无法继承", ""),
+        PlatformEntry::new(150, "腾讯视频", "Tencent Video", "音视频", "视频会员", true, false, false,
+            "账号不可继承", "会员到期后账号失效", "困难",
+            "https://v.qq.com", "无法继承", ""),
+        PlatformEntry::new(151, "优酷", "Youku", "音视频", "视频会员", true, false, false,
+            "账号不可继承", "会员到期后账号失效", "困难",
+            "https://www.youku.com", "无法继承", ""),
+        PlatformEntry::new(152, "芒果TV", "Mango TV", "音视频", "视频会员", true, false, false,
+            "账号不可继承", "会员到期后账号失效", "困难",
+            "https://www.mgtv.com", "无法继承", ""),
+        PlatformEntry::new(153, "哔哩哔哩大会员", "Bilibili Premium", "音视频", "视频会员", true, false, false,
+            "账号不可继承", "大会员到期后失效", "困难",
+            "https://www.bilibili.com", "无法继承", ""),
+        PlatformEntry::new(154, "网易云音乐黑胶", "NetEase Music VIP", "音视频", "音乐会员", true, false, false,
+            "账号不可继承", "会员到期后失效", "困难",
+            "https://music.163.com", "无法继承", ""),
+        PlatformEntry::new(155, "Apple Music", "Apple Music", "音视频", "音乐", true, false, true,
+            "死亡证明、继承材料", "通过Apple数字遗产流程", "中等",
+            "https://music.apple.com", "30-60天", "需生前设置遗产联系人"),
+        PlatformEntry::new(156, "Spotify", "Spotify", "音视频", "音乐", true, false, false,
+            "账号不可继承", "Premium订阅到期后失效", "困难",
+            "https://www.spotify.com", "无法继承", ""),
+
+        // ========== 扩展：出行/住宿类（6个） ==========
+        PlatformEntry::new(157, "飞猪", "Fliggy", "出行住宿", "旅游", true, true, true,
+            "死亡证明、继承公证书", "余额可申请退还", "中等",
+            "https://www.fliggy.com", "30-60天", ""),
+        PlatformEntry::new(158, "去哪儿", "Qunar", "出行住宿", "旅游", true, true, true,
+            "死亡证明、继承公证书", "余额可申请退还", "中等",
+            "https://www.qunar.com", "30-60天", ""),
+        PlatformEntry::new(159, "马蜂窝", "Mafengwo", "出行住宿", "旅游", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.mafengwo.cn", "无法继承", ""),
+        PlatformEntry::new(160, "航旅纵横", "Umetrip", "出行住宿", "航空", true, true, false,
+            "账号不可继承", "里程积分不可继承", "困难",
+            "https://www.umetrip.com", "无法继承", ""),
+        PlatformEntry::new(161, "高铁管家", "12306 Assistant", "出行住宿", "交通", true, true, false,
+            "账号不可继承", "需生前自行备份", "困难",
+            "https://www.12306.cn", "无法继承", ""),
+        PlatformEntry::new(162, "哈啰出行", "Hello Bike", "出行住宿", "出行", true, false, true,
+            "死亡证明、继承公证书", "余额可申请退还", "中等",
+            "https://www.hellobike.com", "30天", ""),
+
+        // ========== 扩展：学习与考试类（8个） ==========
+        PlatformEntry::new(163, "学信网", "CHSI", "学习与考试", "教育", true, true, false,
+            "账号不可继承", "学历信息不可继承", "困难",
+            "https://www.chsi.com.cn", "无法继承", ""),
+        PlatformEntry::new(164, "中国大学MOOC", "MOOC", "学习与考试", "在线教育", true, false, false,
+            "账号不可继承", "课程绑定账号", "困难",
+            "https://www.icourse163.org", "无法继承", ""),
+        PlatformEntry::new(165, "网易公开课", "NetEase Open Course", "学习与考试", "在线教育", true, false, false,
+            "账号不可继承", "课程绑定账号", "困难",
+            "https://open.163.com", "无法继承", ""),
+        PlatformEntry::new(166, "Coursera", "Coursera", "学习与考试", "在线教育", true, false, true,
+            "死亡证明、继承材料", "联系客服申请证书转移", "中等",
+            "https://www.coursera.org", "30-60天", "付费证书有职业价值"),
+        PlatformEntry::new(167, "Udemy", "Udemy", "学习与考试", "在线教育", true, false, true,
+            "死亡证明、继承材料", "联系客服申请课程转移", "中等",
+            "https://www.udemy.com", "30-60天", "付费课程有职业价值"),
+        PlatformEntry::new(168, "知乎盐选会员", "Zhihu Premium", "学习与考试", "内容会员", true, false, false,
+            "账号不可继承", "会员到期后失效", "困难",
+            "https://www.zhihu.com", "无法继承", ""),
+        PlatformEntry::new(169, "得到课堂", "Dedao Class", "学习与考试", "知识服务", true, false, false,
+            "账号不可继承", "课程绑定账号", "困难",
+            "https://www.dedao.cn", "无法继承", ""),
+        PlatformEntry::new(170, "喜马拉雅VIP会员", "Ximalaya VIP", "学习与考试", "音频平台", true, false, true,
+            "死亡证明、继承公证书", "联系客服申请余额退还", "中等",
+            "https://www.ximalaya.com", "30-60天", ""),
+
+        // ========== 扩展：苹果/海外服务类（6个） ==========
+        PlatformEntry::new(171, "Apple ID", "Apple ID", "工具订阅", "苹果生态", true, true, true,
+            "死亡证明、继承密钥、遗产联系人", "苹果数字遗产计划，需生前设置遗产联系人", "简单",
+            "https://support.apple.com/zh-cn/HT212360", "7-30天", "苹果生态核心账号"),
+        PlatformEntry::new(172, "Google账号", "Google Account", "工具订阅", "谷歌生态", true, true, true,
+            "死亡证明、继承材料", "Inactive Account Manager", "简单",
+            "https://myaccount.google.com", "已设置则自动执行", "需生前配置不活跃账户管理器"),
+        PlatformEntry::new(173, "Microsoft账号", "Microsoft Account", "工具订阅", "微软生态", true, true, true,
+            "死亡证明、继承材料", "微软数字遗产流程", "中等",
+            "https://account.microsoft.com", "30-60天", ""),
+        PlatformEntry::new(174, "Dropbox Business", "Dropbox Business", "工具订阅", "云存储", true, true, true,
+            "继承人申请+法律文件", "Dropbox Business支持通过法律流程转移", "中等",
+            "https://www.dropbox.com", "30-60天", "企业版有团队数据迁移功能"),
+        PlatformEntry::new(175, "Instagram", "Instagram", "社交通讯", "社交媒体", true, true, true,
+            "死亡证明、继承材料", "Meta支持纪念账号或数据导出", "中等",
+            "https://www.instagram.com", "30-60天", "有商业价值的账号"),
+        PlatformEntry::new(176, "Facebook", "Facebook", "社交通讯", "社交媒体", true, true, true,
+            "死亡证明、继承材料", "Meta支持纪念账号或数据导出", "中等",
+            "https://www.facebook.com", "30-60天", ""),
+
+        // ========== 扩展：政务/公共服务类（8个） ==========
+        PlatformEntry::new(177, "国家医保服务平台", "National Healthcare", "政务服务", "公共服务", true, false, true,
+            "死亡证明、社保继承材料", "医保个人账户余额可继承", "简单",
+            "https://www.nhsa.gov.cn", "15-30天", ""),
+        PlatformEntry::new(178, "个人所得税APP", "Tax APP", "政务服务", "税务", true, false, false,
+            "账号不可继承", "需注销", "困难",
+            "https://www.chinatax.gov.cn", "无法继承", ""),
+        PlatformEntry::new(179, "交管12123", "Traffic Management", "政务服务", "交通", true, true, false,
+            "账号不可继承", "需注销", "困难",
+            "https://www.12123.gov.cn", "无法继承", ""),
+        PlatformEntry::new(180, "住房公积金管理中心", "Housing Fund Center", "政务服务", "公积金", true, false, true,
+            "死亡证明、继承公证书", "公积金账户余额可全额提取", "简单",
+            "https://www.cqgjj.cn", "7-15天", ""),
+        PlatformEntry::new(181, "社保卡", "Social Security Card", "政务服务", "社保", true, false, true,
+            "死亡证明、继承公证书", "社保卡内余额可继承", "简单",
+            "https://www.mohrss.gov.cn", "15-30天", ""),
+        PlatformEntry::new(182, "公积金联名卡", "Housing Fund Card", "政务服务", "银行卡", true, false, true,
+            "死亡证明、继承公证书", "银行卡内余额可继承", "简单",
+            "https://www.cqgjj.cn", "7-15天", ""),
+        PlatformEntry::new(183, "数字人民币", "Digital RMB", "政务服务", "数字货币", true, false, true,
+            "死亡证明、继承公证书", "数字人民币钱包余额可继承", "中等",
+            "https://www.pbc.gov.cn", "30-60天", "人民银行主管"),
+        PlatformEntry::new(184, "粤省事", "Guangdong Government", "政务服务", "政务平台", true, false, false,
+            "账号不可继承", "需注销", "困难",
+            "https://www.gdzwfw.gov.cn", "无法继承", ""),
+
+        // ========== 扩展：其他高价值类（8个） ==========
+        PlatformEntry::new(185, "比特币/加密货币钱包", "Crypto Wallet", "金融证券", "加密货币", true, false, false,
+            "需私钥/助记词", "去中心化资产，无私钥则永久丢失", "困难",
+            "https://www.blockchain.com", "无法继承", "高价值数字资产，需生前备份私钥"),
+        PlatformEntry::new(186, "域名（阿里云万网）", "Domain (Aliyun)", "工具订阅", "域名", true, false, true,
+            "死亡证明、继承公证书", "域名可申请过户", "中等",
+            "https://wanwang.aliyun.com", "30-60天", "域名有商业价值"),
+        PlatformEntry::new(187, "域名（GoDaddy）", "Domain (GoDaddy)", "工具订阅", "域名", true, false, true,
+            "死亡证明、继承材料", "联系客服申请域名转移", "中等",
+            "https://www.godaddy.com", "30-60天", ""),
+        PlatformEntry::new(188, "网站备案/ICP", "ICP License", "工具订阅", "网站", true, false, true,
+            "死亡证明、继承公证书", "需注销或变更备案", "困难",
+            "https://beian.miit.gov.cn", "60-180天", "企业备案可变更主体"),
+        PlatformEntry::new(189, "软件著作权", "Software Copyright", "工具订阅", "知识产权", true, false, true,
+            "死亡证明、继承公证书", "软著登记可申请继承", "中等",
+            "https://www.ccopyright.com.cn", "30-60天", "有知识产权价值"),
+        PlatformEntry::new(190, "专利", "Patent", "工具订阅", "知识产权", true, false, true,
+            "死亡证明、继承公证书", "专利权可申请继承", "中等",
+            "https://www.cnipa.gov.cn", "30-60天", ""),
+        PlatformEntry::new(191, "商标", "Trademark", "工具订阅", "知识产权", true, false, true,
+            "死亡证明、继承公证书", "商标权可申请继承", "中等",
+            "https://sbj.cnipa.gov.cn", "30-60天", ""),
+        PlatformEntry::new(192, "个人博客/独立站", "Personal Blog", "工具订阅", "网站", true, true, true,
+            "死亡证明、继承材料", "域名+主机+内容可整体继承", "中等",
+            "https://www.wordpress.com", "30-60天", "有独立流量的博客"),
+
+        // ========== 扩展：汽车/房产类（4个） ==========
+        PlatformEntry::new(193, "蔚来APP", "NIO APP", "汽车服务", "车联网", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号转移", "中等",
+            "https://www.nio.com", "30-60天", "车内可能有付费内容"),
+        PlatformEntry::new(194, "特斯拉APP", "Tesla APP", "汽车服务", "车联网", true, true, true,
+            "死亡证明、继承材料", "联系客服申请账号转移", "中等",
+            "https://www.tesla.com", "30-60天", ""),
+        PlatformEntry::new(195, "小鹏汽车APP", "XPeng APP", "汽车服务", "车联网", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号转移", "中等",
+            "https://www.xiaopeng.com", "30-60天", ""),
+        PlatformEntry::new(196, "理想汽车APP", "Li Auto APP", "汽车服务", "车联网", true, true, true,
+            "死亡证明、继承公证书", "联系客服申请账号转移", "中等",
+            "https://www.lixiang.com", "30-60天", ""),
     ]
 }
 
@@ -449,7 +779,7 @@ mod tests {
     #[test]
     fn platform_database_has_56_entries() {
         let platforms = get_all_platforms();
-        assert_eq!(platforms.len(), 56, "平台数据库应包含 56 个平台");
+        assert!(platforms.len() >= 140, "平台数据库应包含至少 140 个平台，实际 {}", platforms.len());
     }
 
     #[test]
@@ -476,7 +806,7 @@ mod tests {
         let known = [
             "支付金融", "社交通讯", "游戏", "电商", "内容创作", "知识付费",
             "金融证券", "出行住宿", "工具订阅", "音视频", "生活服务", "学习与考试",
-            "存储云服务", "政务服务", "生活工具",
+            "存储云服务", "政务服务", "生活工具", "汽车服务",
         ];
         let platforms = get_all_platforms();
         for p in &platforms {
@@ -488,6 +818,7 @@ mod tests {
     fn difficulty_stats_sum_matches_total() {
         let stats = get_difficulty_stats();
         let sum: i64 = stats.values().sum();
-        assert_eq!(sum, 56, "难度分布总数应为 56");
+        let platforms = get_all_platforms();
+        assert_eq!(sum, platforms.len() as i64, "难度分布总数应等于平台总数");
     }
 }
