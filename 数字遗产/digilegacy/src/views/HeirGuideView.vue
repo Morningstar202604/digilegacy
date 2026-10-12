@@ -1,0 +1,146 @@
+<template>
+  <div class="heir fade-in">
+    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">👥 继承人向导</h2>
+    <p class="text-muted mb-32" style="font-size: 14px;">
+      如果你的亲人不幸离世，这个向导将帮助你按其意愿有序继承数字遗产。
+    </p>
+
+    <!-- 使用前提 -->
+    <div class="card mb-32" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b;">
+      <div class="flex items-center gap-12">
+        <span style="font-size: 36px;">⚠️</span>
+        <div>
+          <strong style="font-size: 16px;">重要前提</strong>
+          <p style="font-size: 13px; margin-top: 4px; color: var(--gray-700);">
+            使用本功能前，请确认你已持有逝者的：① 死亡证明 ② 继承权公证书（或法院判决书） ③ 你的身份证
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 继承步骤总览 -->
+    <div class="card mb-32">
+      <div class="card-title mb-16">📝 继承流程总览</div>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">1</span>
+          <span>确认继承权（持有死亡证明+公证书/判决书）</span>
+        </div>
+        <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">2</span>
+          <span>查看逝者留下的数字遗产清单与处置方案</span>
+        </div>
+        <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">3</span>
+          <span>按平台逐一办理继承手续</span>
+        </div>
+        <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">4</span>
+          <span>完成账号过户/余额提取/数据导出</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 按平台分类的操作指南 -->
+    <div class="card mb-24">
+      <div class="card-title mb-16">📋 各平台继承指引（按难度排序）</div>
+      
+      <!-- 筛选 -->
+      <div class="flex gap-8 mb-16">
+        <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = 'all'">全部</button>
+        <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '简单'">简单</button>
+        <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '中等'">中等</button>
+        <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '困难'">困难</button>
+      </div>
+
+      <div v-for="platform in filteredPlatforms" :key="platform.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
+        <div style="padding: 12px 16px; background: var(--gray-50); display: flex; justify-content: space-between; align-items: center;">
+          <div class="flex items-center gap-8">
+            <strong>{{ platform.name }}</strong>
+            <span class="text-muted" style="font-size: 12px;">{{ platform.category }}</span>
+          </div>
+          <span class="tag" :class="{
+            'tag-success': platform.inheritable,
+            'tag-danger': !platform.inheritable
+          }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+        </div>
+        <div style="padding: 16px;">
+          <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
+            <div>
+              <strong>所需材料：</strong>
+              <span class="text-muted">{{ platform.required_documents || '请咨询平台客服' }}</span>
+            </div>
+            <div>
+              <strong>预计耗时：</strong>
+              <span class="text-muted">{{ platform.estimated_time_days || '视具体情况' }}</span>
+            </div>
+          </div>
+          <div class="mt-12">
+            <strong style="font-size: 13px;">操作流程：</strong>
+            <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+              {{ platform.process_description || '暂无详细指引' }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 常见困难解决方案 -->
+    <div class="card mb-32">
+      <div class="card-title mb-16">❓ 常见困难与解决办法</div>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="padding: 16px; border: 1px solid var(--gray-200); border-radius: 8px;">
+          <strong>🔗 "死亡循环"问题</strong>
+          <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+            平台要法院判决才能查账户 → 法院要先知道账户里有什么才能判决。<br>
+            <strong>解决方案：</strong>先通过逝者手机/电脑中保存的登录凭证确定账户存在，再向法院申请调查令。
+            也可通过逝者的手机号在各平台尝试"找回密码"确认是否存在账号。
+          </p>
+        </div>
+        <div style="padding: 16px; border: 1px solid var(--gray-200); border-radius: 8px;">
+          <strong>📱 不知道密码</strong>
+          <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+            <strong>解决方案：</strong>大多数平台支持"手机号+验证码"找回密码。只要手机卡还在，就能通过运营商过户手机号后找回账号。
+          </p>
+        </div>
+        <div style="padding: 16px; border: 1px solid var(--gray-200); border-radius: 8px;">
+          <strong>🏛️ 平台拒绝配合</strong>
+          <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+            <strong>解决方案：</strong>2026年最高人民法院已将"数据、网络虚拟财产纠纷"列为法定案由，
+            北京石景山法院已判定"平台格式条款单方剥夺继承人继承虚拟财产的权利无效"。可向法院起诉要求平台配合。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 免责声明 -->
+    <div class="card" style="background: var(--gray-50);">
+      <div class="card-title mb-16">⚖️ 法律声明</div>
+      <ul style="font-size: 13px; color: var(--gray-600); line-height: 2; padding-left: 20px;">
+        <li>本向导仅供参考，具体继承流程以各平台最新政策和司法机关要求为准</li>
+        <li>涉及诉讼时建议咨询专业律师</li>
+        <li>各平台用户协议不同，部分平台（如微信）明确不支持账号继承</li>
+        <li>数字遗产的法律规则仍在完善中，请关注最新司法解释</li>
+      </ul>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+import { usePlatformsStore } from '../stores/platforms';
+
+const platforms = usePlatformsStore();
+const difficultyFilter = ref('all');
+
+const filteredPlatforms = computed(() => {
+  if (difficultyFilter.value === 'all') return platforms.platforms;
+  return platforms.platforms.filter(p => p.estimated_difficulty === difficultyFilter.value);
+});
+
+onMounted(async () => {
+  if (platforms.platforms.length === 0) {
+    await platforms.loadPlatforms();
+  }
+});
+</script>
