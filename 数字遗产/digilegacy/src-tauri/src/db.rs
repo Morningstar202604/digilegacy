@@ -538,7 +538,7 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
 }
 
 /// 检查状态
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct CheckInStatus {
     pub last_check_in: Option<String>,
     pub interval_days: i64,

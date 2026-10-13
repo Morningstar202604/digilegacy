@@ -62,6 +62,7 @@
         :key="cat.key"
         :title="cat.icon + ' ' + cat.name"
         :count="cat.platforms.length"
+        :default-open="true"
       >
         <div class="platform-grid">
           <div v-for="platform in cat.platforms" :key="platform.id" class="platform-card"
@@ -157,16 +158,19 @@
       </div>
 
       <div class="card" style="text-align: center;">
-        <button class="btn btn-success btn-lg" @click="saveAllAssets">💾 保存全部资产</button>
-        <button class="btn btn-secondary btn-lg ml-12" @click="goToStep(2)">← 返回勾选</button>
-      </div>
-    </div>
+        <p v-if="saveError" class="text-muted" style="color: var(--danger); font-size: 13px; margin-bottom: 12px;">{{ saveError }}</p>
+        <button class="btn btn-success btn-lg" :disabled="saving" @click="saveAllAssets">
+          {{ saving ? '保存中...' : '💾 保存全部资产' }}
+        </button>
+        <button class="btn btn-secondary btn-lg ml-12" :disabled="saving" @click="goToStep(2)">← 返回勾选</button>
+      </div>    </div>
 
     <!-- 完成 -->
     <div v-if="currentStep === 4" class="card text-center" style="padding: 48px;">
       <div style="font-size: 56px; margin-bottom: 16px;">🎉</div>
       <h2 style="font-size: 22px; margin-bottom: 8px;">发现完成！</h2>
-      <p class="text-muted mb-24">已登记 {{ savedCount }} 个数字资产，正在为你生成继承方案...</p>
+      <p class="text-muted mb-24" v-if="savedCount > 0">已登记 {{ savedCount }} 个数字资产，正在为你生成继承方案...</p>
+      <p class="text-muted mb-24" v-else>所选平台均已在你的资产清单中，无需重复登记。</p>
       <div style="display: flex; gap: 12px; justify-content: center;">
         <router-link to="/assets" class="btn btn-primary btn-lg">查看我的资产</router-link>
         <router-link to="/report" class="btn btn-secondary btn-lg">生成继承报告</router-link>
@@ -214,26 +218,29 @@ const checkedCount = computed(() => {
 });
 
 // ── 资产大类定义（静态引导数据）──
+// 数据层实际使用 16 个分类（与 platform_data.rs 一致），向导展示层聚合为 11 个大类，
+// 每个大类映射到一个或多个数据分类，保证勾选的类别能筛出对应平台。
 interface AssetCategory {
   key: string;
   name: string;
   icon: string;
   desc: string;
+  cats: string[];
 }
 
 const assetCategories: AssetCategory[] = [
-  { key: '支付金融', name: '金融资产', icon: '💰', desc: '支付宝、微信零钱、银行/基金APP' },
-  { key: '社交通讯', name: '社交账号', icon: '💬', desc: '微信、微博、小红书、抖音、知乎' },
-  { key: '游戏', name: '游戏资产', icon: '🎮', desc: '王者、原神、Steam等游戏账号和装备' },
-  { key: '金融证券', name: '投资账户', icon: '📈', desc: '股票、基金、债券等证券账户' },
-  { key: '知识付费', name: '学习/会员', icon: '📚', desc: '付费课程、年度会员、云存储套餐' },
-  { key: '工具订阅', name: '订阅服务', icon: '🔧', desc: '各类SaaS、域名、服务器订阅' },
-  { key: '电商', name: '商业账号', icon: '🛒', desc: '淘宝/京东/拼多多店铺和账号' },
-  { key: '内容创作', name: '自媒体账号', icon: '✍️', desc: '公众号、头条、B站、YouTube频道' },
-  { key: '存储云服务', name: '云存储', icon: '☁️', desc: '百度网盘、iCloud、OneDrive等' },
-  { key: '出行住宿', name: '出行积分', icon: '✈️', desc: '航司里程、酒店积分、12306账号' },
-  { key: '生活工具', name: '生活服务', icon: '🏠', desc: '美团/饿了么余额、各类生活APP' },
-  { key: '政务服务', name: '政务社保', icon: '🏛️', desc: '社保、公积金、税务、医保账户' },
+  { key: '支付金融', name: '金融资产', icon: '💰', desc: '支付宝、微信零钱、银行/基金APP', cats: ['支付金融'] },
+  { key: '社交通讯', name: '社交账号', icon: '💬', desc: '微信、微博、小红书、抖音、知乎', cats: ['社交通讯'] },
+  { key: '游戏', name: '游戏资产', icon: '🎮', desc: '王者、原神、Steam等游戏账号和装备', cats: ['游戏'] },
+  { key: '金融证券', name: '投资账户', icon: '📈', desc: '股票、基金、债券等证券账户', cats: ['金融证券'] },
+  { key: '知识付费', name: '学习/音视频', icon: '📚', desc: '付费课程、音视频会员、云存储套餐', cats: ['知识付费', '音视频', '存储云服务'] },
+  { key: '工具订阅', name: '订阅服务', icon: '🔧', desc: '各类SaaS、域名、服务器、知识产权订阅', cats: ['工具订阅'] },
+  { key: '电商', name: '商业账号', icon: '🛒', desc: '淘宝/京东/拼多多店铺和账号', cats: ['电商'] },
+  { key: '内容创作', name: '自媒体账号', icon: '✍️', desc: '公众号、头条、B站、YouTube频道', cats: ['内容创作'] },
+  { key: '出行住宿', name: '出行积分', icon: '✈️', desc: '航司里程、酒店积分、12306账号', cats: ['出行住宿'] },
+  { key: '生活工具', name: '生活/汽车服务', icon: '🏠', desc: '美团/饿了么余额、生活APP、汽车APP', cats: ['生活工具', '生活服务'] },
+  { key: '政务服务', name: '政务社保', icon: '🏛️', desc: '社保、公积金、税务、医保账户', cats: ['政务服务'] },
+  { key: '学习与考试', name: '学习考试', icon: '🎓', desc: '学信网、公开课、在线课程平台', cats: ['学习与考试'] },
 ];
 
 const selectedCats = ref<Set<string>>(new Set());
@@ -249,7 +256,8 @@ function toggleCat(key: string) {
 // 按大类的平台列表（用于展示勾选卡片）
 const filteredPlatformCount = computed(() => {
   if (selectedCats.value.size === 0) return platforms.platforms.length;
-  return platforms.platforms.filter(p => selectedCats.value.has(p.category)).length;
+  const dataCats = new Set(assetCategories.filter(c => selectedCats.value.has(c.key)).flatMap(c => c.cats));
+  return platforms.platforms.filter(p => dataCats.has(p.category)).length;
 });
 
 interface CategoryWithPlatforms extends AssetCategory { platforms: Platform[] }
@@ -260,7 +268,7 @@ const selectedCategoriesWithPlatforms = computed((): CategoryWithPlatforms[] => 
     .filter(c => selectedCats.value.has(c.key))
     .map(c => ({
       ...c,
-      platforms: platforms.platforms.filter(p => p.category === c.key),
+      platforms: platforms.platforms.filter(p => c.cats.includes(p.category)),
     }))
     .filter(c => c.platforms.length > 0);
 });
@@ -276,15 +284,22 @@ interface AssetForm {
 }
 
 const assetForms = reactive<Record<number, AssetForm>>({});
+const saving = ref(false);
+const saveError = ref('');
 
 const platformIcons: Record<string, string> = {
   '支付金融': '💳', '社交通讯': '💬', '游戏': '🎮', '电商': '🛒',
   '金融证券': '📈', '知识付费': '📚', '工具订阅': '🔧', '出行住宿': '✈️',
   '生活工具': '🏠', '内容创作': '✍️', '存储云服务': '☁️', '政务服务': '🏛️',
+  '音视频': '🎬', '学习与考试': '🎓', '汽车服务': '🚗', '生活服务': '🍜',
 };
 
 const selectedPlatformList = computed(() =>
   platforms.platforms.filter(p => platforms.isSelected(p.id))
+);
+
+const registeredPlatformIds = computed(() =>
+  new Set(assets.assets.map(a => a.platform_id))
 );
 
 function goToStep(step: number) {
@@ -292,28 +307,45 @@ function goToStep(step: number) {
 }
 
 async function saveAllAssets() {
-  let count = 0;
-  for (const platform of selectedPlatformList.value) {
-    const form = assetForms[platform.id] || { identifier: '', category: 'mixed', value: null, disposal: 'no_action', heirName: '', heirContact: '' };
-    await assets.addAsset({
-      platform_id: platform.id,
-      account_identifier: form.identifier || '未填写',
-      account_description: platform.subtype || '',
-      category: form.category,
-      estimated_value: form.value,
-      disposal_method: form.disposal,
-      heir_name: form.heirName || undefined,
-      heir_contact: form.heirContact || undefined,
-      notes: platform.notes || '',
-    });
-    count++;
+  if (saving.value) return;
+  // 过滤掉已登记过的平台，避免重复登记
+  const pending = selectedPlatformList.value.filter(p => !registeredPlatformIds.value.has(p.id));
+  if (pending.length === 0) {
+    goToStep(4);
+    savedCount.value = 0;
+    return;
   }
-  savedCount.value = count;
-  goToStep(4);
+  saving.value = true;
+  saveError.value = '';
+  let count = 0;
+  try {
+    for (const platform of pending) {
+      const form = assetForms[platform.id] || { identifier: '', category: 'mixed', value: null, disposal: 'no_action', heirName: '', heirContact: '' };
+      await assets.addAsset({
+        platform_id: platform.id,
+        account_identifier: form.identifier || '未填写',
+        account_description: platform.subtype || '',
+        category: form.category,
+        estimated_value: form.value,
+        disposal_method: form.disposal,
+        heir_name: form.heirName || undefined,
+        heir_contact: form.heirContact || undefined,
+        notes: platform.notes || '',
+      });
+      count++;
+    }
+    savedCount.value = count;
+    platforms.clearSelection();
+    goToStep(4);
+  } catch (e) {
+    saveError.value = `部分资产保存失败（已成功 ${count} / ${pending.length} 项），请检查后重试：${String(e)}`;
+  } finally {
+    saving.value = false;
+  }
 }
 
 onMounted(async () => {
-  await platforms.loadPlatforms();
+  await Promise.all([platforms.loadPlatforms(), assets.loadAssets()]);
   // 初始化表单
   platforms.platforms.forEach(p => {
     if (!assetForms[p.id]) {

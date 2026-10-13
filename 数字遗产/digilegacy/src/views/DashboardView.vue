@@ -158,7 +158,6 @@ onMounted(async () => {
   color: white;
 }
 .btn-white { background: white; color: var(--primary); }
-.btn-ghost { background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3); }
 .stat-blue { background: var(--primary-light); }
 .stat-green { background: var(--success-light); }
 .stat-purple { background: var(--secondary-light); }

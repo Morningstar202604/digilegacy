@@ -72,7 +72,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     try {
       const res = await invoke<ApiResponse<void>>('set_user_profile', { profile });
       if (res.success) {
-        user.value = { ...profile, ...user.value };
+        user.value = { ...user.value, ...profile };
       }
       return res;
     } catch (e) {

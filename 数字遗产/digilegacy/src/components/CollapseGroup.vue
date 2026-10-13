@@ -1,18 +1,18 @@
 <template>
-  <div class="collapse-group" :class="{ open: currentOpen }">
-    <button class="collapse-head" type="button" :aria-expanded="currentOpen" @click="toggle">
+  <div class="collapse-group" :class="{ open: isOpen }">
+    <button class="collapse-head" type="button" :aria-expanded="isOpen" @click="toggle">
       <span class="collapse-chevron">▸</span>
       <span class="collapse-title">{{ title }}</span>
       <span v-if="count != null" class="collapse-count">{{ count }}</span>
     </button>
-    <div v-if="currentOpen" class="collapse-body">
+    <div v-if="isOpen" class="collapse-body">
       <slot />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps<{
   title: string;
@@ -24,18 +24,17 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
 
-const internalOpen = ref(props.defaultOpen ?? false);
+const isOpen = ref(props.modelValue ?? props.defaultOpen ?? false);
 
-const currentOpen = computed(() =>
-  props.modelValue !== undefined ? props.modelValue : internalOpen.value
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (v !== undefined) isOpen.value = v;
+  }
 );
 
 function toggle() {
-  const next = !currentOpen.value;
-  if (props.modelValue !== undefined) {
-    emit('update:modelValue', next);
-  } else {
-    internalOpen.value = next;
-  }
+  isOpen.value = !isOpen.value;
+  emit('update:modelValue', isOpen.value);
 }
 </script>

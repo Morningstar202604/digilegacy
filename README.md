@@ -21,18 +21,19 @@
 
 | # | 模块 | 说明 | 状态 |
 |---|---|---|---|
-| 1 | 数字资产发现引擎 | 基于内置 56 个中国主流平台库，引导式发现用户可能遗忘的数字资产 | MVP |
+| 1 | 数字资产发现引擎 | 基于内置 152 个中国主流平台库（16 个分类），启发式自检问卷 + 引导式发现，自动去重已登记平台 | MVP |
 | 2 | 资产分类与登记 | 财产型 / 人格型 / 混合型三维自动归类，用户确认后入库 | MVP |
 | 3 | 处置意愿设定 | 指定继承、变现分配、纪念化、授权查阅、彻底删除、捐赠、不做处理 | MVP |
-| 4 | 继承报告生成 | 汇总资产清单与处置方案，导出 HTML 报告 | MVP |
-| 5 | 安心传承（DMS） | Dead Man's Switch 三级确认链 + 定期签到 | 配置层就绪，通知链路待接 |
-| 6 | 继承人向导 | 面向继承人的平台办理导航与进度追踪 | 前端就绪 |
+| 4 | 继承报告生成 | 汇总资产清单与处置方案，导出 HTML 报告 + 继承工具包 ZIP（报告/清单/统计三件套） | MVP |
+| 5 | 安心传承（DMS） | Dead Man's Switch 三级确认链 + 定期签到，到期通知已接通：本地发件箱（离线兜底）+ 可选 SMTP 投递 | MVP |
+| 6 | 继承人向导 | 面向继承人的平台办理导航、变现/过户路径卡、常见困难解决方案 | MVP |
+| 7 | 法律模板库 | 6 类法律文书模板（遗嘱/继承声明/授权委托/宣誓书/申请/协议），预览与下载 | MVP |
 
 ## 三、技术架构
 
 ```
 Vue 3 + TypeScript + Pinia + Vue Router      前端
-        │  Tauri invoke (17 个 command)
+        │  Tauri invoke (19 个 command)
 Tauri 2 (Rust)                              桌面壳层
         │
 rusqlite (SQLite, bundled)                  本地存储
@@ -49,15 +50,15 @@ aes-gcm / rand / base64                     加密基础设施
 │   ├── 项目深度分析报告_数据来源.md   数据出处核验
 │   └── digilegacy/                  应用本体
 │       ├── src/                     Vue 前端
-│       │   ├── views/               8 个页面
+│       │   ├── views/               9 个页面
 │       │   ├── stores/              Pinia 状态
 │       │   ├── types/               类型定义
 │       │   └── assets/main.css      设计令牌与全局样式
 │       ├── src-tauri/               Rust 后端
 │       │   ├── src/
-│       │   │   ├── platform_data.rs 56 平台政策数据库
+│       │   │   ├── platform_data.rs 152 平台 / 16 分类政策数据库
 │       │   │   ├── db.rs            SQLite schema 与全部查询
-│       │   │   ├── commands.rs      17 个 Tauri command
+│       │   │   ├── commands.rs      19 个 Tauri command
 │       │   │   ├── crypto.rs        AES-256-GCM 基础设施
 │       │   │   └── models.rs        数据模型
 │       │   └── capabilities/        权限白名单
@@ -90,7 +91,7 @@ npm run tauri:build    # 打包桌面安装包
 ### 验证状态
 
 - `npx vue-tsc --noEmit` 通过
-- `npm run build` 通过（57 modules，产物 gzip 约 55 KB）
+- `npm run build` 通过（68 modules）
 
 ## 五、数据存储
 
@@ -98,7 +99,7 @@ npm run tauri:build    # 打包桌面安装包
 
 `platforms`、`digital_assets`、`user_profile`、`check_in_log`、`dms_config`
 
-首次启动时自动建表并写入 56 个平台的政策数据。
+首次启动时自动建表并写入 152 个平台的政策数据。
 
 ## 六、隐私设计
 

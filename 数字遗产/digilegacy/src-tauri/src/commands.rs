@@ -1,6 +1,7 @@
 use tauri::{command, Manager, AppHandle};
 use crate::models::*;
 use crate::db;
+use crate::db::CheckInStatus;
 use crate::platform_data::get_all_platforms as get_all_platforms_data;
 
 // ========== 平台 ==========
@@ -176,16 +177,8 @@ pub fn update_check_in() -> Result<ApiResponse<String>, String> {
 }
 
 #[command]
-pub fn get_check_in_status() -> Result<ApiResponse<serde_json::Value>, String> {
-    let status = db::get_check_in_status_db()?;
-    let json = serde_json::json!({
-        "last_check_in": status.last_check_in,
-        "interval_days": status.interval_days,
-        "dms_enabled": status.dms_enabled,
-        "next_check_in_due": status.next_check_in_due,
-        "days_until_due": status.days_until_due,
-    });
-    Ok(ApiResponse::ok(json))
+pub fn get_check_in_status() -> Result<ApiResponse<CheckInStatus>, String> {
+    db::get_check_in_status_db().map(ApiResponse::ok)
 }
 
 #[command]

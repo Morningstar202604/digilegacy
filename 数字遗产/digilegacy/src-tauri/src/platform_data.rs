@@ -588,7 +588,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
         PlatformEntry::new(147, "Gitee", "Gitee", "工具订阅", "代码托管", true, true, true,
             "死亡证明、继承材料", "联系客服申请仓库转移", "中等",
             "https://gitee.com", "30-60天", ""),
-        PlatformEntry::new(148, "语雀", "Yuque Enterprise", "工具订阅", "企业知识库", true, true, false,
+        PlatformEntry::new(148, "语雀企业版", "Yuque Enterprise", "工具订阅", "企业知识库", true, true, false,
             "由企业管理员处理", "企业数据归企业所有", "中等",
             "https://www.yuque.com", "视企业而定", ""),
 

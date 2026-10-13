@@ -75,6 +75,7 @@ export const useAssetsStore = defineStore('assets', () => {
       if (res.success) {
         await loadAssets();
       }
+      if (!res.success) throw new Error(res.message);
       return res;
     } catch (e) {
       console.error('更新资产失败:', e);
@@ -88,6 +89,7 @@ export const useAssetsStore = defineStore('assets', () => {
       if (res.success) {
         await loadAssets();
       }
+      if (!res.success) throw new Error(res.message);
       return res;
     } catch (e) {
       console.error('删除资产失败:', e);
