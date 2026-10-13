@@ -13,12 +13,12 @@
       <div class="card-title" style="font-size: 18px;">🧠 资产概览自检</div>
       <div class="card-subtitle">帮助我们记住你可能遗漏的数字资产，确保不遗漏任何重要账户</div>
       <div class="checklist" v-for="(item, idx) in checklistItems" :key="idx">
-        <input :id=" 'check-' + idx" v-model="checkedItems[idx]" :value="item.value" :checked="checkedItems[idx]"/>
+        <input :id=" 'check-' + idx" type="checkbox" v-model="checkedItems[item.value]" />
         <label :for=" 'check-' + idx" style="font-size: 14px; margin-left: 8px;">{{ item.text }}</label>
       </div>
       <div class="checklist-footer">
         已勾选 <strong>{{ checkedCount }} / {{ checklistItems.length }}</strong> 项
-        <button @click="currentStep = 1" class="btn-primary" style="margin-left: 16px;">继续 →</button>
+        <button @click="currentStep = 1" class="btn btn-primary" style="margin-left: 16px;">继续 →</button>
       </div>
     </div>
 
@@ -39,21 +39,21 @@
       </div>
     </div>
 
-    <div class="card mt-24" v-if="currentStep === 0" style="text-align: center;">
+    <div class="card mt-24" v-if="currentStep === 1" style="text-align: center;">
       <p class="text-muted mb-16">已选择 <strong>{{ selectedCats.size }}</strong> 类资产</p>
-      <button class="btn btn-primary btn-lg" :disabled="selectedCats.size === 0" @click="goToStep(1)">
+      <button class="btn btn-primary btn-lg" :disabled="selectedCats.size === 0" @click="goToStep(2)">
         下一步：勾选平台 →
       </button>
     </div>
 
     <!-- 步骤2：平台勾选 + 资产登记 -->
-    <div v-if="currentStep === 1">
+    <div v-if="currentStep === 2">
       <div class="card mb-24" style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <div class="card-title">✅ 勾选你拥有账号的每个平台</div>
           <div class="card-subtitle">已为你筛选 {{ filteredPlatformCount }} 个平台，勾选即有 <strong>{{ platforms.selectedIds.size }}</strong> 个</div>
         </div>
-        <button class="btn btn-sm btn-secondary" @click="goToStep(0)">← 返回修改类别</button>
+        <button class="btn btn-sm btn-secondary" @click="goToStep(1)">← 返回修改类别</button>
       </div>
 
       <!-- 按大类分组展示平台 -->
@@ -85,14 +85,14 @@
       </div>
 
       <div class="card" style="text-align: center;">
-        <button class="btn btn-primary btn-lg" :disabled="platforms.selectedIds.size === 0" @click="goToStep(2)">
+        <button class="btn btn-primary btn-lg" :disabled="platforms.selectedIds.size === 0" @click="goToStep(3)">
           下一步：设定资产详情 ({{ platforms.selectedIds.size }}) →
         </button>
       </div>
     </div>
 
     <!-- 步骤3：资产详情登记 -->
-    <div v-if="currentStep === 2">
+    <div v-if="currentStep === 3">
       <div class="card mb-24">
         <div class="card-title" style="font-size: 18px;">✍️ 填写每项资产的细节</div>
         <div class="card-subtitle">账号标识仅用于帮助继承人辨认，不存储密码</div>
@@ -156,12 +156,12 @@
 
       <div class="card" style="text-align: center;">
         <button class="btn btn-success btn-lg" @click="saveAllAssets">💾 保存全部资产</button>
-        <button class="btn btn-secondary btn-lg ml-12" @click="goToStep(1)">← 返回勾选</button>
+        <button class="btn btn-secondary btn-lg ml-12" @click="goToStep(2)">← 返回勾选</button>
       </div>
     </div>
 
     <!-- 完成 -->
-    <div v-if="currentStep === 3" class="card text-center" style="padding: 48px;">
+    <div v-if="currentStep === 4" class="card text-center" style="padding: 48px;">
       <div style="font-size: 56px; margin-bottom: 16px;">🎉</div>
       <h2 style="font-size: 22px; margin-bottom: 8px;">发现完成！</h2>
       <p class="text-muted mb-24">已登记 {{ savedCount }} 个数字资产，正在为你生成继承方案...</p>
@@ -174,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, watch, onMounted } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 
 import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
@@ -201,19 +201,13 @@ const checklistItems = [
   { value: 'photos_files', text: '个人照片/文件', checkedInit: true },
 ];
 
-const checkedItems: Record<string, boolean> = {};
-let checkedInit = false;
-watch(() => checkedItems, () => {
-  if (!checkedInit) {
-    checkedInit = true;
-    checklistItems.forEach(item => {
-      checkedItems[item.value] = item.checkedInit;
-    });
-  }
-}, { deep: true });
+const checkedItems = reactive<Record<string, boolean>>({});
+checklistItems.forEach(item => {
+  checkedItems[item.value] = !!item.checkedInit;
+});
 
 const checkedCount = computed(() => {
-  return Object.values(checkedItems).filter(v => v).length;
+  return checklistItems.filter(item => checkedItems[item.value]).length;
 });
 
 // ── 资产大类定义（静态引导数据）──
@@ -312,7 +306,7 @@ async function saveAllAssets() {
     count++;
   }
   savedCount.value = count;
-  goToStep(3);
+  goToStep(4);
 }
 
 onMounted(async () => {

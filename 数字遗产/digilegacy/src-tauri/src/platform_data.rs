@@ -122,7 +122,7 @@ impl PlatformEntry {
 
 /// 获取完整的平台数据库
 pub fn get_all_platforms() -> Vec<PlatformEntry> {
-    vec![
+    let mut platforms = vec![
         // ========== 支付金融类 ==========
         PlatformEntry::with_source(1, "支付宝", "Alipay", "支付金融", "移动支付", true, false, true,
             "死亡证明、继承公证书、继承人身份证；5万元以下免公证",
@@ -749,7 +749,217 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
         PlatformEntry::new(196, "理想汽车APP", "Li Auto APP", "汽车服务", "车联网", true, true, true,
             "死亡证明、继承公证书", "联系客服申请账号转移", "中等",
             "https://www.lixiang.com", "30-60天", ""),
-    ]
+    ];
+    enrich_extended(&mut platforms);
+    platforms
+}
+
+/// 为一批高价值平台补充「继承执行工具包」扩展字段：
+/// 变现/过户路径、风险提示、标签、关联法律模板。
+/// 说明：只填充稳妥、通用的描述，不杜撰具体官方链接；
+/// 未在此列出的平台保持扩展字段为空（前端会据此过滤展示）。
+fn enrich_extended(platforms: &mut [PlatformEntry]) {
+    let apply = |p: &mut PlatformEntry, monetization: &str, risk: &str, tags: &str, legal: &str| {
+        p.monetization_path = monetization.to_string();
+        p.risk_warnings = risk.to_string();
+        p.tags = tags.to_string();
+        p.legal_template_ids = legal.to_string();
+    };
+
+    for p in platforms.iter_mut() {
+        match p.name.as_str() {
+            "支付宝" => apply(
+                p,
+                "余额/余额宝资金可依法继承过户：向客服 95188 提交死亡证明+继承公证书+继承人身份证，5 万元以下通常免公证，资金划转至继承人账户。",
+                "余额宝等理财按申请时点净值结算，存在价差；大额需继承权公证。",
+                "需公证,高价值,可继承",
+                "inheritance-declaration,platform-application,will-digital",
+            ),
+            "微信支付" => apply(
+                p,
+                "微信零钱余额可走继承流程提取，向微信支付客服提交死亡证明与继承材料；零钱通理财按净值处理。",
+                "微信社交账号本身不可继承，仅余额/理财权益可处理；零钱提现绑定银行卡。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "云闪付" => apply(
+                p,
+                "银联余额按银行继承流程处理，凭死亡证明+继承公证书联系银联客服 95516 划转余额。",
+                "余额与银行卡绑定，需银行配合完成过户。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "京东支付" => apply(
+                p,
+                "京东金融余额/理财可联系客服 95118 走继承流程，提交死亡证明与继承公证书。",
+                "理财类按净值结算，需确认账户资产范围。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "抖音" => apply(
+                p,
+                "有价值的账号可申请过户/商业继承，需走平台流程；账号收益（橱窗/直播）可协商继承。",
+                "个人号过户门槛高，多为机构/企业号；粉丝与内容价值依赖账号状态。",
+                "高价值,需公证,内容资产",
+                "inheritance-declaration,platform-application,inheritance-agreement",
+            ),
+            "B站(bilibili)" => apply(
+                p,
+                "账号不可继承，创作内容（稿件、收益）需生前自行导出；商业账号可尝试申请纪念处理。",
+                "账号所有权不可转移，未备份的内容/收益将丢失（死亡循环风险）。",
+                "需备份,内容资产,死亡循环风险",
+                "will-digital,inheritance-declaration",
+            ),
+            "小红书" => apply(
+                p,
+                "高价值账号可尝试申请商业继承，个人数据需生前导出；联系客服说明继承诉求。",
+                "账号不可直接过户，未导出的笔记/数据无法取回。",
+                "需备份,内容资产",
+                "inheritance-declaration,will-digital",
+            ),
+            "快手" => apply(
+                p,
+                "平台支持账号继承，走官方流程提交死亡证明与身份关系证明，账号及权益过户给继承人。",
+                "需平台审核，处理周期较长（60-90 天）。",
+                "需公证,可继承,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "淘宝" => apply(
+                p,
+                "个人网店可过户，支付宝余额按支付宝流程继承；店铺经营权益可整体转让。",
+                "店铺与支付宝关联，过户需处理保证金/在途订单。",
+                "可过户,高价值,商业账号",
+                "inheritance-declaration,platform-application,inheritance-agreement",
+            ),
+            "京东" => apply(
+                p,
+                "京东余额与 Plus 会员权益有效期可继承，联系客服提交材料。",
+                "虚拟权益（优惠券等）多不可继承。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "拼多多" => apply(
+                p,
+                "拼多多钱包余额可申请继承，提交死亡证明与继承材料给客服。",
+                "优惠券/红包多绑定个人，通常不可继承。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "闲鱼" => apply(
+                p,
+                "闲鱼与支付宝账号绑定，随支付宝继承流程处理；在售商品需提前下架/交割。",
+                "在售订单需妥善处理，避免纠纷。",
+                "可继承,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "得物" => apply(
+                p,
+                "账户余额可申请提取，联系客服提交继承材料。",
+                "平台权益类多为消费记录，价值有限。",
+                "需公证",
+                "inheritance-declaration,platform-application",
+            ),
+            "米哈游（原神等）" => apply(
+                p,
+                "支持游戏账号继承，联系客服提交材料；游戏内资产/装备价值有限但账号可处理。",
+                "账号绑定手机号，需手机号同步过户；处理周期 30-90 天。",
+                "需公证,可继承",
+                "inheritance-declaration,platform-application",
+            ),
+            "Steam" => apply(
+                p,
+                "账号不可转移；需生前备份/导出游戏购买记录，权益随账号锁定。",
+                "无私钥/密码即永久锁定（死亡循环风险）；库存游戏资产无法变现。",
+                "需备份,死亡循环风险",
+                "will-digital,inheritance-declaration",
+            ),
+            "百度网盘" => apply(
+                p,
+                "不官方支持账号转移；需生前共享重要目录或导出备份，继承人凭备份恢复。",
+                "账号不可继承，未备份的数据将无法取回（死亡循环风险）。",
+                "需备份,死亡循环风险",
+                "will-digital,inheritance-declaration",
+            ),
+            "阿里云盘" => apply(
+                p,
+                "需身份验证+账号密码，官方不支持转移；重要数据需生前备份。",
+                "账号不可继承，未备份即丢失。",
+                "需备份,死亡循环风险",
+                "will-digital",
+            ),
+            "iCloud" => apply(
+                p,
+                "苹果数字遗产：需生前设置「遗产联系人」，凭死亡证明+继承密钥向苹果申请访问照片等数据。",
+                "未生前设置遗产联系人/密钥则无法访问。",
+                "需生前设置,高价值",
+                "will-digital,inheritance-declaration",
+            ),
+            "Google Drive" => apply(
+                p,
+                "Google「Inactive Account Manager」：生前配置后，账号不活跃期满自动向指定联系人移交或删除数据。",
+                "需生前配置，否则数据被删除后无法取回。",
+                "需生前设置,可继承",
+                "will-digital,inheritance-declaration",
+            ),
+            "东方财富" => apply(
+                p,
+                "证券账户按股票继承流程：向证券公司+中国结算（中登）提交死亡证明+继承公证书办理股权过户。",
+                "股权继承复杂、周期长（90-365 天）；市值随行情波动。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application,inheritance-agreement",
+            ),
+            "同花顺" => apply(
+                p,
+                "股票账户继承需走证券公司+中登公司流程，提交继承公证书等证券继承材料。",
+                "周期长、需多机构配合；市值波动影响继承价值。",
+                "需公证,高价值",
+                "inheritance-declaration,inheritance-agreement",
+            ),
+            "蚂蚁财富" => apply(
+                p,
+                "基金/理财产品通过支付宝体系提交继承申请，凭死亡证明+继承公证书办理。",
+                "净值按申请时点结算；需确认持仓范围。",
+                "需公证,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "招商银行APP" => apply(
+                p,
+                "银行卡及 APP 内资产按银行继承流程：凭继承公证书到银行办理余额/理财提取与过户。",
+                "需银行核实继承人身份，周期 7-30 天。",
+                "需公证,高价值,简易程序",
+                "inheritance-declaration,platform-application",
+            ),
+            "公积金" => apply(
+                p,
+                "公积金账户余额可由继承人全额提取，凭死亡证明+继承公证书向公积金中心申请，周期短（7-15 天）。",
+                "需符合提取条件并备齐材料。",
+                "高价值,简易程序",
+                "inheritance-declaration,platform-application",
+            ),
+            "比特币/加密货币钱包" => apply(
+                p,
+                "去中心化资产无法找客服：继承人凭逝者备份的私钥/助记词转移资产，无备份则永久丢失。",
+                "唯一高死亡循环风险资产——必须生前备份并妥善交接私钥/助记词。",
+                "需备份,死亡循环风险,高价值",
+                "will-digital,inheritance-declaration",
+            ),
+            "域名（阿里云万网）" => apply(
+                p,
+                "域名可申请过户，凭死亡证明+继承公证书向万网提交变更持有人。",
+                "需缴纳续费/保持备案有效；有商业价值的域名价值较高。",
+                "需公证,可过户,高价值",
+                "inheritance-declaration,platform-application",
+            ),
+            "软件著作权" => apply(
+                p,
+                "软著登记可申请继承/转让，向版权部门提交继承公证书办理权利人变更。",
+                "需确认软著权属与登记信息一致。",
+                "需公证,知识产权,高价值",
+                "inheritance-declaration,inheritance-agreement",
+            ),
+            _ => {}
+        }
+    }
 }
 
 /// 按ID获取平台

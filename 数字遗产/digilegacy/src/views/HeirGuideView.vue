@@ -254,19 +254,24 @@ onMounted(async () => {
 
 <style scoped>
 .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
   background: var(--gray-100);
   color: var(--gray-600);
-  border: none;
+  border: 1px solid var(--gray-200);
   cursor: pointer;
   transition: all 0.2s;
+  text-decoration: none;
 }
 .tab-btn:hover { background: var(--gray-200); }
 .tab-btn.active {
   background: var(--primary);
   color: white;
+  border-color: var(--primary);
 }
 </style>
