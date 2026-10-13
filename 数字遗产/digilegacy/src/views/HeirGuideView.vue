@@ -52,53 +52,74 @@
 
       <!-- Tab 1: 继承指引 (原内容) -->
       <div v-if="activeTab === 'guide'">
-        <div class="flex gap-8 mb-16">
-          <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = 'all'">全部</button>
-          <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '简单'">简单</button>
-          <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '中等'">中等</button>
-          <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '困难'">困难</button>
+        <div class="flex items-center justify-between flex-wrap gap-12 mb-16">
+          <div class="flex gap-8">
+            <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = 'all'">全部</button>
+            <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '简单'">简单</button>
+            <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '中等'">中等</button>
+            <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '困难'">困难</button>
+          </div>
+          <button class="collapse-all" @click="toggleAllGuide">{{ guideAllOpen ? '收起全部' : '展开全部' }}</button>
         </div>
 
-        <div v-for="platform in filteredPlatforms" :key="platform.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
-          <div style="padding: 12px 16px; background: var(--gray-50); display: flex; justify-content: space-between; align-items: center;">
-            <div class="flex items-center gap-8">
-              <strong>{{ platform.name }}</strong>
-              <span class="text-muted" style="font-size: 12px;">{{ platform.category }}</span>
-            </div>
-            <span class="tag" :class="{
-              'tag-success': platform.inheritable,
-              'tag-danger': !platform.inheritable
-            }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
-          </div>
-          <div style="padding: 16px;">
-            <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
-              <div>
-                <strong>所需材料：</strong>
-                <span class="text-muted">{{ platform.required_documents || '请咨询平台客服' }}</span>
+        <CollapseGroup
+          v-for="g in groupedPlatforms"
+          :key="g.key"
+          :title="g.key"
+          :count="g.platforms.length"
+          v-model="openGroups[g.key]"
+        >
+          <div v-for="platform in g.platforms" :key="platform.id" class="mb-16 minw-0" style="border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden;">
+            <div style="padding: 12px 16px; background: var(--gray-50); display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+              <div class="flex items-center gap-8 minw-0">
+                <strong class="ellipsis">{{ platform.name }}</strong>
+                <span class="text-muted" style="font-size: 12px;">{{ platform.category }}</span>
               </div>
-              <div>
-                <strong>预计耗时：</strong>
-                <span class="text-muted">{{ platform.estimated_time_days || '视具体情况' }}</span>
+              <span class="tag" :class="{
+                'tag-success': platform.inheritable,
+                'tag-danger': !platform.inheritable
+              }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+            </div>
+            <div style="padding: 16px;">
+              <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
+                <div>
+                  <strong>所需材料：</strong>
+                  <span class="text-muted">{{ platform.required_documents || '请咨询平台客服' }}</span>
+                </div>
+                <div>
+                  <strong>预计耗时：</strong>
+                  <span class="text-muted">{{ platform.estimated_time_days || '视具体情况' }}</span>
+                </div>
+              </div>
+              <div class="mt-12">
+                <strong style="font-size: 13px;">操作流程：</strong>
+                <p class="text-muted clamp-3" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+                  {{ platform.process_description || '暂无详细指引' }}
+                </p>
               </div>
             </div>
-            <div class="mt-12">
-              <strong style="font-size: 13px;">操作流程：</strong>
-              <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
-                {{ platform.process_description || '暂无详细指引' }}
-              </p>
-            </div>
           </div>
-        </div>
+        </CollapseGroup>
       </div>
 
       <!-- Tab 2: 变现/过户路径卡 (新增) -->
       <div v-if="activeTab === 'monetization'">
-        <div class="flex gap-8 mb-16 flex-wrap">
-          <button class="btn btn-sm" :class="categoryFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = 'all'">全部</button>
-          <button class="btn btn-sm" v-for="cat in categories" :key="cat" :class="categoryFilter === cat ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = cat">{{ cat }}</button>
+        <div class="flex items-center justify-between flex-wrap gap-12 mb-8">
+          <div class="flex gap-8 flex-wrap">
+            <button class="btn btn-sm" :class="categoryFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = 'all'">全部</button>
+            <button class="btn btn-sm" v-for="cat in categories" :key="cat" :class="categoryFilter === cat ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = cat">{{ cat }}</button>
+          </div>
+          <button class="collapse-all" @click="toggleAllExt">{{ extAllOpen ? '收起全部' : '展开全部' }}</button>
         </div>
 
-        <div v-for="platform in filteredExtendedPlatforms" :key="platform.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
+        <CollapseGroup
+          v-for="g in groupedExtended"
+          :key="g.key"
+          :title="g.key"
+          :count="g.platforms.length"
+          v-model="openExtGroups[g.key]"
+        >
+          <div v-for="platform in g.platforms" :key="platform.id" class="mb-16 minw-0" style="border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden;">
           <div style="padding: 12px 16px; background: linear-gradient(135deg, var(--primary-light) 0%, var(--secondary-light) 100%); display: flex; justify-content: space-between; align-items: center;">
             <div class="flex items-center gap-8">
               <strong>{{ platform.name }}</strong>
@@ -162,6 +183,7 @@
             </div>
           </div>
         </div>
+        </CollapseGroup>
 
         <div v-if="filteredExtendedPlatforms.length === 0" class="text-center text-muted py-32">
           暂无该分类下的变现/过户路径数据
@@ -211,8 +233,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, reactive, onMounted, watch } from 'vue';
 import { usePlatformsStore } from '../stores/platforms';
+import CollapseGroup from '../components/CollapseGroup.vue';
 import type { PlatformExtended } from '../types';
 
 const platforms = usePlatformsStore();
@@ -238,6 +261,46 @@ const filteredExtendedPlatforms = computed((): PlatformExtended[] => {
   }
   return list.filter(p => p.monetization_path || p.inheritance_form_url || p.risk_warnings || p.legal_template_ids || p.tags);
 });
+
+// ── 按类别分组 + 折叠 ──
+const openGroups = reactive<Record<string, boolean>>({});
+const openExtGroups = reactive<Record<string, boolean>>({});
+
+function groupByCategory<T extends { id: number; category: string }>(list: T[]) {
+  const groups: { key: string; platforms: T[] }[] = [];
+  for (const p of list) {
+    let g = groups.find(x => x.key === p.category);
+    if (!g) {
+      g = { key: p.category, platforms: [] };
+      groups.push(g);
+    }
+    g.platforms.push(p);
+  }
+  return groups;
+}
+
+const groupedPlatforms = computed(() => groupByCategory(filteredPlatforms.value));
+const groupedExtended = computed(() => groupByCategory(filteredExtendedPlatforms.value));
+
+const guideAllOpen = computed(
+  () => groupedPlatforms.value.length > 0 && groupedPlatforms.value.every(g => openGroups[g.key])
+);
+const extAllOpen = computed(
+  () => groupedExtended.value.length > 0 && groupedExtended.value.every(g => openExtGroups[g.key])
+);
+
+function toggleAllGuide() {
+  const open = !guideAllOpen.value;
+  groupedPlatforms.value.forEach(g => {
+    openGroups[g.key] = open;
+  });
+}
+function toggleAllExt() {
+  const open = !extAllOpen.value;
+  groupedExtended.value.forEach(g => {
+    openExtGroups[g.key] = open;
+  });
+}
 
 watch(() => activeTab.value, async (newTab) => {
   if (newTab === 'monetization' && platforms.platformsExtended.length === 0) {

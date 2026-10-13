@@ -153,14 +153,14 @@ onMounted(async () => {
 
 <style scoped>
 .hero-card {
-  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #8a4534 0%, #c56a58 100%);
   border: none;
   color: white;
 }
 .btn-white { background: white; color: var(--primary); }
-.btn-ghost { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); }
-.stat-blue { background: #dbeafe; }
-.stat-green { background: #d1fae5; }
-.stat-purple { background: #ede9fe; }
-.stat-yellow { background: #fef3c7; }
+.btn-ghost { background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3); }
+.stat-blue { background: var(--primary-light); }
+.stat-green { background: var(--success-light); }
+.stat-purple { background: var(--secondary-light); }
+.stat-yellow { background: var(--warning-light); }
 </style>

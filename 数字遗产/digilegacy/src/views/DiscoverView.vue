@@ -56,18 +56,21 @@
         <button class="btn btn-sm btn-secondary" @click="goToStep(1)">← 返回修改类别</button>
       </div>
 
-      <!-- 按大类分组展示平台 -->
-      <div v-for="cat in selectedCategoriesWithPlatforms" :key="cat.key" class="mb-32">
-        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--gray-600);">
-          {{ cat.icon }} {{ cat.name }} ({{ cat.platforms.length }})
-        </h3>
+      <!-- 按大类分组展示平台（可折叠，默认展开） -->
+      <CollapseGroup
+        v-for="cat in selectedCategoriesWithPlatforms"
+        :key="cat.key"
+        :title="cat.icon + ' ' + cat.name"
+        :count="cat.platforms.length"
+        default-open
+      >
         <div class="platform-grid">
           <div v-for="platform in cat.platforms" :key="platform.id" class="platform-card"
                :class="{ selected: platforms.isSelected(platform.id) }"
                @click="platforms.toggle(platform.id)">
             <div class="platform-card-header">
-              <div>
-                <div class="platform-name">{{ platform.name }}</div>
+              <div class="minw-0">
+                <div class="platform-name ellipsis">{{ platform.name }}</div>
                 <div class="platform-type">{{ platform.subtype }}</div>
               </div>
               <div class="platform-check">{{ platforms.isSelected(platform.id) ? '✓' : '+' }}</div>
@@ -79,10 +82,10 @@
               <span class="tag tag-warning" v-if="platform.has_property">有财产价值</span>
               <span class="tag tag-personality" v-if="platform.has_personality">有人格价值</span>
             </div>
-            <div class="platform-process"><strong>继承指引：</strong>{{ platform.process_description }}</div>
+            <div class="platform-process clamp-3"><strong>继承指引：</strong>{{ platform.process_description }}</div>
           </div>
         </div>
-      </div>
+      </CollapseGroup>
 
       <div class="card" style="text-align: center;">
         <button class="btn btn-primary btn-lg" :disabled="platforms.selectedIds.size === 0" @click="goToStep(3)">
@@ -178,6 +181,7 @@ import { ref, computed, reactive, onMounted } from 'vue';
 
 import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
+import CollapseGroup from '../components/CollapseGroup.vue';
 import type { Platform } from '../types';
 
 const platforms = usePlatformsStore();

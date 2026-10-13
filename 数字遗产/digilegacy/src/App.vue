@@ -4,10 +4,20 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
-          <span>归</span>
-          <div>
-            <div>归零</div>
-            <div class="sidebar-subtitle">DigiLegacy</div>
+          <svg class="logo-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#digilegacy-logo)"/>
+            <circle cx="20" cy="20" r="9.5" stroke="#fff" stroke-width="2.2" opacity="0.95"/>
+            <circle cx="20" cy="20" r="3.2" fill="#fff"/>
+            <defs>
+              <linearGradient id="digilegacy-logo" x1="1" y1="1" x2="39" y2="39" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#c56a58"/>
+                <stop offset="1" stop-color="#9a473b"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="logo-wordmark">
+            <span class="logo-name">归零</span>
+            <span class="logo-sub">DigiLegacy</span>
           </div>
         </div>
       </div>
@@ -42,11 +52,13 @@
       </header>
       
       <main class="main-content">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
+        <div class="content-wrap">
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </div>
       </main>
     </div>
   </div>
