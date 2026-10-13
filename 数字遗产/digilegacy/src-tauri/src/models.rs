@@ -74,7 +74,7 @@ pub fn validate_disposal(method: &str) -> Result<String, String> {
 // 数据传输对象（DTO）
 // ──────────────────────────────────────────────
 
-/// 平台信息
+/// 平台信息（基础版，用于数据库存储与常规查询）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Platform {
     pub id: i64,
@@ -90,6 +90,20 @@ pub struct Platform {
     pub official_policy_url: String,
     pub estimated_time_days: String,
     pub notes: String,
+}
+
+/// 平台扩展信息（包含继承执行工具包所需字段）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PlatformExtended {
+    #[serde(flatten)]
+    pub base: Platform,
+    pub name_en: String,
+    pub data_source: String,
+    pub inheritance_form_url: String,
+    pub monetization_path: String,
+    pub legal_template_ids: String,
+    pub risk_warnings: String,
+    pub tags: String,
 }
 
 /// 数字资产

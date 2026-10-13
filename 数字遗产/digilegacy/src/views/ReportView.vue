@@ -83,13 +83,14 @@
       </div>
     </div>
 
-    <div class="mt-24 text-center">
-      <button class="btn btn-primary btn-lg" @click="exportReport">📥 导出报告到文件</button>
-      <button class="btn btn-secondary btn-lg ml-12" @click="handlePrint">🖨 打印</button>
-    </div>
-
     <div v-if="exportPath" class="card mt-24 tag-success" style="background: var(--success-light); border-color: var(--success);">
       报告已保存到：{{ exportPath }}
+    </div>
+
+    <div class="mt-24 text-center">
+      <button class="btn btn-primary btn-lg" @click="exportReport">📥 导出报告到文件</button>
+      <button class="btn btn-secondary btn-lg ml-12" @click="exportZip">📦 导出继承工具包 ZIP</button>
+      <button class="btn btn-secondary btn-lg ml-12" @click="handlePrint">🖨 打印</button>
     </div>
   </div>
 </template>
@@ -97,6 +98,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+
+import * as JSZip from 'jszip';
 
 import { usePlatformsStore } from '../stores/platforms';
 import type { ApiResponse, DigitalAsset } from '../types';
@@ -166,6 +169,40 @@ async function exportReport() {
   } catch (e) { console.error(e); }
 }
 
+async function exportZip() {
+  if (!report.value) return;
+  // @ts-ignore - jszip 需要 new 实例
+  const j = new (await import('jszip').then(m => m.default || m));
+  // @ts-ignore - 避免类型推断问题
+  const zip: any = j;
+  // 添加报告 HTML
+  const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
+  zip.file('继承报告.html', htmlContent);
+  // 添加资产清单 JSON
+  zip.file('资产清单.json', JSON.stringify(report.value.assets, null, 2));
+  // 添加统计摘要 JSON
+  zip.file('统计摘要.json', JSON.stringify({
+    total_assets: report.value.assets.length,
+    property_assets: report.value.property_assets_count,
+    personality_assets: report.value.personality_assets_count,
+    total_value: report.value.total_estimated_value,
+    generated_at: report.value.generated_at,
+  }, null, 2));
+  // 生成 ZIP 字节流
+  const content = await zip.generateAsync({ type: 'uint8array' });
+  // 转为 base64
+  const base64 = btoa(
+    Array.from(new Uint8Array(content))
+      .map(b => String.fromCharCode(b))
+      .join('')
+  );
+  // 通过 Tauri 命令保存文件
+  const res = await invoke<ApiResponse<string>>('export_zip_to_file', { content: base64 });
+  if (res.success && res.data) {
+    exportPath.value = res.data;
+  }
+}
+
 function handlePrint() { window.print(); }
 
 onMounted(async () => {
@@ -173,3 +210,9 @@ onMounted(async () => {
   await loadReport();
 });
 </script>
+
+<style scoped>
+.report-page { max-width: 800px; margin: 0 auto; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 16px 0; }
+.stats-grid .text-center { padding: 12px; border: 1px solid var(--gray-200); border-radius: 8px; }
+</style>

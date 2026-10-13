@@ -75,6 +75,7 @@ const navRoutes: NavRoute[] = [
   { path: '/dms', title: '安心传承', icon: '⏰' },
   { path: '/report', title: '继承报告', icon: '📄' },
   { path: '/heir', title: '继承人向导', icon: '👥' },
+  { path: '/legal', title: '法律模板', icon: '📜' },
 ];
 
 const currentRoute = computed(() => route.path);

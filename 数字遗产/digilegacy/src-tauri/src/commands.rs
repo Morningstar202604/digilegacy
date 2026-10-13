@@ -1,12 +1,45 @@
 use tauri::{command, Manager, AppHandle};
 use crate::models::*;
 use crate::db;
+use crate::platform_data::get_all_platforms as get_all_platforms_data;
 
 // ========== 平台 ==========
 
 #[command]
 pub fn get_all_platforms() -> Result<ApiResponse<Vec<Platform>>, String> {
     db::get_all_platforms_db().map(ApiResponse::ok)
+}
+
+#[command]
+pub fn get_all_platforms_extended() -> Result<ApiResponse<Vec<PlatformExtended>>, String> {
+    let platforms = get_all_platforms_data()
+        .into_iter()
+        .map(|p| PlatformExtended {
+            base: Platform {
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                subtype: p.subtype,
+                has_property: p.has_property,
+                has_personality: p.has_personality,
+                inheritable: p.inheritable,
+                required_documents: p.required_documents,
+                process_description: p.process_description,
+                estimated_difficulty: p.estimated_difficulty,
+                official_policy_url: p.official_policy_url,
+                estimated_time_days: p.estimated_time_days,
+                notes: p.notes,
+            },
+            name_en: p.name_en,
+            data_source: p.data_source,
+            inheritance_form_url: p.inheritance_form_url,
+            monetization_path: p.monetization_path,
+            legal_template_ids: p.legal_template_ids,
+            risk_warnings: p.risk_warnings,
+            tags: p.tags,
+        })
+        .collect();
+    Ok(ApiResponse::ok(platforms))
 }
 
 // ========== 数字资产 ==========
@@ -110,6 +143,26 @@ pub fn export_report_to_file(app_handle: AppHandle, content: String) -> Result<A
     Ok(ApiResponse::ok_with_msg(
         file_path.to_string_lossy().to_string(),
         "报告已导出到应用数据目录"
+    ))
+}
+
+// ========== ZIP 工具包导出 ==========
+
+#[command]
+pub fn export_zip_to_file(content: String, app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
+    use base64::{Engine, engine::general_purpose::STANDARD as base64};
+    let decoded = base64.decode(&content).map_err(|e| format!("Base64解码失败: {}", e))?;
+    let app_dir = app_handle.path().app_data_dir()
+        .map_err(|e| format!("获取目录失败: {}", e))?;
+    
+    std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建目录失败: {}", e))?;
+    
+    let zip_path = app_dir.join("继承工具包.zip");
+    std::fs::write(&zip_path, &decoded).map_err(|e| format!("写入ZIP失败: {}", e))?;
+    
+    Ok(ApiResponse::ok_with_msg(
+        zip_path.to_string_lossy().to_string(),
+        "继承工具包已导出"
     ))
 }
 

@@ -16,6 +16,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_all_platforms,
+            commands::get_all_platforms_extended,
             commands::add_asset,
             commands::update_asset,
             commands::delete_asset,
@@ -27,6 +28,7 @@ pub fn run() {
             commands::get_user_profile,
             commands::get_inheritance_report,
             commands::export_report_to_file,
+            commands::export_zip_to_file,
             commands::update_check_in,
             commands::get_check_in_status,
             commands::set_dead_mans_switch,

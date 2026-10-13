@@ -16,6 +16,16 @@ export interface Platform {
   notes: string;
 }
 
+export interface PlatformExtended extends Platform {
+  name_en: string;
+  data_source: string;
+  inheritance_form_url: string;
+  monetization_path: string;
+  legal_template_ids: string;
+  risk_warnings: string;
+  tags: string;
+}
+
 export interface DigitalAsset {
   id?: number;
   platform_id: number;

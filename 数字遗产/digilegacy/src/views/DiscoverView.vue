@@ -8,13 +8,27 @@
       </div>
     </div>
 
-    <!-- 步骤1：资产大类选择 -->
+    <!-- 步骤0：启发式自检问卷 -->
     <div class="card mb-32" v-if="currentStep === 0">
+      <div class="card-title" style="font-size: 18px;">🧠 资产概览自检</div>
+      <div class="card-subtitle">帮助我们记住你可能遗漏的数字资产，确保不遗漏任何重要账户</div>
+      <div class="checklist" v-for="(item, idx) in checklistItems" :key="idx">
+        <input :id=" 'check-' + idx" v-model="checkedItems[idx]" :value="item.value" :checked="checkedItems[idx]"/>
+        <label :for=" 'check-' + idx" style="font-size: 14px; margin-left: 8px;">{{ item.text }}</label>
+      </div>
+      <div class="checklist-footer">
+        已勾选 <strong>{{ checkedCount }} / {{ checklistItems.length }}</strong> 项
+        <button @click="currentStep = 1" class="btn-primary" style="margin-left: 16px;">继续 →</button>
+      </div>
+    </div>
+
+    <!-- 步骤1：资产大类选择 -->
+    <div class="card mb-32" v-if="currentStep === 1">
       <div class="card-title" style="font-size: 18px;">🗂️ 你拥有哪些类型的数字资产？</div>
       <div class="card-subtitle">选择你拥有的资产类型，我们会为你展示对应的平台清单</div>
     </div>
 
-    <div class="category-grid" v-if="currentStep === 0">
+    <div class="category-grid" v-if="currentStep === 1">
       <div v-for="cat in assetCategories" :key="cat.key" 
            class="category-card" :class="{ selected: selectedCats.has(cat.key) }"
            @click="toggleCat(cat.key)">
@@ -160,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, watch, onMounted } from 'vue';
 
 import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
@@ -169,9 +183,38 @@ import type { Platform } from '../types';
 const platforms = usePlatformsStore();
 const assets = useAssetsStore();
 
-const steps = ['选择类别', '勾选平台', '资产详情', '完成'];
+const steps = ['启发式自检问卷', '资产类型选择', '勾选平台', '资产详情', '完成'];
 const currentStep = ref(0);
 const savedCount = ref(0);
+
+// ── 启发式自检问卷项 ──
+const checklistItems = [
+  { value: 'bank', text: '银行账户', checkedInit: true },
+  { value: 'credit_card', text: '信用卡/借记卡', checkedInit: true },
+  { value: 'crypto_wallet', text: '加密货币钱包', checkedInit: false },
+  { value: 'social_media', text: '社交媒体账号', checkedInit: true },
+  { value: 'email', text: '电子邮箱账号', checkedInit: true },
+  { value: 'gaming', text: '游戏平台账号', checkedInit: true },
+  { value: 'cloud_storage', text: '云存储服务', checkedInit: true },
+  { value: 'domain_website', text: '域名/个人网站', checkedInit: false },
+  { value: 'digital_subscriptions', text: '数字订阅服务', checkedInit: false },
+  { value: 'photos_files', text: '个人照片/文件', checkedInit: true },
+];
+
+const checkedItems: Record<string, boolean> = {};
+let checkedInit = false;
+watch(() => checkedItems, () => {
+  if (!checkedInit) {
+    checkedInit = true;
+    checklistItems.forEach(item => {
+      checkedItems[item.value] = item.checkedInit;
+    });
+  }
+}, { deep: true });
+
+const checkedCount = computed(() => {
+  return Object.values(checkedItems).filter(v => v).length;
+});
 
 // ── 资产大类定义（静态引导数据）──
 interface AssetCategory {

@@ -2,10 +2,11 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-import type { Platform, ApiResponse } from '../types';
+import type { Platform, PlatformExtended, ApiResponse } from '../types';
 
 export const usePlatformsStore = defineStore('platforms', () => {
   const platforms = ref<Platform[]>([]);
+  const platformsExtended = ref<PlatformExtended[]>([]);
   const loading = ref(false);
   const selectedIds = ref<Set<number>>(new Set());
   const loaded = ref(false);
@@ -24,6 +25,21 @@ export const usePlatformsStore = defineStore('platforms', () => {
     } finally {
       loading.value = false;
     }
+  }
+
+  async function loadPlatformsExtended() {
+    try {
+      const res = await invoke<ApiResponse<PlatformExtended[]>>('get_all_platforms_extended');
+      if (res.success && res.data) {
+        platformsExtended.value = res.data;
+      }
+    } catch (e) {
+      console.error('加载扩展平台数据失败:', e);
+    }
+  }
+
+  function getExtendedById(id: number): PlatformExtended | undefined {
+    return platformsExtended.value.find(p => p.id === id);
   }
 
   function toggle(id: number) {
@@ -46,5 +62,5 @@ export const usePlatformsStore = defineStore('platforms', () => {
     selectedIds.value.clear();
   }
 
-  return { platforms, loading, selectedIds, loaded, loadPlatforms, toggle, isSelected, getById, clearSelection };
+  return { platforms, platformsExtended, loading, selectedIds, loaded, loadPlatforms, loadPlatformsExtended, toggle, isSelected, getById, getExtendedById, clearSelection };
 });

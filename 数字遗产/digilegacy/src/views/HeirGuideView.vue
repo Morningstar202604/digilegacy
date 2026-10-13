@@ -41,46 +41,130 @@
       </div>
     </div>
 
-    <!-- 按平台分类的操作指南 -->
+    <!-- Tab 切换 -->
     <div class="card mb-24">
-      <div class="card-title mb-16">📋 各平台继承指引（按难度排序）</div>
-      
-      <!-- 筛选 -->
-      <div class="flex gap-8 mb-16">
-        <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = 'all'">全部</button>
-        <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '简单'">简单</button>
-        <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '中等'">中等</button>
-        <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '困难'">困难</button>
+      <div class="card-title mb-16">
+        <div class="flex gap-4">
+          <button class="tab-btn" :class="{ active: activeTab === 'guide' }" @click="activeTab = 'guide'">📋 继承指引</button>
+          <button class="tab-btn" :class="{ active: activeTab === 'monetization' }" @click="activeTab = 'monetization'">💰 变现/过户路径卡</button>
+        </div>
       </div>
 
-      <div v-for="platform in filteredPlatforms" :key="platform.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
-        <div style="padding: 12px 16px; background: var(--gray-50); display: flex; justify-content: space-between; align-items: center;">
-          <div class="flex items-center gap-8">
-            <strong>{{ platform.name }}</strong>
-            <span class="text-muted" style="font-size: 12px;">{{ platform.category }}</span>
-          </div>
-          <span class="tag" :class="{
-            'tag-success': platform.inheritable,
-            'tag-danger': !platform.inheritable
-          }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+      <!-- Tab 1: 继承指引 (原内容) -->
+      <div v-if="activeTab === 'guide'">
+        <div class="flex gap-8 mb-16">
+          <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = 'all'">全部</button>
+          <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '简单'">简单</button>
+          <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '中等'">中等</button>
+          <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '困难'">困难</button>
         </div>
-        <div style="padding: 16px;">
-          <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
-            <div>
-              <strong>所需材料：</strong>
-              <span class="text-muted">{{ platform.required_documents || '请咨询平台客服' }}</span>
+
+        <div v-for="platform in filteredPlatforms" :key="platform.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
+          <div style="padding: 12px 16px; background: var(--gray-50); display: flex; justify-content: space-between; align-items: center;">
+            <div class="flex items-center gap-8">
+              <strong>{{ platform.name }}</strong>
+              <span class="text-muted" style="font-size: 12px;">{{ platform.category }}</span>
             </div>
-            <div>
-              <strong>预计耗时：</strong>
-              <span class="text-muted">{{ platform.estimated_time_days || '视具体情况' }}</span>
+            <span class="tag" :class="{
+              'tag-success': platform.inheritable,
+              'tag-danger': !platform.inheritable
+            }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+          </div>
+          <div style="padding: 16px;">
+            <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
+              <div>
+                <strong>所需材料：</strong>
+                <span class="text-muted">{{ platform.required_documents || '请咨询平台客服' }}</span>
+              </div>
+              <div>
+                <strong>预计耗时：</strong>
+                <span class="text-muted">{{ platform.estimated_time_days || '视具体情况' }}</span>
+              </div>
+            </div>
+            <div class="mt-12">
+              <strong style="font-size: 13px;">操作流程：</strong>
+              <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+                {{ platform.process_description || '暂无详细指引' }}
+              </p>
             </div>
           </div>
-          <div class="mt-12">
-            <strong style="font-size: 13px;">操作流程：</strong>
-            <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
-              {{ platform.process_description || '暂无详细指引' }}
-            </p>
+        </div>
+      </div>
+
+      <!-- Tab 2: 变现/过户路径卡 (新增) -->
+      <div v-if="activeTab === 'monetization'">
+        <div class="flex gap-8 mb-16 flex-wrap">
+          <button class="btn btn-sm" :class="categoryFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = 'all'">全部</button>
+          <button class="btn btn-sm" v-for="cat in categories" :key="cat" :class="categoryFilter === cat ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = cat">{{ cat }}</button>
+        </div>
+
+        <div v-for="platform in filteredExtendedPlatforms" :key="platform.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
+          <div style="padding: 12px 16px; background: linear-gradient(135deg, var(--primary-light) 0%, var(--secondary-light) 100%); display: flex; justify-content: space-between; align-items: center;">
+            <div class="flex items-center gap-8">
+              <strong>{{ platform.name }}</strong>
+              <span class="text-muted" style="font-size: 12px;">{{ platform.category }}</span>
+            </div>
+            <div class="flex gap-8">
+              <span class="tag" :class="{
+                'tag-success': platform.inheritable,
+                'tag-danger': !platform.inheritable
+              }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+              <span v-if="platform.monetization_path" class="tag tag-warning">有变现路径</span>
+            </div>
           </div>
+          <div style="padding: 16px;">
+            <!-- 变现/过户路径卡 -->
+            <div v-if="platform.monetization_path" class="mb-16 p-12" style="background: var(--gray-50); border-radius: 8px; border-left: 3px solid var(--success);">
+              <div style="font-size: 13px; color: var(--gray-700); line-height: 1.6;">
+                {{ platform.monetization_path }}
+              </div>
+            </div>
+
+            <!-- 继承申请表链接 -->
+            <div v-if="platform.inheritance_form_url" class="mb-12 p-12" style="background: var(--primary-light); border-radius: 8px;">
+              <strong style="font-size: 13px;">📄 官方继承申请表：</strong>
+              <a :href="platform.inheritance_form_url" target="_blank" style="margin-left: 8px; color: var(--primary); font-size: 13px; text-decoration: underline;">{{ platform.inheritance_form_url }}</a>
+            </div>
+
+            <!-- 风险提示 -->
+            <div v-if="platform.risk_warnings" class="mb-12 p-12" style="background: #fef3c7; border-radius: 8px; border-left: 3px solid #f59e0b;">
+              <strong style="font-size: 13px; color: #b45309;">⚠️ 风险提示：</strong>
+              <p class="text-muted" style="font-size: 13px; margin-top: 4px; color: #b45309;">{{ platform.risk_warnings }}</p>
+            </div>
+
+            <!-- 关联法律模板 -->
+            <div v-if="platform.legal_template_ids" class="mb-12 p-12" style="background: var(--gray-50); border-radius: 8px;">
+              <strong style="font-size: 13px;">📋 关联法律文书模板：</strong>
+              <span class="text-muted" style="font-size: 12px; margin-left: 8px;">{{ platform.legal_template_ids }}</span>
+            </div>
+
+            <!-- 标签 -->
+            <div v-if="platform.tags" class="mb-12" style="display: flex; flex-wrap: wrap; gap: 6px;">
+              <span v-for="tag in platform.tags.split(',')" :key="tag" class="tag tag-secondary" style="font-size: 11px;">{{ tag.trim() }}</span>
+            </div>
+
+            <!-- 基础信息 -->
+            <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
+              <div>
+                <strong>所需材料：</strong>
+                <span class="text-muted">{{ platform.required_documents || '请咨询平台客服' }}</span>
+              </div>
+              <div>
+                <strong>预计耗时：</strong>
+                <span class="text-muted">{{ platform.estimated_time_days || '视具体情况' }}</span>
+              </div>
+            </div>
+            <div class="mt-12">
+              <strong style="font-size: 13px;">操作流程：</strong>
+              <p class="text-muted" style="font-size: 13px; margin-top: 4px; line-height: 1.5;">
+                {{ platform.process_description || '暂无详细指引' }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="filteredExtendedPlatforms.length === 0" class="text-center text-muted py-32">
+          暂无该分类下的变现/过户路径数据
         </div>
       </div>
     </div>
@@ -127,15 +211,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { usePlatformsStore } from '../stores/platforms';
+import type { PlatformExtended } from '../types';
 
 const platforms = usePlatformsStore();
+const activeTab = ref<'guide' | 'monetization'>('guide');
 const difficultyFilter = ref('all');
+const categoryFilter = ref('all');
 
 const filteredPlatforms = computed(() => {
   if (difficultyFilter.value === 'all') return platforms.platforms;
   return platforms.platforms.filter(p => p.estimated_difficulty === difficultyFilter.value);
+});
+
+const categories = computed(() => {
+  const cats = new Set<string>();
+  platforms.platformsExtended.forEach(p => cats.add(p.category));
+  return Array.from(cats).sort();
+});
+
+const filteredExtendedPlatforms = computed((): PlatformExtended[] => {
+  let list = platforms.platformsExtended;
+  if (categoryFilter.value !== 'all') {
+    list = list.filter(p => p.category === categoryFilter.value);
+  }
+  return list.filter(p => p.monetization_path || p.inheritance_form_url || p.risk_warnings || p.legal_template_ids || p.tags);
+});
+
+watch(() => activeTab.value, async (newTab) => {
+  if (newTab === 'monetization' && platforms.platformsExtended.length === 0) {
+    await platforms.loadPlatformsExtended();
+  }
 });
 
 onMounted(async () => {
@@ -144,3 +251,22 @@ onMounted(async () => {
   }
 });
 </script>
+
+<style scoped>
+.tab-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab-btn:hover { background: var(--gray-200); }
+.tab-btn.active {
+  background: var(--primary);
+  color: white;
+}
+</style>

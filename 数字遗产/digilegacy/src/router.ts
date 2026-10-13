@@ -55,6 +55,12 @@ const router = createRouter({
       component: () => import('./views/HeirGuideView.vue'),
       meta: { title: '继承人向导', icon: '👥' }
     },
+    {
+      path: '/legal',
+      name: 'LegalTemplates',
+      component: () => import('./views/LegalTemplates.vue'),
+      meta: { title: '法律模板', icon: '📜' }
+    },
   ]
 });
 
