@@ -41,3 +41,7 @@ yarn-error.log*
 pnpm-debug.log*
 # ---- ZCode 工具本地缓存 ----
 .v2c/
+
+# ---- 参赛材料（仅存本地，不入仓库） ----
+参赛材料/
+.research_tmp/
