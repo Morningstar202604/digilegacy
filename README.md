@@ -23,6 +23,8 @@
 |---|---|
 | ![仪表板](数字遗产/digilegacy/screenshots/01-dashboard.png) | ![资产发现](数字遗产/digilegacy/screenshots/02-discover.png) |
 | *仪表板* | *资产发现* |
+| ![我的资产](数字遗产/digilegacy/screenshots/03-assets.png) | ![我的档案](数字遗产/digilegacy/screenshots/04-profile.png) |
+| *我的资产* | *我的档案* |
 | ![安心传承](数字遗产/digilegacy/screenshots/05-dms.png) | ![继承报告](数字遗产/digilegacy/screenshots/08-report.png) |
 | *安心传承（DMS）* | *继承报告* |
 | ![继承人向导](数字遗产/digilegacy/screenshots/06-heir-guide.png) | ![法律模板](数字遗产/digilegacy/screenshots/07-legal.png) |
