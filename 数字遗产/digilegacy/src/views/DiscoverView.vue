@@ -62,7 +62,6 @@
         :key="cat.key"
         :title="cat.icon + ' ' + cat.name"
         :count="cat.platforms.length"
-        default-open
       >
         <div class="platform-grid">
           <div v-for="platform in cat.platforms" :key="platform.id" class="platform-card"

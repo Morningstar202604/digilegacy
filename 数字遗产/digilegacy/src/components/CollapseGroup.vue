@@ -1,11 +1,11 @@
 <template>
-  <div class="collapse-group" :class="{ open }">
-    <button class="collapse-head" type="button" :aria-expanded="open" @click="open = !open">
+  <div class="collapse-group" :class="{ open: currentOpen }">
+    <button class="collapse-head" type="button" :aria-expanded="currentOpen" @click="toggle">
       <span class="collapse-chevron">▸</span>
       <span class="collapse-title">{{ title }}</span>
       <span v-if="count != null" class="collapse-count">{{ count }}</span>
     </button>
-    <div v-if="open" class="collapse-body">
+    <div v-if="currentOpen" class="collapse-body">
       <slot />
     </div>
   </div>
@@ -25,11 +25,17 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
 
 const internalOpen = ref(props.defaultOpen ?? false);
-const open = computed({
-  get: () => (props.modelValue !== undefined ? props.modelValue : internalOpen.value),
-  set: (v: boolean) => {
-    if (props.modelValue !== undefined) emit('update:modelValue', v);
-    else internalOpen.value = v;
-  },
-});
+
+const currentOpen = computed(() =>
+  props.modelValue !== undefined ? props.modelValue : internalOpen.value
+);
+
+function toggle() {
+  const next = !currentOpen.value;
+  if (props.modelValue !== undefined) {
+    emit('update:modelValue', next);
+  } else {
+    internalOpen.value = next;
+  }
+}
 </script>
