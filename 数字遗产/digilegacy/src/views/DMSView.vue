@@ -127,12 +127,23 @@ const statusIcon = computed(() => ({ ok: '✅', warning: '⚠️', overdue: '�
 const statusTitle = computed(() => ({
   ok: '一切安好', warning: '即将需要确认', overdue: '已超过检查时间', disabled: 'Dead Man\'s Switch 未启用',
 }[dmsState.value]));
-const statusSubtitle = computed(() => ({
-  ok: `距离下次检查还有 ${daysUntilDue.value} 天`,
-  warning: `仅剩 ${daysUntilDue.value} 天，请及时确认安全`,
-  overdue: '请立即确认你的安全状态',
-  disabled: '前往「我的档案」页面开启此功能',
-}[dmsState.value]));
+const statusSubtitle = computed(() => {
+  const days = daysUntilDue.value;
+  if (dmsState.value === 'ok') {
+    return days === null || days === undefined
+      ? '已开启，等待首次确认后开始计算周期'
+      : `距离下次检查还有 ${days} 天`;
+  }
+  if (dmsState.value === 'warning') {
+    return days === null || days === undefined
+      ? '请及时确认安全'
+      : `仅剩 ${days} 天，请及时确认安全`;
+  }
+  return {
+    overdue: '请立即确认你的安全状态',
+    disabled: '前往「我的档案」页面开启此功能',
+  }[dmsState.value] || '';
+});
 const statusColor = computed(() => ({
   ok: 'var(--success)', warning: 'var(--warning)', overdue: 'var(--danger)', disabled: 'var(--gray-500)',
 }[dmsState.value]));
