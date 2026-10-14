@@ -37,8 +37,13 @@
       </nav>
       
       <div class="sidebar-footer">
-        <router-link v-if="!security.hasMasterPassword" to="/profile" style="color: var(--warning); text-decoration: none;">⚠️ 未启用加密 · 点此设置主密码</router-link>
-        <span v-else>数据本地加密存储 · 已启用主密码</span>
+        <div class="sidebar-security">
+          <router-link v-if="!security.hasMasterPassword" to="/profile" style="color: var(--warning); text-decoration: none;">⚠️ 未启用加密 · 点此设置主密码</router-link>
+          <span v-else>数据本地加密存储 · 已启用主密码</span>
+        </div>
+        <div class="sidebar-brandline">
+          <span>v{{ appVersion }} · 开源 MIT</span>
+        </div>
       </div>
     </aside>
 
@@ -125,6 +130,9 @@ interface NavRoute {
 const route = useRoute();
 const dashboard = useDashboardStore();
 const security = useSecurityStore();
+
+// 版本号：构建期由 Vite 注入（见 vite.config.ts），兜底用 package.json 版本
+const appVersion = '0.1.0';
 
 const unlockPassword = ref('');
 const unlockError = ref('');

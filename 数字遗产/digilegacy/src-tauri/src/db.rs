@@ -716,7 +716,6 @@ pub fn reset_security_config_db(
     master_key: &[u8; 32],
     new_key: &[u8; 32],
 ) -> Result<(), String> {
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     {
         let guard = get_conn()?;
         let conn = guard.as_ref().unwrap();

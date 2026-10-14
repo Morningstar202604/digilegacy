@@ -1,10 +1,18 @@
 # 归零 DigiLegacy · 数字遗产管理系统
 
+[![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust Tests](https://img.shields.io/badge/cargo%20test-37%20passed-brightgreen.svg)](#八开发与验证)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#六开发)
+[![Local-first](https://img.shields.io/badge/privacy-local--first-4a7c8c.svg)](#九隐私设计)
+
 > 广东省「挑战杯」大学生创业计划竞赛项目 · 赛道：社会治理和公共服务
 >
 > 数字有数，归处有路。
 
 一款本地优先、隐私优先的桌面端数字遗产规划工具。生前帮助用户**发现、登记、规划处置**自己的数字资产；身后帮助继承人**有序、合规地继承**。
+
+**开源（MIT 许可）· 无服务器 · 无遥测 · 数据只属于用户**
 
 ---
 

@@ -138,7 +138,10 @@ pub fn export_report_to_file(app_handle: AppHandle, content: String) -> Result<A
     
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建目录失败: {}", e))?;
     
-    let file_path = app_dir.join("继承报告.html");
+    let file_path = app_dir.join(format!(
+        "归零继承报告_{}.html",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    ));
     std::fs::write(&file_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
     
     Ok(ApiResponse::ok_with_msg(
@@ -158,7 +161,10 @@ pub fn export_zip_to_file(content: String, app_handle: AppHandle) -> Result<ApiR
     
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建目录失败: {}", e))?;
     
-    let zip_path = app_dir.join("继承工具包.zip");
+    let zip_path = app_dir.join(format!(
+        "归零继承工具包_{}.zip",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    ));
     std::fs::write(&zip_path, &decoded).map_err(|e| format!("写入ZIP失败: {}", e))?;
     
     Ok(ApiResponse::ok_with_msg(

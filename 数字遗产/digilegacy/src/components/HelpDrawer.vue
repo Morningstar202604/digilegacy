@@ -49,12 +49,31 @@
           <li><strong>资金类平台注意什么？</strong>建议只保存查询/登录信息，不要保存银行卡取款密码（PIN）</li>
         </ul>
       </div>
+
+      <div class="help-section about-section">
+        <div class="help-section-title">ℹ️ 关于</div>
+        <p class="about-text">
+          归零 DigiLegacy · 数字遗产管理及继承系统 <span class="about-ver">v0.1.0</span><br>
+          开源（MIT 许可）· 本地优先 · 无服务器、无遥测<br>
+          你的数据只属于你自己：即使我们（开发者）也无法读取。
+        </p>
+        <p class="about-shortcut">快捷键：Esc 关闭本面板 · 引导中 ← → 切换步骤</p>
+      </div>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue';
+
 const emit = defineEmits<{ (e: 'close'): void; (e: 'replay-tour'): void }>();
+
+function onKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('close');
+}
+
+onMounted(() => window.addEventListener('keydown', onKey));
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <style scoped>
@@ -109,5 +128,28 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'replay-tour'): void }>();
 }
 .help-list strong {
   color: var(--gray-800, #37464f);
+}
+.about-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--gray-100, #f0ece6);
+}
+.about-text {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--gray-600, #5c6f79);
+  line-height: 1.75;
+}
+.about-ver {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--gray-100, #f0ece6);
+  font-size: 11px;
+  color: var(--gray-700, #4a5560);
+}
+.about-shortcut {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--gray-400, #9aa8b0);
 }
 </style>

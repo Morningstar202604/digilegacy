@@ -178,17 +178,42 @@ async function exportZip() {
   const zip: any = j;
   // 添加报告 HTML
   const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
-  zip.file('继承报告.html', htmlContent);
+  zip.file('01-继承报告.html', htmlContent);
   // 添加资产清单 JSON
-  zip.file('资产清单.json', JSON.stringify(report.value.assets, null, 2));
+  zip.file('02-资产清单.json', JSON.stringify(report.value.assets, null, 2));
   // 添加统计摘要 JSON
-  zip.file('统计摘要.json', JSON.stringify({
+  zip.file('03-统计摘要.json', JSON.stringify({
     total_assets: report.value.assets.length,
     property_assets: report.value.property_assets_count,
     personality_assets: report.value.personality_assets_count,
     total_value: report.value.total_estimated_value,
     generated_at: report.value.generated_at,
   }, null, 2));
+  // 添加使用说明，让家人拿到工具包后知道从哪看起
+  zip.file('00-使用说明.txt', [
+    '归零 · 继承工具包（DigiLegacy）',
+    '=================================',
+    '',
+    '本工具包由「归零」数字遗产管理系统生成，用于将逝者的数字资产安排交给家人执行。',
+    '',
+    '文件说明：',
+    '  01-继承报告.html  —— 继承方案全文（双击用浏览器打开；不含任何密码）',
+    '  02-资产清单.json  —— 结构化资产清单（含处置意愿与继承人）',
+    '  03-统计摘要.json  —— 资产数量与估值汇总',
+    '',
+    '建议办理顺序：',
+    '  1) 先读 01-继承报告.html，了解全部资产与处置意愿',
+    '  2) 打开应用「继承人向导」，按平台逐一核对所需材料',
+    '  3) 备齐死亡证明、继承公证书（或法院判决书）、本人身份证，再前往各平台办理',
+    '',
+    '重要提示：',
+    '  · 本工具包不包含任何账号密码；如需凭据，请另行取得（由持有人当面告知或加密备份交付）',
+    '  · 各平台继承政策以官方最新公告为准，本工具仅提供整理与指引，不参与账号交易',
+    '  · 涉及资金的平台请通过官方客服/柜面渠道办理，谨防代办诈骗',
+    '',
+    `生成时间：${report.value.generated_at}`,
+    '开源项目（MIT 许可）· 数据全部存储于本机 · 开发者无法读取',
+  ].join('\n'));
   // 生成 ZIP 字节流
   const content = await zip.generateAsync({ type: 'uint8array' });
   // 转为 base64

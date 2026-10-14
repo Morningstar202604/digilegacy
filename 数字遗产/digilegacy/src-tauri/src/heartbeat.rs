@@ -19,6 +19,12 @@ pub struct HeartbeatStatus {
     pub last_result: String, // "ok" | "failed" | "never"
 }
 
+impl HeartbeatStatus {
+    pub fn last_seen_ok(&self) -> bool {
+        self.last_result == "ok"
+    }
+}
+
 #[derive(Default)]
 struct HeartbeatConfig {
     enabled: bool,
@@ -27,6 +33,7 @@ struct HeartbeatConfig {
 }
 
 fn read_config() -> HeartbeatConfig {
+    let _ = 0;
     let enabled = std::env::var("DMS_HEARTBEAT_ENABLED")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -41,9 +48,11 @@ fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
     }
     let url = format!("{}/heartbeat", endpoint.trim_end_matches('/'));
     let body = format!("{{\"token\":\"{}\"}}", token.replace('\\', "\\\\").replace('"', "\\\""));
+    // 丢弃响应体的目标：Unix 用 /dev/null，Windows 用 NUL
+    let discard = if cfg!(windows) { "NUL" } else { "/dev/null" };
     let output = std::process::Command::new("curl")
         .args([
-            "-s", "-o", "/dev/null", "-m", &TIMEOUT_SECS.to_string(),
+            "-s", "-o", discard, "-m", &TIMEOUT_SECS.to_string(),
             "-X", "POST", "-H", "Content-Type: application/json",
             "-d", &body, "--", &url,
         ])
@@ -78,10 +87,15 @@ fn record_attempt(endpoint: &str, enabled: bool, ok: bool) {
 /// 发送一次心跳（后台线程与手动测试共用）；永不 panic
 pub fn send_heartbeat() -> HeartbeatStatus {
     let cfg = read_config();
+    send_heartbeat_with(&cfg)
+}
+
+/// 可注入配置的心跳发送（便于测试，避免依赖进程级环境变量）
+pub fn send_heartbeat_with(cfg: &HeartbeatConfig) -> HeartbeatStatus {
     if !cfg.enabled || cfg.token.is_empty() {
         let status = HeartbeatStatus {
             enabled: cfg.enabled,
-            endpoint: cfg.endpoint,
+            endpoint: cfg.endpoint.clone(),
             last_attempt: None,
             last_result: "never".to_string(),
         };
@@ -106,29 +120,84 @@ pub fn current_status() -> HeartbeatStatus {
 mod tests {
     use super::*;
 
+    /// 测试串行锁：本模块的断言依赖全局 LAST_STATUS，避免与其他用例交叉污染
+    static HB_SERIAL: once_cell::sync::Lazy<std::sync::Mutex<()>> =
+        once_cell::sync::Lazy::new(|| std::sync::Mutex::new(()));
+
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        HB_SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn disabled_or_empty_token_never_sends() {
-        std::env::remove_var("DMS_HEARTBEAT_ENABLED");
-        let status = send_heartbeat();
+        let _g = lock();
+        let cfg = HeartbeatConfig {
+            enabled: false,
+            token: String::new(),
+            endpoint: DEFAULT_ENDPOINT.to_string(),
+        };
+        let status = send_heartbeat_with(&cfg);
         assert_eq!(status.last_result, "never");
         assert!(!status.enabled);
     }
 
     #[test]
+    fn enabled_but_empty_token_never_sends() {
+        let _g = lock();
+        let cfg = HeartbeatConfig {
+            enabled: true,
+            token: String::new(),
+            endpoint: DEFAULT_ENDPOINT.to_string(),
+        };
+        assert_eq!(send_heartbeat_with(&cfg).last_result, "never");
+    }
+
+    #[test]
     fn unreachable_server_tolerated() {
-        std::env::set_var("DMS_HEARTBEAT_ENABLED", "1");
-        std::env::set_var("DMS_HEARTBEAT_TOKEN", "test-token-123");
-        std::env::set_var("DMS_HEARTBEAT_ENDPOINT", "https://127.0.0.1:9");
-        let status = send_heartbeat();
+        let _g = lock();
+        // 直接注入不可达端点：不依赖环境变量，避免并行测试竞争
+        let cfg = HeartbeatConfig {
+            enabled: true,
+            token: "test-token-123".to_string(),
+            endpoint: "https://127.0.0.1:9".to_string(),
+        };
+        let status = send_heartbeat_with(&cfg);
         assert_eq!(status.last_result, "failed", "失联必须被容忍并记录，不得 panic");
-        std::env::remove_var("DMS_HEARTBEAT_ENABLED");
-        std::env::remove_var("DMS_HEARTBEAT_TOKEN");
-        std::env::remove_var("DMS_HEARTBEAT_ENDPOINT");
     }
 
     #[test]
     fn status_defaults() {
         let s = current_status();
         assert!(matches!(s.last_result.as_str(), "never" | "ok" | "failed"));
+    }
+
+    /// 起一个本地最小 HTTP 服务，验证心跳成功路径真的能发出并收到 200
+    /// （此前的用例只覆盖了失败路径，成功路径无验证）
+    #[test]
+    fn reachable_local_server_records_ok() {
+        let _g = lock();
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind 本地端口失败");
+        let port = listener.local_addr().unwrap().port();
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{\"ok\":true}");
+                let _ = stream.flush();
+            }
+        });
+
+        let cfg = HeartbeatConfig {
+            enabled: true,
+            token: "local-test-token".to_string(),
+            endpoint: format!("http://127.0.0.1:{}", port),
+        };
+        let status = send_heartbeat_with(&cfg);
+        assert_eq!(status.last_result, "ok", "本地可达服务应返回 ok");
+        assert!(status.last_seen_ok(), "确认状态记录为成功");
+        let _ = handle.join();
     }
 }
