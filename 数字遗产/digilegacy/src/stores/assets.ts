@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../api/invoke';
 
 import type { DigitalAsset, AssetRequest, ApiResponse } from '../types';
 

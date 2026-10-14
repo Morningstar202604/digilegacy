@@ -27,6 +27,7 @@
             <div style="display: flex; gap: 8px; margin-top: 8px;">
               <span class="tag" :class="'tag-' + asset.category">{{ categoryLabel(asset.category) }}</span>
               <span class="tag" :class="asset.disposal_method !== 'no_action' ? 'tag-success' : 'tag-warning'">{{ disposalLabel(asset.disposal_method) }}</span>
+              <span class="tag tag-success" v-if="asset.has_credential">🔐 已存凭据</span>
             </div>
           </div>
         </div>

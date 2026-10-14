@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../api/invoke';
 
 import type { DashboardStats, CheckInStatus, UserProfile, ApiResponse, DmsEvaluation } from '../types';
 

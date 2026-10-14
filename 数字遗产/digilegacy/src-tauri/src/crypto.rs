@@ -1,8 +1,10 @@
 #![allow(dead_code)]
-//! AES-256-GCM 加密基础设施
-//! 
-//! 当前 MVP 阶段数据库采用本地文件级安全控制（仅当前用户可读），
-//! 后续版本将升级为字段级 AES-256-GCM 加密，此时直接启用本模块。
+/// AES-256-GCM 加密基础设施
+///
+/// 提供两套接口：
+/// 1. 密码式 encrypt/decrypt（每次调用派生密钥，适合低频、单值场景）；
+/// 2. 密钥式 encrypt_with_key/decrypt_with_key（密钥派生一次、批量复用，
+///    供 vault 模块做主密码字段级加密，避免逐字段 PBKDF2 开销）。
 
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -24,9 +26,49 @@ pub fn generate_nonce() -> [u8; 12] {
 
 /// 从密码派生密钥（PBKDF2-SHA256，10万次迭代）
 fn derive_key(password: &str, salt: &[u8]) -> Key<Aes256Gcm> {
+    *Key::<Aes256Gcm>::from_slice(&derive_key_bytes(password, salt))
+}
+
+/// 从密码与盐派生 32 字节原始密钥（密钥式接口与验证器复用）
+pub fn derive_key_bytes(password: &str, salt: &[u8]) -> [u8; 32] {
     let mut key_bytes = [0u8; 32];
     pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ITERATIONS, &mut key_bytes);
-    *Key::<Aes256Gcm>::from_slice(&key_bytes)
+    key_bytes
+}
+
+/// 用已派生密钥加密，输出 base64(nonce(12) || ciphertext)
+pub fn encrypt_with_key(plaintext: &str, key: &[u8; 32]) -> Result<String, String> {
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce_bytes = generate_nonce();
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|e| format!("加密失败: {:?}", e))?;
+
+    let mut out = Vec::with_capacity(12 + ciphertext.len());
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+
+    Ok(BASE64.encode(&out))
+}
+
+/// 用已派生密钥解密 encrypt_with_key 的输出
+pub fn decrypt_with_key(encrypted: &str, key: &[u8; 32]) -> Result<String, String> {
+    let data = BASE64.decode(encrypted).map_err(|_| "数据格式无效".to_string())?;
+
+    if data.len() < 13 {
+        return Err("数据长度不合法".to_string());
+    }
+
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Nonce::from_slice(&data[0..12]);
+
+    let plaintext = cipher
+        .decrypt(nonce, &data[12..])
+        .map_err(|_| "解密失败，请检查主密码".to_string())?;
+
+    String::from_utf8(plaintext).map_err(|_| "解密后数据编码错误".to_string())
 }
 
 /// AES-256-GCM 加密
@@ -141,5 +183,31 @@ mod tests {
         let encrypted = encrypt(message, password).unwrap();
         let decrypted = decrypt(&encrypted, password).unwrap();
         assert_eq!(message, decrypted);
+    }
+
+    #[test]
+    fn test_key_based_roundtrip() {
+        let key = derive_key_bytes("master-pw", &[7u8; 16]);
+        let ct = encrypt_with_key("敏感内容-账号密码", &key).unwrap();
+        assert_ne!(ct, "敏感内容-账号密码");
+        assert_eq!(decrypt_with_key(&ct, &key).unwrap(), "敏感内容-账号密码");
+    }
+
+    #[test]
+    fn test_key_based_tamper_fails() {
+        let key = derive_key_bytes("master-pw", &[7u8; 16]);
+        let ct = encrypt_with_key("data", &key).unwrap();
+        let mut bytes = BASE64.decode(&ct).unwrap();
+        let n = bytes.len();
+        bytes[n - 1] ^= 0x01;
+        let tampered = BASE64.encode(&bytes);
+        assert!(decrypt_with_key(&tampered, &key).is_err());
+    }
+
+    #[test]
+    fn test_key_based_empty_roundtrip() {
+        let key = derive_key_bytes("master-pw", &[7u8; 16]);
+        let ct = encrypt_with_key("", &key).unwrap();
+        assert_eq!(decrypt_with_key(&ct, &key).unwrap(), "");
     }
 }

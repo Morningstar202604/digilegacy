@@ -72,6 +72,7 @@
           <p>3. 建议将本报告的内容公证或纳入正式遗嘱，以获得完整的法律效力。</p>
           <p>4. 各平台的继承政策可能随时调整，请以平台最新公告为准。</p>
           <p>5. 根据2026年《最高人民法院关于修改〈民事案由规定〉的决定》，"数据、网络虚拟财产纠纷"已被列为法定案由。</p>
+          <p>6. 各账号的密码等凭据已加密保存在持有人本机，未包含在本报告与工具包中；如需使用请由持有人当面告知或另行交付。</p>
         </div>
       </div>
 
@@ -97,7 +98,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../api/invoke';
 
 import * as JSZip from 'jszip';
 

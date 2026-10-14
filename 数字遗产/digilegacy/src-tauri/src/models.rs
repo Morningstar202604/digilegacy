@@ -121,9 +121,17 @@ pub struct DigitalAsset {
     pub heir_name: Option<String>,
     pub heir_contact: Option<String>,
     pub notes: String,
+    pub has_credential: bool,
     pub is_confirmed: bool,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// 安全状态
+#[derive(Debug, Clone, Serialize)]
+pub struct SecurityStatus {
+    pub has_master_password: bool,
+    pub unlocked: bool,
 }
 
 /// 创建/更新资产的请求

@@ -198,3 +198,268 @@ pub fn set_dead_mans_switch(enabled: bool, interval_days: i64) -> Result<ApiResp
 pub fn get_dashboard_stats() -> Result<ApiResponse<DashboardStats>, String> {
     db::get_dashboard_stats_db().map(ApiResponse::ok)
 }
+
+// ========== 安全与凭据保管 ==========
+
+#[command]
+pub fn security_status() -> Result<ApiResponse<SecurityStatus>, String> {
+    let has = db::get_security_config_db()?.is_some();
+    Ok(ApiResponse::ok(SecurityStatus {
+        has_master_password: has,
+        unlocked: crate::vault::is_unlocked(),
+    }))
+}
+
+#[command]
+pub fn set_master_password(password: String) -> Result<ApiResponse<SecurityStatus>, String> {
+    use base64::{Engine, engine::general_purpose::STANDARD as base64};
+
+    if password.chars().count() < 8 {
+        return Ok(ApiResponse::fail("主密码至少需要 8 个字符"));
+    }
+    if db::get_security_config_db()?.is_some() {
+        return Ok(ApiResponse::fail("已设置主密码，暂不支持修改"));
+    }
+
+    let salt = crate::crypto::generate_salt();
+    let key = crate::crypto::derive_key_bytes(&password, &salt);
+    let verifier = crate::vault::make_verifier(&key)?;
+    let (recovery_code, recovery_seal) = crate::recovery::create_recovery_seal(&key)?;
+    db::set_security_config_db(&base64.encode(salt), &verifier)?;
+    db::set_recovery_seal_db(&recovery_seal)?;
+    crate::vault::set_key(key);
+
+    let encrypted_rows = db::encrypt_existing_data_db()?;
+
+    return Ok(ApiResponse {
+        success: true,
+        message: format!("加密已启用，存量数据已加密 {} 条。请立即抄写恢复密钥：{}", encrypted_rows, recovery_code),
+        data: Some(SecurityStatus { has_master_password: true, unlocked: true }),
+    });
+}
+
+#[command]
+pub fn unlock(password: String) -> Result<ApiResponse<SecurityStatus>, String> {
+    use base64::{Engine, engine::general_purpose::STANDARD as base64};
+
+    let Some((salt_b64, verifier)) = db::get_security_config_db()? else {
+        return Ok(ApiResponse::fail("尚未设置主密码"));
+    };
+    let salt = base64.decode(&salt_b64).map_err(|_| "安全配置损坏".to_string())?;
+    let key = crate::crypto::derive_key_bytes(&password, &salt);
+
+    if crate::vault::verify_key(&verifier, &key) {
+        crate::vault::set_key(key);
+        Ok(ApiResponse::ok(SecurityStatus { has_master_password: true, unlocked: true }))
+    } else {
+        Ok(ApiResponse::fail("主密码错误"))
+    }
+}
+
+#[command]
+pub fn lock() -> Result<ApiResponse<SecurityStatus>, String> {
+    crate::vault::clear_key();
+    Ok(ApiResponse::ok_with_msg(
+        SecurityStatus { has_master_password: true, unlocked: false },
+        "已锁定",
+    ))
+}
+
+#[command]
+pub fn set_asset_credential(id: i64, credential: String) -> Result<ApiResponse<()>, String> {
+    if db::get_asset_by_id_db(id)?.is_none() {
+        return Ok(ApiResponse::fail("资产不存在或已被删除"));
+    }
+    db::set_asset_credential_db(id, &credential)?;
+    let msg = if credential.is_empty() { "凭据已清除" } else { "凭据已加密保存" };
+    Ok(ApiResponse::ok_with_msg((), msg))
+}
+
+#[command]
+pub fn get_asset_credential(id: i64) -> Result<ApiResponse<String>, String> {
+    db::get_asset_credential_db(id).map(ApiResponse::ok)
+}
+
+#[command]
+pub fn change_master_password(
+    old_password: String,
+    new_password: String,
+    confirm_password: String,
+) -> Result<ApiResponse<SecurityStatus>, String> {
+    match db::change_master_password_db(&old_password, &new_password, &confirm_password) {
+        Ok(()) => Ok(ApiResponse::ok_with_msg(
+            SecurityStatus { has_master_password: true, unlocked: true },
+            "主密码已更新，全部数据已用新密钥重新加密",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+#[command]
+pub fn export_backup(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
+    let json = db::export_backup_json_db()?;
+    let app_dir = app_handle.path().app_data_dir()
+        .map_err(|e| format!("获取目录失败: {}", e))?;
+    let dir = app_dir.join("备份");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {}", e))?;
+    let name = format!("归零加密备份_{}.json", chrono::Local::now().format("%Y%m%d_%H%M%S"));
+    let path = dir.join(name);
+    std::fs::write(&path, json).map_err(|e| format!("写入备份失败: {}", e))?;
+    Ok(ApiResponse::ok_with_msg(
+        path.to_string_lossy().to_string(),
+        "备份已导出（含密文与安全配置，可与其他设备互导）",
+    ))
+}
+
+#[command]
+pub fn import_backup(content: String) -> Result<ApiResponse<String>, String> {
+    match db::import_backup_json_db(&content) {
+        Ok(n) => Ok(ApiResponse::ok_with_msg(
+            format!("已恢复 {} 条资产，请用该备份对应的主密码重新解锁", n),
+            "备份导入完成",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+#[command]
+pub fn get_recovery_seal_exists() -> Result<ApiResponse<bool>, String> {
+    Ok(ApiResponse::ok(!db::get_recovery_seal_db()?.is_empty()))
+}
+
+/// 恢复流程第一步：用恢复码解出主密钥（不设新密码），返回临时解锁态
+#[command]
+pub fn start_recovery(recovery_code: String) -> Result<ApiResponse<SecurityStatus>, String> {
+    let seal = db::get_recovery_seal_db()?;
+    if seal.is_empty() {
+        return Ok(ApiResponse::fail("该安装未启用恢复密钥"));
+    }
+    match crate::recovery::unseal_with_recovery(&recovery_code, &seal) {
+        Ok(master_key) => {
+            crate::vault::set_key(master_key);
+            Ok(ApiResponse::ok(SecurityStatus { has_master_password: true, unlocked: true }))
+        }
+        Err(_) => Ok(ApiResponse::fail("恢复密钥不正确")),
+    }
+}
+
+/// 恢复流程第二步：处于恢复解锁态时设置新密码（重派生验证器并轮换恢复码）
+#[command]
+pub fn complete_recovery(
+    new_password: String,
+    confirm_password: String,
+) -> Result<ApiResponse<String>, String> {
+    use base64::{Engine, engine::general_purpose::STANDARD as base64};
+
+    if !crate::vault::is_unlocked() {
+        return Ok(ApiResponse::fail("请先通过恢复密钥解锁"));
+    }
+    if new_password.chars().count() < 8 {
+        return Ok(ApiResponse::fail("新主密码至少需要 8 个字符"));
+    }
+    if new_password != confirm_password {
+        return Ok(ApiResponse::fail("两次输入的新主密码不一致"));
+    }
+    let Some(master_key) = crate::vault::get_key() else {
+        return Ok(ApiResponse::fail("解锁状态异常"));
+    };
+
+    let salt_new = crate::crypto::generate_salt();
+    let key_new = crate::crypto::derive_key_bytes(&new_password, &salt_new);
+    let verifier_new = crate::vault::make_verifier(&key_new)?;
+    let (recovery_code_new, recovery_seal_new) = crate::recovery::create_recovery_seal(&master_key)?;
+
+    db::reset_security_config_db(&base64.encode(salt_new), &verifier_new, &recovery_seal_new, &master_key, &key_new)?;
+
+    Ok(ApiResponse::ok_with_msg(
+        recovery_code_new,
+        "主密码已重置，请立即保存新的恢复密钥",
+    ))
+}
+
+#[command]
+pub fn get_heartbeat_status() -> Result<ApiResponse<crate::heartbeat::HeartbeatStatus>, String> {
+    Ok(ApiResponse::ok(crate::heartbeat::current_status()))
+}
+
+#[command]
+pub fn send_heartbeat_now() -> Result<ApiResponse<crate::heartbeat::HeartbeatStatus>, String> {
+    Ok(ApiResponse::ok(crate::heartbeat::send_heartbeat()))
+}
+
+#[command]
+pub fn set_autostart(app_handle: AppHandle, enabled: bool) -> Result<ApiResponse<()>, String> {
+    use tauri_plugin_autostart::ManagerExt as _;
+    let manager = app_handle.autolaunch();
+    let result = if enabled { manager.enable() } else { manager.disable() };
+    match result {
+        Ok(()) => Ok(ApiResponse::ok_with_msg((), if enabled { "已设置开机自启" } else { "已关闭开机自启" })),
+        Err(e) => Ok(ApiResponse::fail(&format!("设置自启失败: {}", e))),
+    }
+}
+
+#[command]
+pub fn hide_main_window(app_handle: AppHandle) -> Result<ApiResponse<()>, String> {
+    use tauri::Manager as _;
+    if let Some(win) = app_handle.get_webview_window("main") {
+        let _ = win.hide();
+    }
+    Ok(ApiResponse::ok_with_msg((), "已隐藏到托盘"))
+}
+
+#[command]
+pub fn open_external(url: String) -> Result<ApiResponse<()>, String> {
+    let checked = crate::vault::validate_external_url(&url)?;
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        #[link(name = "shell32")]
+        extern "system" {
+            fn ShellExecuteW(
+                hwnd: *mut core::ffi::c_void,
+                operation: *const u16,
+                file: *const u16,
+                parameters: *const u16,
+                directory: *const u16,
+                show_cmd: i32,
+            ) -> *mut core::ffi::c_void;
+        }
+        let to_wide = |s: &str| -> Vec<u16> {
+            std::ffi::OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+        };
+        let op = to_wide("open");
+        let target = to_wide(&checked);
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                op.as_ptr(),
+                target.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
+        };
+        if (result as isize) <= 32 {
+            return Err("无法打开链接".to_string());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&checked)
+            .spawn()
+            .map_err(|e| format!("无法打开链接: {}", e))?;
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&checked)
+            .spawn()
+            .map_err(|e| format!("无法打开链接: {}", e))?;
+    }
+
+    Ok(ApiResponse::ok_with_msg((), "已在浏览器打开"))
+}

@@ -39,9 +39,15 @@ export interface DigitalAsset {
   heir_name: string | null;
   heir_contact: string | null;
   notes: string;
+  has_credential: boolean;
   is_confirmed: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface SecurityStatus {
+  has_master_password: boolean;
+  unlocked: boolean;
 }
 
 export interface AssetRequest {

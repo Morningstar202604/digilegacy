@@ -1,7 +1,9 @@
 {
   "identifier": "default",
   "description": "Default permissions for the app",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "dialog:default",
@@ -9,6 +11,8 @@
     "fs:allow-read-file",
     "fs:allow-write-file",
     "fs:allow-exists",
-    "fs:scope"
+    "fs:scope",
+    "notification:default",
+    "autostart:default"
   ]
 }

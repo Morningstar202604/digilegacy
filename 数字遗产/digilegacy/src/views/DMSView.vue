@@ -39,21 +39,37 @@
       </div>
     </div>
 
+    <!-- 本地提醒 -->
+    <div class="card mb-32">
+      <div class="card-title mb-16">🔔 本地提醒</div>
+      <ul class="dms-note-list">
+        <li>应用运行期间每 30 分钟自动检查：距确认到期 <strong>3 天内或已逾期</strong>，会弹出系统通知（每天至多一条）。</li>
+        <li>分级通知同步写入<strong>本地发件箱</strong>（应用数据目录 `dms_outbox`）；配置邮件环境变量 DMS_SMTP_HOST / DMS_SMTP_PORT / SMTP_FROM 后可同时发送邮件。</li>
+        <li>短信与跨设备推送属于后续<strong>云端计划</strong>：服务端接入后启用，本地数据已为其预留。</li>
+      </ul>
+      <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap;">
+        <button class="btn btn-secondary btn-sm" :disabled="testingNotify" @click="handleTestNotify">{{ testingNotify ? '发送中...' : '发送测试提醒' }}</button>
+        <span v-if="testResult" style="font-size: 12px;" :style="{ color: testResult === 'ok' ? 'var(--success)' : 'var(--warning)' }">
+          {{ testResult === 'ok' ? '已发送，请查看系统通知' : '发送失败或当前环境不支持（浏览器预览不发系统通知）' }}
+        </span>
+      </div>
+    </div>
+
     <!-- 三级确认说明 -->
     <div class="card">
       <div class="card-title mb-16">🔄 三级确认机制</div>
       <div class="dms-stages">
         <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 1 }">
           <span class="dms-stage-num">1️⃣</span>
-          <div><strong>第一阶段（到期后3天）</strong><p class="text-muted">发送邮件和短信提醒你本人确认安全</p></div>
+          <div><strong>第一阶段（到期后3天）</strong><p class="text-muted">系统通知 + 邮件提醒你本人确认安全（通知先写入本地发件箱）</p></div>
         </div>
         <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 2 }">
           <span class="dms-stage-num">2️⃣</span>
-          <div><strong>第二阶段（再7天后）</strong><p class="text-muted">通知紧急联系人确认你的状态</p></div>
+          <div><strong>第二阶段（再7天后）</strong><p class="text-muted">写信通知紧急联系人确认你的状态（邮件 / 本地发件箱）</p></div>
         </div>
         <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 3 }">
           <span class="dms-stage-num">3️⃣</span>
-          <div><strong>第三阶段（再14天后）</strong><p class="text-muted">向遗产执行人发送"数字遗产密钥信封"</p></div>
+          <div><strong>第三阶段（再14天后）</strong><p class="text-muted">向遗产执行人发送"数字遗产密钥信封"（邮件 / 本地发件箱）</p></div>
         </div>
       </div>
     </div>
@@ -77,10 +93,23 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useDashboardStore } from '../stores/dashboard';
+import { sendTestNotification } from '../api/reminders';
 
 const dashboard = useDashboardStore();
 const checking = ref(false);
 const settings = ref({ interval: 30, enabled: true });
+const testingNotify = ref(false);
+const testResult = ref<'' | 'ok' | 'fail'>('');
+
+async function handleTestNotify() {
+  testingNotify.value = true;
+  try {
+    const ok = await sendTestNotification();
+    testResult.value = ok ? 'ok' : 'fail';
+  } finally {
+    testingNotify.value = false;
+  }
+}
 
 const status = computed(() => dashboard.checkInStatus);
 const lastCheckIn = computed(() => status.value?.last_check_in);
@@ -142,6 +171,8 @@ onMounted(async () => {
 .dms-stages { display: flex; flex-direction: column; gap: 16px; }
 .dms-stage { display: flex; gap: 12px; padding: 12px 16px; border-radius: 8px; }
 .dms-stage p { font-size: 13px; margin-top: 2px; }
+.dms-note-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--gray-600, #5c6f79); line-height: 1.65; }
+.dms-note-list strong { color: var(--gray-800, #37464f); }
 .dms-stage-1 { background: var(--success-light); }
 .dms-stage-2 { background: var(--warning-light); }
 .dms-stage-3 { background: var(--danger-light); }
