@@ -139,6 +139,9 @@
               <div style="font-size: 13px; color: var(--gray-700); line-height: 1.6;">
                 {{ platform.monetization_path }}
               </div>
+              <div style="font-size: 11px; color: var(--gray-500); margin-top: 6px; line-height: 1.5;">
+                以上为平台官方公开的法定继承/过户渠道，凭死亡证明与继承公证书办理；本工具不参与、不协助任何账号买卖或第三方交易。
+              </div>
             </div>
 
             <!-- 继承申请表链接 -->

@@ -451,7 +451,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "https://www.boc.cn", "7-15天", ""),
         PlatformEntry::new(49, "交通银行", "BOCOM", "金融证券", "银行", true, false, true,
             "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
-            "https://www.bocomm.com", "7-15天", ""),
+            "https://www.bankcomm.com", "7-15天", ""),
         PlatformEntry::new(104, "平安银行", "Ping An Bank", "金融证券", "银行", true, false, true,
             "死亡证明、继承公证书、继承人身份证", "银行柜台办理，流程成熟", "简单",
             "https://www.pingan.com", "7-15天", ""),
@@ -518,7 +518,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "https://www.kurogames.com", "60-120天", "鸣潮等"),
         PlatformEntry::new(124, "叠纸游戏", "Papergames", "游戏", "游戏账号", true, true, true,
             "死亡证明、继承公证书", "联系客服申请账号继承", "中等",
-            "https://www.papergames.com", "60-120天", "恋与深空等"),
+            "https://www.papegames.com", "60-120天", "恋与深空等"),
 
         // ========== 扩展：电商/生活类（8个） ==========
         PlatformEntry::new(125, "唯品会", "Vipshop", "电商", "网购平台", true, false, true,
@@ -529,7 +529,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "https://www.suning.com", "30-60天", ""),
         PlatformEntry::new(127, "网易严选", "Yanxuan", "电商", "网购平台", true, false, true,
             "死亡证明、继承公证书", "余额可申请退还", "中等",
-            "https://www.you.163.com", "30-60天", ""),
+            "https://you.163.com", "30-60天", ""),
         PlatformEntry::new(128, "小红书店铺", "Xiaohongshu Shop", "电商", "网店", true, true, true,
             "死亡证明、继承公证书", "店铺可申请过户", "中等",
             "https://www.xiaohongshu.com", "60-90天", "有收入的店铺"),
@@ -636,7 +636,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "https://www.12306.cn", "无法继承", ""),
         PlatformEntry::new(162, "哈啰出行", "Hello Bike", "出行住宿", "出行", true, false, true,
             "死亡证明、继承公证书", "余额可申请退还", "中等",
-            "https://www.hellobike.com", "30天", ""),
+            "https://hellobike.com", "30天", ""),
 
         // ========== 扩展：学习与考试类（8个） ==========
         PlatformEntry::new(163, "学信网", "CHSI", "学习与考试", "教育", true, true, false,
@@ -693,7 +693,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "https://www.chinatax.gov.cn", "无法继承", ""),
         PlatformEntry::new(179, "交管12123", "Traffic Management", "政务服务", "交通", true, true, false,
             "账号不可继承", "需注销", "困难",
-            "https://www.12123.gov.cn", "无法继承", ""),
+            "https://gab.122.gov.cn", "无法继承", ""),
         PlatformEntry::new(180, "住房公积金管理中心", "Housing Fund Center", "政务服务", "公积金", true, false, true,
             "死亡证明、继承公证书", "公积金账户余额可全额提取", "简单",
             "https://www.cqgjj.cn", "7-15天", ""),
@@ -759,6 +759,8 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
 /// 说明：只填充稳妥、通用的描述，不杜撰具体官方链接；
 /// 未在此列出的平台保持扩展字段为空（前端会据此过滤展示）。
 fn enrich_extended(platforms: &mut [PlatformEntry]) {
+    // 合规说明：本字段只收录平台官方公开的继承/法定过户流程（凭死亡证明与继承公证书办理），
+    // 不涉及任何账号买卖、第三方交易或规避平台规则的方式。使用界面会同时展示该声明。
     let apply = |p: &mut PlatformEntry, monetization: &str, risk: &str, tags: &str, legal: &str| {
         p.monetization_path = monetization.to_string();
         p.risk_warnings = risk.to_string();
@@ -1030,5 +1032,16 @@ mod tests {
         let sum: i64 = stats.values().sum();
         let platforms = get_all_platforms();
         assert_eq!(sum, platforms.len() as i64, "难度分布总数应等于平台总数");
+    }
+
+    /// 开发工具：导出平台库 JSON（供 Web 预览 mock 使用）：
+    /// cargo test --lib dump_platforms_json -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn dump_platforms_json() {
+        let json = serde_json::to_string_pretty(&get_all_platforms()).unwrap();
+        println!("<<<PLATFORMS_JSON>>>");
+        println!("{}", json);
+        println!("<<<END_PLATFORMS_JSON>>>");
     }
 }
