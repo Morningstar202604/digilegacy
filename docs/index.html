@@ -298,7 +298,7 @@ footer li{margin-bottom:6px}
     <div class="grid g2">
       <div class="card">
         <h3>Field-level AES-256-GCM encryption</h3>
-        <p>After you set a master password, account identifiers, credentials, profile fields and heir contacts are encrypted <em>before</em> they reach the database. The key is derived with PBKDF2-SHA256 (100,000 iterations) and lives only in memory — locking the app wipes it.</p>
+        <p>A <strong>zero-knowledge, local-first design</strong>: after you set a master password, account identifiers, credentials, profile fields and heir contacts are encrypted <em>before</em> they reach the database. The key is derived with PBKDF2-SHA256 (100,000 iterations) and lives only in memory — locking the app wipes it.</p>
       </div>
       <div class="card">
         <h3>Recovery key, not a dead end</h3>
@@ -396,7 +396,7 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
 
     <details>
       <summary>What happens to my data if the project stops being maintained?</summary>
-      <p>Nothing breaks. There is no server to switch off: your data is a local SQLite file, exports are open formats, and the code is public — anyone can fork and continue. That is exactly why we chose this architecture.</p>
+      <p>Nothing breaks — this is the point of the local-first, zero-knowledge design. There is no server to switch off: your data is a local SQLite file, exports are open formats, and the code is public — anyone can fork and continue. That is exactly why we chose this architecture.</p>
     </details>
 
     <details>
