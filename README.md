@@ -1,188 +1,287 @@
-# 归零 DigiLegacy · 数字遗产管理系统
+# DigiLegacy 归零 — Open-Source Digital Legacy & Inheritance Manager
 
 [![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Rust Tests](https://img.shields.io/badge/cargo%20test-37%20passed-brightgreen.svg)](#八开发与验证)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#六开发)
-[![Local-first](https://img.shields.io/badge/privacy-local--first-4a7c8c.svg)](#九隐私设计)
+[![Tests](https://img.shields.io/badge/cargo%20test-39%20passed-brightgreen.svg)](#development--verification)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#development)
+[![No servers](https://img.shields.io/badge/servers-none-4a7c8c.svg)](#privacy-model)
+[![No telemetry](https://img.shields.io/badge/telemetry-none-4a7c8c.svg)](#privacy-model)
 
-> 广东省「挑战杯」大学生创业计划竞赛项目 · 赛道：社会治理和公共服务
->
-> 数字有数，归处有路。
+**Website: [badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)** · [中文说明见下方](#中文说明) · [Screenshots](https://badhope.github.io/digilegacy/#screenshots)
 
-一款本地优先、隐私优先的桌面端数字遗产规划工具。生前帮助用户**发现、登记、规划处置**自己的数字资产；身后帮助继承人**有序、合规地继承**。
+> **Plan your digital legacy. Leave your family a toolkit, not a puzzle.**
 
-**开源（MIT 许可）· 无服务器 · 无遥测 · 数据只属于用户**
+DigiLegacy is a free, open-source, **local-first desktop application** for **digital legacy planning** and **digital inheritance management**. It helps you discover every online account you own, decide how each one should be handled, and produce a **ready-to-execute inheritance toolkit** for your family — with everything encrypted on your own device.
+
+**Open source (MIT) · No servers · No telemetry · Not even the developers can read your data.**
+
+### Topics
+
+`digital-legacy` · `digital-inheritance` · `digital-assets` · `estate-planning` · `dead-mans-switch` · `local-first` · `privacy-first` · `zero-knowledge` · `aes-256-gcm` · `encrypted-vault` · `rust` · `tauri` · `vue3` · `sqlite` · `open-source` · `desktop-app`
 
 ---
 
-## 一、项目定位
+## Table of contents
 
-| 项 | 内容 |
-|---|---|
-| 中文名 | 归零（"归"=回归归属，"零"=归零处理） |
-| 英文名 | DigiLegacy |
-| 形态 | 桌面应用（Tauri 2 + Vue 3 + TypeScript + SQLite） |
-| 核心主张 | **即便开发者也无法读取用户的数字遗产数据**——无服务器、无云端同步，数据仅存本地 |
+- [Why this exists](#why-this-exists)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Security model](#security-model)
+- [Comparison](#comparison)
+- [Get started](#get-started)
+- [Architecture](#architecture)
+- [Development & verification](#development--verification)
+- [Data storage](#data-storage)
+- [Privacy model](#privacy-model)
+- [FAQ](#faq)
+- [Mirrors](#mirrors)
+- [License](#license)
+- [中文说明](#中文说明)
 
-## 二、界面截图
+---
+
+## Why this exists
+
+When someone dies, their family usually cannot find — or access — what they left online. Three problems stack on top of each other:
+
+1. **Nobody knows what exists.** Payment balances, game assets, subscription credits, creator income — scattered across dozens of platforms. Even the owner cannot list them from memory.
+2. **Nobody knows what is inheritable.** A wallet balance can be inherited; the account itself often cannot. Game accounts have case law supporting property rights. Rules differ per platform and live inside terms of service.
+3. **Nobody knows how to claim it.** A deadlock: platforms ask for a notarized certificate; notaries need to know what the accounts contain; the family does not know. The estate simply goes dormant.
+
+Existing tools each answer a fragment: Google and Apple cover only their own ecosystems; password managers hand over credentials, not inheritance rights; paper will services never touch the accounts themselves. **The full chain — discovery, registration, planning, documents, trigger, execution — has no incumbent.**
+
+## Features
+
+| # | Module | What it does |
+|---|---|---|
+| 1 | **Digital asset discovery** | Built-in policy database of **150+ platforms across 16 categories**, plus a guided self-check questionnaire that surfaces accounts you have already forgotten; already-registered entries are de-duplicated automatically |
+| 2 | **Classification & registration** | Every asset is classified as *property*, *personality* or *mixed*. Platform passwords are never stored — the app records *where* an account exists, not *how to break into it* |
+| 3 | **Disposal planning** | Per asset: inherit by a named person · liquidate and distribute · memorialize · authorize viewing · delete permanently · donate · take no action |
+| 4 | **Inheritance report & toolkit** | One-click HTML report plus a ZIP toolkit (report, asset list, summary, instructions). Open formats — readable without this application |
+| 5 | **Dead man's switch** | Periodic check-in with a **three-stage confirmation chain** (remind you → notify your emergency contact → send the key envelope to your executor). Runs in the system tray, re-evaluating every 30 minutes; optional **zero-content** cloud heartbeat |
+| 6 | **Heir guidance wizard** | Walks family members through each platform's procedure, required documents and transfer path |
+| 7 | **Legal template library** | Six categories of legal document templates (will clause, inheritance declaration, authorization, affidavit, application, agreement) |
+| 8 | **Encrypted vault & recovery key** | Field-level AES-256-GCM encryption, master password lock with idle auto-lock, one-time recovery key, encrypted backup export/import |
+| 9 | **Onboarding & help centre** | First-run guided tour; built-in help explaining the encryption model and the **real** capability boundaries of reminders |
+| 10 | **Credential vault** | Optional encrypted storage of account credentials — deliberately excluded from every export |
+
+## Screenshots
 
 | | |
 |---|---|
-| ![仪表板](数字遗产/digilegacy/screenshots/01-dashboard.png) | ![资产发现](数字遗产/digilegacy/screenshots/02-discover.png) |
-| *仪表板* | *资产发现* |
-| ![我的资产](数字遗产/digilegacy/screenshots/03-assets.png) | ![我的档案](数字遗产/digilegacy/screenshots/04-profile.png) |
-| *我的资产* | *我的档案* |
-| ![安心传承](数字遗产/digilegacy/screenshots/05-dms.png) | ![继承报告](数字遗产/digilegacy/screenshots/08-report.png) |
-| *安心传承（DMS）* | *继承报告* |
-| ![继承人向导](数字遗产/digilegacy/screenshots/06-heir-guide.png) | ![法律模板](数字遗产/digilegacy/screenshots/07-legal.png) |
-| *继承人向导* | *法律模板* |
+| ![Dashboard](docs/screenshots/01-dashboard.png) | ![Asset discovery](docs/screenshots/02-discover.png) |
+| *Dashboard — overview & planning progress* | *Guided discovery questionnaire* |
+| ![Assets](docs/screenshots/03-assets.png) | ![Profile](docs/screenshots/04-profile.png) |
+| *Registered assets with disposal status* | *Profile, encryption & backup* |
+| ![Dead man's switch](docs/screenshots/05-dms.png) | ![Inheritance report](docs/screenshots/08-report.png) |
+| *Dead man's switch & local reminders* | *Generated inheritance report* |
+| ![Heir guidance](docs/screenshots/06-heir-guide.png) | ![Legal templates](docs/screenshots/07-legal.png) |
+| *Heir guidance wizard* | *Legal template library* |
 
-## 三、使用指南
+> The interface is currently in Simplified Chinese (the primary target locale); an English UI is on the roadmap. All screens are also viewable on the [website](https://badhope.github.io/digilegacy/#screenshots).
 
-### 场景 A：资产持有人（生前规划）
+## Security model
 
-首次启动会自动播放约 30 秒的新手引导（可跳过；右上角「帮助」中可随时重播，帮助中心还汇总了加密、备份与通知的真实能力说明）。
+Digital legacy data is the most private data a person owns — it contains both property information and wishes about who may see what. The architecture removes the question rather than promising an answer:
 
-1. **资产发现**：回答自检问卷，应用从内置的 152 个平台库（16 个分类）中引导式发现你可能持有的数字资产，并自动排除已登记项
-2. **我的资产**：确认发现结果、补登遗漏；每项资产自动归入财产型 / 人格型 / 混合型三维分类
-3. **处置意愿**：为每项资产选择处置方式——指定继承、变现分配、纪念化、授权查阅、彻底删除、捐赠或不做处理
-4. **我的档案**：完善本人与继承人基础信息，作为报告与文书的数据来源；在此设置主密码启用加密
-5. **安心传承（DMS）**：开启定期签到（顶部按钮或托盘菜单一键检查）；应用驻留托盘期间每 30 分钟自动评估，到期前 3 天或逾期时发送系统通知（按日去重），逾期后沿三级确认链逐级通知；可选开启云端心跳（零内容）
-6. **继承报告**：一键生成汇总报告，导出 HTML 报告与继承工具包 ZIP（报告 / 清单 / 统计三件套）
-7. **法律模板**：下载遗嘱、继承声明、授权委托等 6 类文书模板，配合线下公证使用
-8. **安全与加密（我的档案页）**：设置 / 修改主密码；导出加密备份或导入备份文件（换电脑迁移，同密码可解锁）
+| Layer | Implementation |
+|---|---|
+| **Field-level encryption** | Sensitive fields are encrypted with **AES-256-GCM** *before* they reach the database (`enc:v1:` prefixed ciphertext). The key is derived with **PBKDF2-SHA256, 100,000 iterations** |
+| **Key lifetime** | The derived key lives only in memory. Locking the app (manually or after 10 minutes idle) zeroes and drops it; credential reads are refused at the decryption layer while locked |
+| **Recovery** | A one-time **24-character recovery key** seals the master key, so forgetting the password is recoverable; the recovery key rotates automatically on every password change |
+| **No server, no telemetry** | There is no backend. The app makes no network requests of its own — "open platform website" hands a URL to your system browser (http/https only) |
+| **Zero-content heartbeat (optional)** | If you want reminders while the machine is off, the heartbeat sends **only a token**. The server learns "this token is alive" and nothing else — never an asset, a credential, a name or an address |
+| **Exports** | Reports and toolkits are open HTML/JSON/ZIP and contain **no credentials**, stated explicitly in the generated toolkit instructions |
 
-资产详情页还提供两项配套能力：**官方入口跳转**（一键在浏览器打开平台官网，注册 / 找回密码 / 办理业务）与**凭据加密保管**（账号密码等敏感信息加密保存，随时复制，30 秒后尝试自动清除剪贴板）。
+**Honest limitations.** Local encryption protects data at rest; it cannot stop malware running as your user or someone who knows your master password. Credentials you choose to save live on the same machine — the same trade-off every password manager makes. Reports and toolkits are plain files: treat them like paper documents.
 
-### 场景 B：继承人（身后执行）
+## Comparison
 
-1. **继承人向导**：按平台查询办理流程、变现 / 过户路径卡与常见困难应对方案
-2. **继承工具包**：使用持有人导出的 ZIP 与法律模板，按清单逐平台办理
+| Tool | Scope | What it leaves out |
+|---|---|---|
+| **DigiLegacy** | Discovery · registration · planning · documents · trigger · execution | — |
+| Google Inactive Account Manager | Google accounts only | Any non-Google platform; no inventory; no planning workflow |
+| Apple Digital Legacy | Apple ID access for a legacy contact | No inventory; no per-platform procedures |
+| Meta memorialization | Facebook / Instagram | Passive marking only |
+| 1Password / Bitwarden emergency access | Credential handover | Answers "who gets the password", not "can it be inherited, and how" |
+| Offline will services / notary offices | Paper wills | No digital asset discovery; no platform guidance |
 
-### 数据安全
+## Get started
 
-数据仅存储在本机 SQLite 数据库中，应用无遥测；设置主密码后，账号、凭据、档案等敏感字段以 AES-256-GCM 加密落库，开发者从架构上无法读取；卸载应用即完全删除数据。云端心跳为可选项且采用零内容设计——服务器只接收令牌，永远接触不到用户的资产与凭据数据。
+### Use the app (Windows 10/11, ~3 MB)
 
-## 四、功能模块
-
-| # | 模块 | 说明 | 状态 |
-|---|---|---|---|
-| 1 | 数字资产发现引擎 | 基于内置 152 个中国主流平台库（16 个分类），启发式自检问卷 + 引导式发现，自动去重已登记平台；每个平台附官方入口链接 | MVP |
-| 2 | 资产分类与登记 | 财产型 / 人格型 / 混合型三维自动归类，用户确认后入库 | MVP |
-| 3 | 处置意愿设定 | 指定继承、变现分配、纪念化、授权查阅、彻底删除、捐赠、不做处理 | MVP |
-| 4 | 继承报告生成 | 汇总资产清单与处置方案，导出 HTML 报告 + 继承工具包 ZIP（报告/清单/统计三件套） | MVP |
-| 5 | 安心传承（DMS） | Dead Man's Switch 三级确认链 + 定期签到；运行期间每 30 分钟自动评估，到期/逾期发系统通知（按日去重）；通知落本地发件箱（离线兜底），可选 SMTP 邮件；短信与跨设备推送为云端计划 | MVP |
-| 6 | 继承人向导 | 面向继承人的平台办理导航、变现/过户路径卡、常见困难解决方案 | MVP |
-| 7 | 法律模板库 | 6 类法律文书模板（遗嘱/继承声明/授权委托/宣誓书/申请/协议），预览与下载 | MVP |
-| 8 | 安全与加密 | 主密码（PBKDF2-SHA256）→ 敏感字段级 AES-256-GCM 加密；修改主密码（全库重加密）；手动锁定 + 闲置 10 分钟自动锁定；凭据加密保管、复制后 30 秒尝试清除剪贴板；加密备份导出/导入；外部跳转仅放行 http/https | MVP |
-| 9 | Web 开发预览 | 浏览器打开 `npm run dev` 即为预览模式：自动启用本地 mock（内置 152 个平台真实数据 + 演示资产），用于开发时查看前端外观；仅开发环境生效，桌面版与生产构建不受影响 | 开发工具 |
-| 10 | 新手引导与帮助中心 | 首次启动分步引导（聚光高亮导航与关键入口、可跳过、可在帮助中心重播）；常驻「帮助」入口：快速上手、加密说明、DMS 真实能力边界、常见问题 | MVP |
-| 11 | 托盘常驻与后台推进 | 关闭窗口驻留系统托盘（菜单：显示 / 我还安好 / 锁定 / 退出），后台每 30 分钟推进 DMS 评估与云端心跳；可选开机自启 | MVP |
-| 12 | 恢复密钥 | 设置主密码时生成一次性 24 位恢复码（4 位一组）；忘记主密码时凭恢复码重设密码并全库重加密；修改主密码自动轮换恢复码 | MVP |
-| 13 | 云端心跳（可选） | 零内容设计：仅上报「我还安好」令牌，不携带任何资产/凭据/档案数据；失联容忍不影响本地；服务器参考实现见 `server/heartbeat-server.mjs` | MVP（客户端）/ 参考实现（服务端） |
-
-## 五、技术架构
+Download the installer or the portable executable from [Releases](https://github.com/badhope/digilegacy/releases). No account, no sign-up, no network connection required.
 
 ```
-Vue 3 + TypeScript + Pinia + Vue Router      前端
-        │  Tauri invoke (29 个 command)
-Tauri 2 (Rust)                              桌面壳层
+Installer  : DigiLegacy_*_x64-setup.exe
+Portable   : digilegacy.exe
+Database   : %APPDATA%\com.digilegacy.app\digilegacy.db
+```
+
+On first launch a short guided tour explains each screen. The built-in help centre documents the encryption model and the true boundaries of the reminder chain.
+
+### Build from source
+
+```bash
+git clone https://github.com/badhope/digilegacy.git
+cd digilegacy
+
+npm install
+npm run tauri:dev        # desktop development mode
+npm run tauri:build      # produce installers
+
+npm run dev              # frontend only — browser preview at http://localhost:1420
+cd src-tauri && cargo test
+```
+
+### Optional: self-hosted heartbeat server
+
+```bash
+cd digilegacy/server
+node heartbeat-server.mjs            # default port 8080
+
+# Client environment variables:
+#   DMS_HEARTBEAT_ENABLED=1
+#   DMS_HEARTBEAT_TOKEN=<your token>
+#   DMS_HEARTBEAT_ENDPOINT=http://<host>:8080
+```
+
+The reference server does three things: record the last heartbeat time per token, emit an alert payload when a token goes silent (default 21 days), and hand that payload to your scheduled job for delivery. **It never receives or stores user content.**
+
+## Architecture
+
+```
+Vue 3 + TypeScript + Pinia + Vue Router        frontend
+        │  Tauri invoke (29 commands)
+Tauri 2 (Rust)                                 desktop shell
         │
-rusqlite (SQLite, bundled)                  本地存储
-aes-gcm / rand / base64                     加密基础设施
+rusqlite (SQLite, bundled)                     local storage
+aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 ```
 
-### 目录结构
-
 ```
-挑战杯/
-├── .gitignore
-├── 数字遗产/
-│   └── digilegacy/                  应用本体
-│       ├── src/                     Vue 前端
-│       │   ├── views/               9 个页面
-│       │   ├── stores/              Pinia 状态
-│       │   ├── api/                 invoke 包装与 Web 预览 mock
-│       │   ├── types/               类型定义
-│       │   └── assets/main.css      设计令牌与全局样式
-│       ├── src-tauri/               Rust 后端
-│       │   ├── src/
-│       │   │   ├── platform_data.rs 152 平台 / 16 分类政策数据库
-│       │   │   ├── db.rs            SQLite schema 与全部查询
-│       │   │   ├── commands.rs      29 个 Tauri command
-│       │   │   ├── vault.rs         主密码与字段级加密（锁定即清钥）
-│       │   │   ├── crypto.rs        AES-256-GCM 基础设施
-│       │   │   └── models.rs        数据模型
-│       │   └── capabilities/        权限白名单
-│       ├── package.json
-│       └── vite.config.ts
+.
+├── docs/                                  # project website (GitHub Pages)
+├── digilegacy/
+│   ├── src/                               # Vue frontend
+│   │   ├── views/                         # 9 screens
+│   │   ├── stores/                        # Pinia state
+│   │   ├── api/                           # invoke wrapper + browser-preview mock
+│   │   ├── components/                    # onboarding tour, help drawer
+│   │   └── assets/main.css                # design tokens
+│   ├── src-tauri/                         # Rust backend
+│   │   ├── src/
+│   │   │   ├── platform_data.rs           # 150+ platform policy database
+│   │   │   ├── db.rs                      # schema, queries, migrations
+│   │   │   ├── commands.rs                # 29 Tauri commands
+│   │   │   ├── vault.rs                   # master password & field encryption
+│   │   │   ├── recovery.rs                # one-time recovery key
+│   │   │   ├── heartbeat.rs               # zero-content cloud heartbeat
+│   │   │   ├── crypto.rs                  # AES-256-GCM primitives
+│   │   │   └── notify.rs                  # dead man's switch chain
+│   │   └── capabilities/                  # permission allowlist
+│   └── server/heartbeat-server.mjs        # reference heartbeat server
 └── LICENSE
 ```
 
-## 六、开发
+## Development & verification
 
-### 环境要求
+| Check | Command | Status |
+|---|---|---|
+| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **39 / 39 passing** |
+| Frontend type check | `npx vue-tsc --noEmit` | passing |
+| Production build | `npm run build` | passing |
+| Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
+| CI | GitHub Actions (3 jobs) | green on every push |
 
-- Node.js ≥ 18
-- Rust 工具链（stable）
-- Tauri 2 平台依赖（Windows 需 WebView2 + MSVC Build Tools）
+CI runs the frontend type check and build, the full Rust test suite, and a syntax check of the reference server on every push to `main`.
 
-### 常用命令
+## Data storage
 
-```bash
-cd 数字遗产/digilegacy
+A single local file: `digilegacy.db` in the app data directory (`%APPDATA%\com.digilegacy.app` on Windows), holding six tables:
 
-npm install
+`platforms` · `digital_assets` · `user_profile` · `check_in_log` · `dms_config` · `security_config`
 
-npm run dev            # 仅前端开发服务器（http://localhost:1420）
-npm run tauri:dev      # 完整桌面应用开发模式
-npm run build          # 类型检查 + 前端生产构建
-npm run tauri:build    # 打包桌面安装包
-```
+On first launch the database is created and seeded with the platform policy database; the platform table is **synchronised idempotently on every start**, so policy and URL corrections reach existing installations without touching user data. Older databases are migrated automatically (`credential_enc`, `recovery_seal` columns).
 
-### 云端心跳服务器（自托管，可选）
+## Privacy model
 
-```bash
-cd 数字遗产/digilegacy/server
-node heartbeat-server.mjs          # 默认 8080 端口
-# 客户端环境变量：DMS_HEARTBEAT_ENABLED=1  DMS_HEARTBEAT_TOKEN=<令牌>
-#                DMS_HEARTBEAT_ENDPOINT=http://<host>:8080
-```
+1. **Field-level encryption.** Account identifiers, credentials, profile fields and heir contact details are encrypted with AES-256-GCM before storage; the master key is derived with PBKDF2-SHA256 and held in memory only.
+2. **Master-password lock.** Manual lock, or automatic after 10 minutes idle. While locked, credential decryption is refused at the Rust layer — the UI overlay is only the visible half.
+3. **Credential vault.** Optional encrypted storage with copy-to-clipboard (clipboard cleared after 30 seconds when possible). Credentials never enter reports, toolkits or backups of reports.
+4. **No server, no telemetry, no cloud sync.** External links are restricted to `http`/`https`.
+5. Application permissions are narrowed to an allowlist in `src-tauri/capabilities/default.json`.
 
-服务器只做三件事：记录令牌最后心跳时间、超期（默认 21 天）输出提醒载荷、由定时任务把提醒转发到邮件网关。**不接收、不存储任何用户内容数据。**
+## FAQ
 
-### Web 开发预览（浏览器看前端）
+<details>
+<summary><strong>Is it really free?</strong></summary>
 
-`npm run dev` 后直接在浏览器打开 http://localhost:1420 即可预览全部 9 个页面：
+Yes. The desktop application is MIT-licensed and permanently free — the entire source is open. Optional cloud conveniences (encrypted backup, assisted setup) are planned as paid services; the local app stays free.
+</details>
 
-- 非 Tauri 环境下自动启用 `src/api/mock.ts` 本地 mock：内置 152 个平台真实数据与演示资产，支持增删改、凭据、备份等交互（数据存 localStorage，重启浏览器不丢）；
-- mock 仅在开发环境生效，`npm run build` 的生产构建不包含 mock 代码；
-- 桌面端行为不受影响（`src/api/invoke.ts` 自动检测运行环境路由）。
+<details>
+<summary><strong>What happens to my data if the project stops being maintained?</strong></summary>
 
-### 验证状态
+Nothing breaks. There is no server to switch off: your data is a local SQLite file, exports are open formats, and the code is public — anyone can fork and continue. That is precisely why the architecture was chosen this way.
+</details>
 
-- `npx vue-tsc --noEmit` 通过
-- `npm run build` 通过（68 modules，含类型检查）
-- `cargo check` 通过
-- `cargo test` 通过（37 / 37）
+<details>
+<summary><strong>Does it store my passwords?</strong></summary>
 
-## 七、数据存储
+It never stores platform passwords in plaintext. If you choose to save credentials, they are encrypted with your master password on your machine and are deliberately excluded from every export.
+</details>
 
-数据库位于系统应用数据目录下的 `digilegacy.db`（Windows：`%APPDATA%\com.digilegacy.app`），包含 6 张表：
+<details>
+<summary><strong>Can it automatically detect all my accounts?</strong></summary>
 
-`platforms`、`digital_assets`、`user_profile`、`check_in_log`、`dms_config`、`security_config`
+No — and any tool claiming that would either be lying or require your credentials. DigiLegacy performs **guided discovery**: it knows 150+ mainstream platforms and asks questions that help you remember, then you confirm. The final list is always yours.
+</details>
 
-首次启动时自动建表并写入 152 个平台的政策数据；旧版本数据库会在启动时自动迁移（新增 `credential_enc` 列）。
+<details>
+<summary><strong>Do reminders work when the app is closed?</strong></summary>
 
-## 八、隐私设计
+With the tray resident (default) the app re-evaluates every 30 minutes while running and can start with Windows. For reminders while the machine is off, enable the optional zero-content cloud heartbeat — the server only ever sees a token.
+</details>
 
-1. **字段级加密**：设置主密码后，资产账号、凭据、档案、继承人联系方式等敏感字段在写入数据库前以 AES-256-GCM 加密（密文带 `enc:v1:` 前缀）；主密码经 PBKDF2-SHA256（10 万次迭代）派生密钥，仅驻留内存，锁定即清除
-2. **主密码锁**：可手动锁定或闲置 10 分钟自动锁定；锁定后应用被遮罩拦截，凭据读取在解密层直接拒绝
-3. **凭据保管**：账号密码等凭据单独加密存储，支持一键复制（30 秒后尝试自动清除剪贴板）；继承报告与工具包不包含任何凭据
-4. **无服务器、无遥测、无云端同步**；外部链接跳转仅允许 http/https 协议
-5. 应用层权限白名单收敛在 `src-tauri/capabilities/default.json`
+<details>
+<summary><strong>Why a policy database for Chinese platforms?</strong></summary>
 
-## 九、许可
+Because that is where platform inheritance rules are most opaque and least documented — the database covers 150+ platforms used in mainland China (WeChat, Alipay, Taobao, Bilibili, Steam and more), each entry carrying its source. The architecture itself is not region-bound.
+</details>
 
-MIT，见 [LICENSE](LICENSE)。
+<details>
+<summary><strong>How can I contribute?</strong></summary>
+
+Issues and pull requests are welcome — especially policy corrections (every entry carries a source) and translations. The database is plain Rust data and easy to extend.
+</details>
+
+## Mirrors
+
+| Platform | Repository | Website |
+|---|---|---|
+| GitHub · badhope | [github.com/badhope/digilegacy](https://github.com/badhope/digilegacy) | [badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/) |
+| GitHub · x33834 | [github.com/x33834/digilegacy](https://github.com/x33834/digilegacy) | [x33834.github.io/digilegacy](https://x33834.github.io/digilegacy/) |
+| GitHub · Morningstar202604 | [github.com/Morningstar202604/digilegacy](https://github.com/Morningstar202604/digilegacy) | [morningstar202604.github.io/digilegacy](https://morningstar202604.github.io/digilegacy/) |
+| Gitee · badhope | [gitee.com/badhope/digilegacy](https://gitee.com/badhope/digilegacy) | — |
+| GitCode · badhope | [gitcode.com/badhope/digilegacy](https://gitcode.com/badhope/digilegacy) | — |
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
+
+## 中文说明
+
+**归零 DigiLegacy** 是一款**开源（MIT）、本地优先**的桌面应用，用于**数字遗产规划**与**数字资产继承管理**：帮你在生前理清所有网络账号、为每一项安排好身后的处置方式，并给家人留下一份可以直接照做的**继承工具包**。
+
+**开源 · 无服务器 · 无遥测 · 连开发者也无法读取你的数据。**
+
+- **官网**：[badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)
+- **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
+- **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（绝不进入导出物）
+- **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
+- **测试**：`cargo test` 39/39 通过；CI 在每次推送时运行
+
+*数字有数，归处有路。*

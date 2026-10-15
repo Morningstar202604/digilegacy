@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: 数字遗产/digilegacy
+        working-directory: digilegacy
     steps:
       - uses: actions/checkout@v4
 
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: 数字遗产/digilegacy/package-lock.json
+          cache-dependency-path: digilegacy/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: 数字遗产/digilegacy/src-tauri
+        working-directory: digilegacy/src-tauri
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +65,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 数字遗产/digilegacy/src-tauri
+          workspaces: digilegacy/src-tauri
 
       - name: Run tests
         run: cargo test --verbose
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: 数字遗产/digilegacy/server
+        working-directory: digilegacy/server
     steps:
       - uses: actions/checkout@v4
 
