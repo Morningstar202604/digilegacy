@@ -20,7 +20,7 @@
         <div class="card-title">🔐 账号凭据保管（本地加密）</div>
         <template v-if="security.hasMasterPassword">
           <div class="flex items-center gap-8 mt-16">
-            <input class="form-input" :type="showCredential ? 'text' : 'password'" v-model="credentialInput" placeholder="账号 / 密码 / 密保信息（一行内填写，仅保存在本机）" style="flex: 1;" />
+            <input class="form-input" :type="showCredential ? 'text' : 'password'" v-model="credentialInput" aria-label="账号凭据内容（仅保存在本机）" placeholder="账号 / 密码 / 密保信息（一行内填写，仅保存在本机）" style="flex: 1;" />
             <button class="btn btn-secondary btn-sm" @click="showCredential = !showCredential">{{ showCredential ? '隐藏' : '显示' }}</button>
           </div>
           <div class="flex items-center gap-8 mt-12" style="flex-wrap: wrap;">
@@ -28,7 +28,7 @@
             <button class="btn btn-secondary btn-sm" @click="copyCredential">复制凭据</button>
             <button class="btn btn-danger btn-sm" v-if="asset?.has_credential" @click="clearCredential">清除</button>
             <span class="tag tag-success" v-if="asset?.has_credential">已加密保存</span>
-            <span class="text-muted" style="font-size: 12px;">{{ credentialStatus }}</span>
+            <span class="text-muted" style="font-size: 12px;" aria-live="polite">{{ credentialStatus }}</span>
           </div>
         </template>
         <template v-else>
@@ -38,27 +38,27 @@
             设置主密码，之后即可加密保存账号与密码。
           </p>
         </template>
-        <p v-if="isFinancialPlatform" style="font-size: 12px; color: var(--warning); margin-top: 12px;">⚠️ 涉及资金类平台：建议只保存查询/登录信息，不要保存银行卡取款密码（PIN）。</p>
+        <p v-if="isFinancialPlatform" style="font-size: 12px; color: var(--warning-strong); margin-top: 12px;"><span aria-hidden="true">⚠️</span> 涉及资金类平台：建议只保存查询/登录信息，不要保存银行卡取款密码（PIN）。</p>
         <div class="mt-16" style="padding-top: 12px; border-top: 1px solid var(--gray-200, #e8e4de);">
           <button class="btn btn-secondary btn-sm" @click="openOfficial">🔗 打开平台官网</button>
           <span class="text-muted" style="font-size: 12px; margin-left: 8px;">在浏览器中注册 / 找回密码后，把账号信息填回上方加密保存</span>
-          <div v-if="linkStatus" class="text-muted" style="font-size: 12px; margin-top: 6px;">{{ linkStatus }}</div>
+          <div v-if="linkStatus" class="text-muted" style="font-size: 12px; margin-top: 6px;" role="alert">{{ linkStatus }}</div>
         </div>
       </div>
 
       <div class="grid grid-2">
-        <div class="form-group"><label class="form-label">账号标识</label><input class="form-input" v-model="asset.account_identifier" /></div>
-        <div class="form-group"><label class="form-label">资产类别</label><select class="form-select" v-model="asset.category"><option value="property">💰 财产型</option><option value="personality">📷 人格型</option><option value="mixed">🔗 混合型</option></select></div>
-        <div class="form-group"><label class="form-label">预估价值（元）</label><input class="form-input" type="number" v-model.number="asset.estimated_value" /></div>
-        <div class="form-group"><label class="form-label">处置意愿</label><select class="form-select" v-model="asset.disposal_method"><option value="inherit">指定继承人继承</option><option value="liquidate">变现后分配</option><option value="memorialize">保留为纪念</option><option value="authorize_view">授权特定人查阅</option><option value="delete">彻底删除</option><option value="no_action">暂不设定</option></select></div>
+        <div class="form-group"><label class="form-label" for="detail-identifier">账号标识</label><input class="form-input" id="detail-identifier" v-model="asset.account_identifier" /></div>
+        <div class="form-group"><label class="form-label" for="detail-category">资产类别</label><select class="form-select" id="detail-category" v-model="asset.category"><option value="property">💰 财产型</option><option value="personality">📷 人格型</option><option value="mixed">🔗 混合型</option></select></div>
+        <div class="form-group"><label class="form-label" for="detail-value">预估价值（元）</label><input class="form-input" id="detail-value" type="number" v-model.number="asset.estimated_value" /></div>
+        <div class="form-group"><label class="form-label" for="detail-disposal">处置意愿</label><select class="form-select" id="detail-disposal" v-model="asset.disposal_method"><option value="inherit">指定继承人继承</option><option value="liquidate">变现后分配</option><option value="memorialize">保留为纪念</option><option value="authorize_view">授权特定人查阅</option><option value="delete">彻底删除</option><option value="no_action">暂不设定</option></select></div>
       </div>
 
       <div v-if="asset.disposal_method === 'inherit'" class="grid grid-2" style="margin-top: 16px;">
-        <div class="form-group"><label class="form-label">继承人姓名</label><input class="form-input" v-model="asset.heir_name" placeholder="继承人姓名" /></div>
-        <div class="form-group"><label class="form-label">继承人联系方式</label><input class="form-input" v-model="asset.heir_contact" placeholder="电话或邮箱" /></div>
+        <div class="form-group"><label class="form-label" for="detail-heir-name">继承人姓名</label><input class="form-input" id="detail-heir-name" v-model="asset.heir_name" placeholder="继承人姓名" /></div>
+        <div class="form-group"><label class="form-label" for="detail-heir-contact">继承人联系方式</label><input class="form-input" id="detail-heir-contact" v-model="asset.heir_contact" placeholder="电话或邮箱" /></div>
       </div>
 
-      <div class="form-group mt-16"><label class="form-label">备注</label><textarea class="form-textarea" v-model="asset.notes" placeholder="关于此资产的其他说明..."></textarea></div>
+      <div class="form-group mt-16"><label class="form-label" for="detail-notes">备注</label><textarea class="form-textarea" id="detail-notes" v-model="asset.notes" placeholder="关于此资产的其他说明..."></textarea></div>
 
       <div style="display: flex; gap: 12px; justify-content: space-between; margin-top: 24px;">
         <button class="btn btn-danger btn-sm" @click="handleDelete">删除此资产</button>
@@ -79,6 +79,7 @@ import { invoke } from '../api/invoke';
 import { useAssetsStore } from '../stores/assets';
 import { usePlatformsStore } from '../stores/platforms';
 import { useSecurityStore } from '../stores/security';
+import { platformIcon } from '../utils/format';
 import type { ApiResponse, DigitalAsset } from '../types';
 
 const route = useRoute();
@@ -179,10 +180,6 @@ async function openOfficial() {
   } catch (e) {
     linkStatus.value = '打开失败：' + String(e);
   }
-}
-
-function platformIcon(name: string): string {
-  return { '支付宝': '💳', '微信': '💬', '淘宝': '🛒' }[name] || '📱';
 }
 
 async function handleSave() {

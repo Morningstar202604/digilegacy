@@ -31,14 +31,14 @@
           :class="{ active: currentRoute === route.path }"
           :data-tour="'nav-' + route.path.slice(1)"
         >
-          <span class="nav-icon">{{ route.icon }}</span>
+          <span class="nav-icon" aria-hidden="true">{{ route.icon }}</span>
           <span>{{ route.title }}</span>
         </router-link>
       </nav>
       
       <div class="sidebar-footer">
         <div class="sidebar-security">
-          <router-link v-if="!security.hasMasterPassword" to="/profile" style="color: var(--warning); text-decoration: none;">⚠️ 未启用加密 · 点此设置主密码</router-link>
+          <router-link v-if="!security.hasMasterPassword" to="/profile" style="color: var(--warning); text-decoration: none;"><span aria-hidden="true">⚠️</span> 未启用加密 · 点此设置主密码</router-link>
           <span v-else>数据本地加密存储 · 已启用主密码</span>
         </div>
         <div class="sidebar-brandline">
@@ -52,10 +52,10 @@
       <header class="main-header">
         <div class="header-title">{{ currentPageTitle }}</div>
         <div class="header-actions">
-          <button class="btn btn-sm btn-secondary" data-tour="help" @click="showHelp = true">❓ 帮助</button>
-          <button class="btn btn-sm btn-secondary" v-if="security.hasMasterPassword && security.unlocked" @click="handleLock">🔒 锁定</button>
+          <button class="btn btn-sm btn-secondary" data-tour="help" @click="showHelp = true"><span aria-hidden="true">❓</span> 帮助</button>
+          <button class="btn btn-sm btn-secondary" v-if="security.hasMasterPassword && security.unlocked" @click="handleLock"><span aria-hidden="true">🔒</span> 锁定</button>
           <button class="btn btn-sm" data-tour="checkin" :class="checkBtnClass" @click="handleCheckIn">
-            {{ checkBtnText }}
+            <span v-if="checkBtnIcon" aria-hidden="true">{{ checkBtnIcon }}</span> {{ checkBtnText }}
           </button>
         </div>
       </header>
@@ -71,32 +71,32 @@
       </main>
     </div>
 
-    <!-- 锁定遮罩 -->
+    <!-- 锁定遮罩：模态对话框语义 + 焦点困留，键盘/读屏用户不得穿透到遮罩后的功能 -->
     <div v-if="security.hasMasterPassword && !security.unlocked" class="lock-overlay">
-      <div class="lock-card">
+      <div class="lock-card" role="dialog" aria-modal="true" aria-labelledby="lock-title" ref="lockCardRef">
         <template v-if="!recoveryMode">
-          <div style="font-size: 40px;">🔒</div>
-          <h2 style="font-size: 18px; font-weight: 700; margin-top: 8px;">应用已锁定</h2>
+          <div style="font-size: 40px;" aria-hidden="true">🔒</div>
+          <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">应用已锁定</h2>
           <p class="text-muted" style="font-size: 13px; margin-top: 8px;">输入主密码解锁。数据以 AES-256-GCM 加密存储于本机，开发者无法读取。</p>
-          <input class="form-input" type="password" v-model="unlockPassword" placeholder="主密码" style="margin-top: 16px;" @keyup.enter="handleUnlock" />
-          <p v-if="unlockError" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ unlockError }}</p>
+          <input class="form-input" type="password" v-model="unlockPassword" aria-label="主密码" placeholder="主密码" style="margin-top: 16px;" @keyup.enter="handleUnlock" />
+          <p v-if="unlockError" role="alert" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ unlockError }}</p>
           <button class="btn btn-primary" style="margin-top: 16px; width: 100%;" :disabled="security.busy" @click="handleUnlock">{{ security.busy ? '验证中...' : '解锁' }}</button>
           <button class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="recoveryMode = true">忘记主密码？用恢复密钥重设</button>
           <p class="text-muted" style="font-size: 12px; margin-top: 12px;">主密码只用于本机解密；恢复密钥是设置时生成的一次性代码</p>
         </template>
         <template v-else>
-          <div style="font-size: 40px;">🔑</div>
-          <h2 style="font-size: 18px; font-weight: 700; margin-top: 8px;">恢复访问</h2>
+          <div style="font-size: 40px;" aria-hidden="true">🔑</div>
+          <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">恢复访问</h2>
           <p class="text-muted" style="font-size: 13px; margin-top: 8px;">输入设置主密码时保存的恢复密钥（形如 XXXX-XXXX-XXXX-XXXX-XXXX-XXXX）。</p>
-          <input class="form-input" v-model="recoveryCode" placeholder="恢复密钥" style="margin-top: 16px;" @keyup.enter="handleStartRecovery" />
+          <input class="form-input" v-model="recoveryCode" aria-label="恢复密钥" placeholder="恢复密钥" style="margin-top: 16px;" @keyup.enter="handleStartRecovery" />
           <template v-if="recoveryUnlocked">
-            <input class="form-input" type="password" v-model="recoveryNewPassword" placeholder="新主密码（至少 8 位）" style="margin-top: 12px;" />
-            <input class="form-input" type="password" v-model="recoveryNewPassword2" placeholder="确认新主密码" style="margin-top: 12px;" />
-            <p v-if="recoveryMessage" style="font-size: 13px; margin-top: 8px;" :style="{ color: recoveryOk ? 'var(--success)' : 'var(--danger)' }" class="recovery-msg">{{ recoveryMessage }}</p>
+            <input class="form-input" type="password" v-model="recoveryNewPassword" data-autofocus-pw aria-label="新主密码（至少 8 位）" placeholder="新主密码（至少 8 位）" style="margin-top: 12px;" />
+            <input class="form-input" type="password" v-model="recoveryNewPassword2" aria-label="确认新主密码" placeholder="确认新主密码" style="margin-top: 12px;" />
+            <p v-if="recoveryMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: recoveryOk ? 'var(--success)' : 'var(--danger)' }" class="recovery-msg">{{ recoveryMessage }}</p>
             <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleCompleteRecovery">{{ recoveryBusy ? '处理中...' : '重设主密码' }}</button>
-            <p v-if="recoveryNewCode" class="recovery-code-box">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
+            <p v-if="recoveryNewCode" class="recovery-code-box" role="alert">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
           </template>
-          <p v-else-if="recoveryError" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ recoveryError }}</p>
+          <p v-else-if="recoveryError" role="alert" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ recoveryError }}</p>
           <button class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="backToUnlock">返回主密码解锁</button>
         </template>
       </div>
@@ -109,7 +109,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke } from './api/invoke';
 
@@ -131,14 +131,40 @@ const route = useRoute();
 const dashboard = useDashboardStore();
 const security = useSecurityStore();
 
-// 版本号：构建期由 Vite 注入（见 vite.config.ts），兜底用 package.json 版本
-const appVersion = '0.1.0';
+// 版本号：构建期由 Vite 从 package.json 注入（见 vite.config.ts define）
+const appVersion = __APP_VERSION__;
 
 const unlockPassword = ref('');
 const unlockError = ref('');
 const showTour = ref(false);
 const showHelp = ref(false);
+const lockCardRef = ref<HTMLElement | null>(null);
 let stopReminders: (() => void) | null = null;
+
+// 焦点困留（document 捕获阶段拦截 Tab）：即使焦点因点击遮罩逃到对话框之外，
+// 下一次 Tab 也会被拉回对话框，禁止穿透到被遮罩的侧边栏与主内容
+function trapLockFocus(e: KeyboardEvent) {
+  if (e.key !== 'Tab') return;
+  const card = lockCardRef.value;
+  if (!card) return;
+  const focusables = Array.from(
+    card.querySelectorAll<HTMLElement>('button:not([disabled]), input, [href], textarea, select')
+  );
+  if (focusables.length === 0) return;
+  const active = document.activeElement as HTMLElement | null;
+  const inside = !!active && card.contains(active);
+  if (!inside) {
+    e.preventDefault();
+    focusables[0].focus();
+    return;
+  }
+  const idx = focusables.indexOf(active);
+  let next = idx + (e.shiftKey ? -1 : 1);
+  if (next < 0) next = focusables.length - 1;
+  if (next >= focusables.length) next = 0;
+  e.preventDefault();
+  focusables[next].focus();
+}
 
 function startTour() {
   showHelp.value = false;
@@ -217,6 +243,27 @@ const recoveryMessage = ref('');
 const recoveryOk = ref(false);
 const recoveryBusy = ref(false);
 const recoveryNewCode = ref('');
+
+// 锁定遮罩出现 / 内部状态切换（主密码↔恢复模式↔设置新密码）时：
+// 1. 注册全文档捕获级 Tab 困留（焦点逃出对话框也能被拉回）
+// 2. 焦点移入对应输入框（恢复设置新密码时聚焦新密码框，而非第一个输入框）
+watch(
+  () => [security.hasMasterPassword, security.unlocked, recoveryMode.value, recoveryUnlocked.value] as const,
+  async ([hasMasterPassword, unlocked, recMode, recUnlocked]) => {
+    const locked = hasMasterPassword && !unlocked;
+    if (locked) {
+      document.addEventListener('keydown', trapLockFocus, true);
+      await nextTick();
+      if (recMode && recUnlocked) {
+        lockCardRef.value?.querySelector<HTMLElement>('[data-autofocus-pw]')?.focus();
+      } else {
+        lockCardRef.value?.querySelector<HTMLElement>('input')?.focus();
+      }
+    } else {
+      document.removeEventListener('keydown', trapLockFocus, true);
+    }
+  }
+);
 
 async function handleStartRecovery() {
   recoveryError.value = '';
@@ -299,9 +346,20 @@ const checkBtnText = computed(() => {
   if (!status.dms_enabled) return 'DMS未启用';
   const days = status.days_until_due;
   if (days === null) return '点击检查';
-  if (days <= 0) return '⚠️ 请确认安全';
+  if (days <= 0) return '请确认安全';
   if (days <= 3) return `${days}天后需检查`;
-  return `✓ ${days}天后检查`;
+  return `${days}天后检查`;
+});
+
+// 图标与文案分离：emoji 走 aria-hidden 装饰位，读屏只读语义文本
+const checkBtnIcon = computed(() => {
+  const status = dashboard.checkInStatus;
+  if (!status?.dms_enabled) return '';
+  const days = status.days_until_due;
+  if (days === null) return '';
+  if (days <= 0) return '⚠️';
+  if (days <= 3) return '';
+  return '✓';
 });
 
 const checkBtnClass = computed(() => {
@@ -333,6 +391,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   unregisterActivityWatch();
   if (stopReminders) stopReminders();
+  document.removeEventListener('keydown', trapLockFocus, true);
 });
 </script>
 

@@ -1,16 +1,19 @@
 <template>
   <div class="tour-root">
     <!-- 遮罩可点击关闭：避免用户找不到出口时被"困"在引导里 -->
-    <div class="tour-blocker" @click="finish" title="点击关闭引导"></div>
+    <div class="tour-blocker" @click="finish" title="点击关闭引导" aria-label="点击关闭引导"></div>
 
     <div v-if="rect" class="tour-spotlight" :style="spotlightStyle"></div>
 
-    <div class="tour-card" :style="cardStyle" @click.stop>
-      <div class="tour-progress">
+    <div class="tour-card" ref="cardRef" tabindex="-1" :style="cardStyle" role="dialog" aria-modal="true" aria-labelledby="tour-title" @click.stop>
+      <div class="tour-progress" aria-hidden="true">
         <span v-for="(_, i) in steps" :key="i" class="tour-dot" :class="{ active: i === index }"></span>
       </div>
-      <div class="tour-title">{{ current.title }}</div>
-      <div class="tour-desc">{{ current.desc }}</div>
+      <!-- 切步时读屏自动播报（4.1.3 状态消息） -->
+      <div aria-live="polite">
+        <div class="tour-title" id="tour-title">{{ current.title }}</div>
+        <div class="tour-desc">{{ current.desc }}</div>
+      </div>
       <div class="tour-actions">
         <button class="btn btn-secondary btn-sm" @click="skip">跳过</button>
         <div style="display: flex; gap: 8px;">
@@ -33,6 +36,9 @@ interface TourStep {
 }
 
 const emit = defineEmits<{ (e: 'close'): void }>();
+
+const cardRef = ref<HTMLElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
 
 const steps: TourStep[] = [
   { target: null, title: '欢迎使用「归零」', desc: '30 秒带你认识主要功能，之后的每一步都可以点「跳过」。' },
@@ -124,11 +130,16 @@ onMounted(() => {
   measure();
   window.addEventListener('resize', measure);
   window.addEventListener('keydown', onKey);
+  // 焦点移入引导卡片（tabindex=-1 容器，避免 Enter 触发按钮与全局快捷键双重响应）；
+  // 关闭时归还焦点给打开引导的按钮
+  previouslyFocused = document.activeElement as HTMLElement | null;
+  cardRef.value?.focus();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', measure);
   window.removeEventListener('keydown', onKey);
+  previouslyFocused?.focus?.();
 });
 </script>
 

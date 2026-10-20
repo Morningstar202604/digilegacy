@@ -1,7 +1,7 @@
 <template>
   <div class="collapse-group" :class="{ open: isOpen }">
     <button class="collapse-head" type="button" :aria-expanded="isOpen" @click="toggle">
-      <span class="collapse-chevron">▸</span>
+      <span class="collapse-chevron" aria-hidden="true">▸</span>
       <span class="collapse-title">{{ title }}</span>
       <span v-if="count != null" class="collapse-count">{{ count }}</span>
     </button>

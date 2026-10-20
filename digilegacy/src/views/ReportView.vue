@@ -7,7 +7,7 @@
 
     <div v-if="report" class="report-page">
       <div class="report-title">数 字 遗 产 继 承 方 案</div>
-      <div style="text-align: center; color: var(--gray-500); font-size: 13px; margin-bottom: 32px;">
+      <div style="text-align: center; color: var(--gray-600); font-size: 13px; margin-bottom: 32px;">
         生成时间：{{ report.generated_at }} | 仅供内部参考
       </div>
 
@@ -30,7 +30,7 @@
           <div class="text-center"><div style="font-size: 32px; font-weight: 700; color: var(--primary);">{{ report.assets.length }}</div><div class="text-muted" style="font-size: 12px;">资产总数</div></div>
           <div class="text-center"><div style="font-size: 32px; font-weight: 700; color: var(--success);">{{ report.property_assets_count }}</div><div class="text-muted" style="font-size: 12px;">财产型</div></div>
           <div class="text-center"><div style="font-size: 32px; font-weight: 700; color: var(--secondary);">{{ report.personality_assets_count }}</div><div class="text-muted" style="font-size: 12px;">人格型</div></div>
-          <div class="text-center"><div style="font-size: 32px; font-weight: 700;">¥{{ formatValue(report.total_estimated_value) }}</div><div class="text-muted" style="font-size: 12px;">预估总价值</div></div>
+          <div class="text-center"><div style="font-size: 32px; font-weight: 700;">¥{{ formatMoney(report.total_estimated_value) }}</div><div class="text-muted" style="font-size: 12px;">预估总价值</div></div>
         </div>
       </div>
 
@@ -44,7 +44,7 @@
               <td>{{ asset.platform_name }}</td>
               <td>{{ asset.account_identifier }}</td>
               <td>{{ categoryLabel(asset.category) }}</td>
-              <td>{{ asset.estimated_value ? '¥' + formatValue(asset.estimated_value) : '-' }}</td>
+              <td>{{ asset.estimated_value ? '¥' + formatMoney(asset.estimated_value) : '-' }}</td>
               <td>{{ disposalLabel(asset.disposal_method) }}</td>
               <td>{{ asset.heir_name || '-' }}</td>
             </tr>
@@ -60,7 +60,7 @@
             处置方式：{{ disposalLabel(asset.disposal_method) }} |
             <span v-if="asset.heir_name">继承人：{{ asset.heir_name }} ({{ asset.heir_contact }})</span>
           </p>
-          <p style="font-size: 12px; color: var(--gray-500); margin-top: 4px;">平台策略：{{ getPlatformProcess(asset.platform_id) }}</p>
+          <p style="font-size: 12px; color: var(--gray-600); margin-top: 4px;">平台策略：{{ getPlatformProcess(asset.platform_id) }}</p>
         </div>
       </div>
 
@@ -100,9 +100,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '../api/invoke';
 
-import * as JSZip from 'jszip';
-
 import { usePlatformsStore } from '../stores/platforms';
+import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
 import type { ApiResponse, DigitalAsset } from '../types';
 
 interface InheritanceReportData {
@@ -123,26 +122,9 @@ const platforms = usePlatformsStore();
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
 
-function formatValue(n: number): string {
-  if (!n) return '0';
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
-  return n.toLocaleString('zh-CN');
-}
-
 const inheritableAssets = computed(() =>
   (report.value?.assets || []).filter(a => a.disposal_method !== 'no_action')
 );
-
-function categoryLabel(cat: string): string {
-  return { property: '财产型', personality: '人格型', mixed: '混合型' }[cat] || cat;
-}
-
-function disposalLabel(method: string): string {
-  return {
-    inherit: '指定继承', liquidate: '变现分配', memorialize: '保留纪念',
-    authorize_view: '授权查阅', delete: '彻底删除', donate: '捐赠', no_action: '待定',
-  }[method] || method;
-}
 
 function getPlatformProcess(platformId: number): string {
   const platform = platforms.platforms.find(p => p.id === platformId);
@@ -161,7 +143,23 @@ async function loadReport() {
 async function exportReport() {
   if (!report.value) return;
   const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
-  const fullHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>数字继承报告</title><style>body{font-family:sans-serif;max-width:800px;margin:0 auto;padding:40px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ddd;padding:8px;text-align:left}</style></head><body>${htmlContent}</body></html>`;
+  const fullHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>数字继承报告</title><style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#232019}
+h1,h2,h3{margin:0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{border-bottom:1px solid #e8e2d8;padding:10px 12px;text-align:left;vertical-align:middle;word-break:break-word}
+th{background:#f6f3ee;color:#6b6157;font-weight:600;font-size:13px;border-bottom:2px solid #e4ddd3}
+tr:hover td{background:#f6f3ee}
+.text-muted{color:#6b6157}.text-center{text-align:center}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}
+.stats-grid .text-center{padding:12px;border:1px solid #e4ddd3;border-radius:8px}
+.mt-16{margin-top:16px}
+.report-page{background:#fff;max-width:800px;margin:0 auto;padding:40px;border:1px solid #e8e2d8;border-radius:8px}
+.report-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:28px;letter-spacing:4px}
+.report-section{margin-bottom:26px}
+.report-section-title{font-size:16px;font-weight:600;padding-bottom:8px;border-bottom:2px solid #e4ddd3;margin-bottom:12px}
+@media print{body{padding:0}.report-page{border:none}}
+</style></head><body>${htmlContent}</body></html>`;
   try {
     const res = await invoke<ApiResponse<string>>('export_report_to_file', { content: fullHtml });
     if (res.success && res.data) {

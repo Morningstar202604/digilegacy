@@ -8,9 +8,9 @@
     <!-- 分类筛选 -->
     <div class="card mb-24">
       <div class="card-title mb-16">📂 按类型筛选</div>
-      <div class="flex gap-8 flex-wrap">
-        <button class="btn btn-sm" :class="typeFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="typeFilter = 'all'">全部</button>
-        <button class="btn btn-sm" v-for="t in templateTypes" :key="t.value" :class="typeFilter === t.value ? 'btn-primary' : 'btn-secondary'" @click="typeFilter = t.value">{{ t.label }}</button>
+      <div class="flex gap-8 flex-wrap" role="group" aria-label="按文书类型筛选">
+        <button class="btn btn-sm" :class="typeFilter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="typeFilter === 'all'" @click="typeFilter = 'all'">全部</button>
+        <button class="btn btn-sm" v-for="t in templateTypes" :key="t.value" :class="typeFilter === t.value ? 'btn-primary' : 'btn-secondary'" :aria-pressed="typeFilter === t.value" @click="typeFilter = t.value">{{ t.label }}</button>
       </div>
     </div>
 
@@ -38,11 +38,11 @@
     </div>
 
     <!-- 预览弹窗 -->
-    <div v-if="previewTemplate" class="modal-overlay" @click.self="previewTemplate = null">
-      <div class="modal-content">
+    <div v-if="previewTemplate" class="modal-overlay" @click.self="closePreview">
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="legal-preview-title" ref="previewRef" @keydown.tab="trapPreviewFocus">
         <div class="modal-header">
-          <h3 style="font-size: 18px; font-weight: 600;">{{ previewTemplate.name }}</h3>
-          <button class="btn btn-sm btn-secondary" @click="previewTemplate = null">关闭</button>
+          <h3 id="legal-preview-title" style="font-size: 18px; font-weight: 600; margin: 0;">{{ previewTemplate.name }}</h3>
+          <button class="btn btn-sm btn-secondary" ref="previewCloseRef" @click="closePreview">关闭</button>
         </div>
         <div class="modal-body">
           <pre style="white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: var(--gray-700);">{{ previewTemplate.content }}</pre>
@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
 
 interface LegalTemplate {
   id: string;
@@ -296,6 +296,50 @@ const filteredTemplates = computed(() => {
 });
 
 const previewTemplate = ref<LegalTemplate | null>(null);
+const previewRef = ref<HTMLElement | null>(null);
+const previewCloseRef = ref<HTMLElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
+
+function closePreview() {
+  previewTemplate.value = null;
+}
+
+// 预览弹窗：Esc 关闭、焦点移入/困留/归还
+function onPreviewKey(e: KeyboardEvent) {
+  if (e.key === 'Escape') closePreview();
+}
+
+function trapPreviewFocus(e: KeyboardEvent) {
+  const dialog = previewRef.value;
+  if (!dialog) return;
+  const focusables = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input, [href], textarea, select'));
+  if (focusables.length === 0) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  const active = document.activeElement;
+  if (e.shiftKey && (active === first || !dialog.contains(active))) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && (active === last || !dialog.contains(active))) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+watch(previewTemplate, async (val) => {
+  if (val) {
+    previouslyFocused = document.activeElement as HTMLElement | null;
+    window.addEventListener('keydown', onPreviewKey);
+    await nextTick();
+    previewCloseRef.value?.focus();
+  } else {
+    window.removeEventListener('keydown', onPreviewKey);
+    previouslyFocused?.focus?.();
+    previouslyFocused = null;
+  }
+});
+
+onBeforeUnmount(() => window.removeEventListener('keydown', onPreviewKey));
 
 function downloadTemplate(tmpl: LegalTemplate) {
   const blob = new Blob([tmpl.content], { type: 'text/plain;charset=utf-8' });

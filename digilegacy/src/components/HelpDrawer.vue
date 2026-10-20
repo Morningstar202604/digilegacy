@@ -1,9 +1,9 @@
 <template>
-  <div class="drawer-mask" @click="emit('close')"></div>
-  <aside class="help-drawer">
+  <div class="drawer-mask" aria-hidden="true" @click="emit('close')"></div>
+  <aside class="help-drawer" role="dialog" aria-modal="true" aria-labelledby="help-title" ref="drawerRef">
     <div class="help-header">
-      <div style="font-size: 17px; font-weight: 700;">❓ 帮助中心</div>
-      <button class="btn btn-secondary btn-sm" @click="emit('close')">关闭</button>
+      <h2 id="help-title" style="font-size: 17px; font-weight: 700; margin: 0;"><span aria-hidden="true">❓</span> 帮助中心</h2>
+      <button class="btn btn-secondary btn-sm" ref="closeBtnRef" @click="emit('close')">关闭</button>
     </div>
 
     <div class="help-body">
@@ -33,7 +33,7 @@
         <div class="help-section-title">⏰ 安心传承是怎么提醒的</div>
         <ul class="help-list">
           <li>应用运行期间每 30 分钟自动检查一次：距确认到期 3 天内或已逾期，会弹出系统通知（每天至多一条）</li>
-          <li>逾期后按三级确认链推进：提醒你本人 → 通知紧急联系人 → 向遗产执行人发送密钥信封</li>
+          <li>逾期后按三级确认链推进：提醒你本人 → 通知紧急联系人 → 向遗产执行人发送数字遗产继承指引（不含任何账号凭据）</li>
           <li>每条通知都会写入本地发件箱（应用数据目录 `dms_outbox`），另行配置邮件环境变量时可同时发邮件</li>
           <li>可选开启云端心跳（零内容）：应用每 30 分钟向自托管服务器上报一次令牌，服务器只在长时间收不到时按预注册联系方式提醒，接触不到任何用户数据</li>
           <li>短信与跨设备推送仍属后续云端计划：心跳服务器参考实现已就绪（server/ 目录）</li>
@@ -53,7 +53,7 @@
       <div class="help-section about-section">
         <div class="help-section-title">ℹ️ 关于</div>
         <p class="about-text">
-          归零 DigiLegacy · 数字遗产管理及继承系统 <span class="about-ver">v0.1.0</span><br>
+          归零 DigiLegacy · 数字遗产管理及继承系统 <span class="about-ver">v{{ appVersion }}</span><br>
           开源（MIT 许可）· 本地优先 · 无服务器、无遥测<br>
           你的数据只属于你自己：即使我们（开发者）也无法读取。
         </p>
@@ -64,16 +64,54 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'replay-tour'): void }>();
+
+const appVersion = __APP_VERSION__;
+const drawerRef = ref<HTMLElement | null>(null);
+const closeBtnRef = ref<HTMLElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close');
 }
 
-onMounted(() => window.addEventListener('keydown', onKey));
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
+// Tab 困留在面板内：aria-modal 面板不允许键盘穿透到背景内容
+function trapTab(e: KeyboardEvent) {
+  if (e.key !== 'Tab') return;
+  const panel = drawerRef.value;
+  if (!panel) return;
+  const focusables = Array.from(
+    panel.querySelectorAll<HTMLElement>('button:not([disabled]), input, [href], textarea, select')
+  );
+  if (focusables.length === 0) return;
+  const active = document.activeElement as HTMLElement | null;
+  if (!active || !panel.contains(active)) {
+    e.preventDefault();
+    focusables[0].focus();
+    return;
+  }
+  const idx = focusables.indexOf(active);
+  let next = idx + (e.shiftKey ? -1 : 1);
+  if (next < 0) next = focusables.length - 1;
+  if (next >= focusables.length) next = 0;
+  e.preventDefault();
+  focusables[next].focus();
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKey);
+  document.addEventListener('keydown', trapTab, true);
+  // 打开时焦点移入面板；关闭时归还给触发按钮
+  previouslyFocused = document.activeElement as HTMLElement | null;
+  closeBtnRef.value?.focus();
+});
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey);
+  document.removeEventListener('keydown', trapTab, true);
+  previouslyFocused?.focus?.();
+});
 </script>
 
 <style scoped>

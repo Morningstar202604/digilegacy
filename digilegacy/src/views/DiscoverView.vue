@@ -29,14 +29,16 @@
     </div>
 
     <div class="category-grid" v-if="currentStep === 1">
-      <div v-for="cat in assetCategories" :key="cat.key" 
+      <button v-for="cat in assetCategories" :key="cat.key"
+           type="button"
            class="category-card" :class="{ selected: selectedCats.has(cat.key) }"
+           :aria-pressed="selectedCats.has(cat.key)"
            @click="toggleCat(cat.key)">
-        <div class="category-icon">{{ cat.icon }}</div>
+        <div class="category-icon" aria-hidden="true">{{ cat.icon }}</div>
         <div class="category-name">{{ cat.name }}</div>
         <div class="category-desc">{{ cat.desc }}</div>
-        <div class="category-check" v-if="selectedCats.has(cat.key)">✓</div>
-      </div>
+        <div class="category-check" v-if="selectedCats.has(cat.key)" aria-hidden="true">✓</div>
+      </button>
     </div>
 
     <div class="card mt-24" v-if="currentStep === 1" style="text-align: center;">
@@ -67,7 +69,11 @@
         <div class="platform-grid">
           <div v-for="platform in cat.platforms" :key="platform.id" class="platform-card"
                :class="{ selected: platforms.isSelected(platform.id) }"
-               @click="platforms.toggle(platform.id)">
+               role="checkbox" :aria-checked="platforms.isSelected(platform.id)" tabindex="0"
+               :aria-label="`${platform.name}（${platform.inheritable ? '可继承' : '难继承'}）`"
+               @click="platforms.toggle(platform.id)"
+               @keydown.enter.prevent="platforms.toggle(platform.id)"
+               @keydown.space.prevent="platforms.toggle(platform.id)">
             <div class="platform-card-header">
               <div class="minw-0">
                 <div class="platform-name ellipsis">{{ platform.name }}</div>
@@ -103,7 +109,7 @@
 
       <div v-for="platform in selectedPlatformList" :key="platform.id" class="card mb-16">
         <div class="flex items-center gap-12 mb-16">
-          <div class="platform-icon">{{ platformIcons[platform.category] || '📱' }}</div>
+          <div class="platform-icon" aria-hidden="true">{{ categoryIcon(platform.category) }}</div>
           <div>
             <strong>{{ platform.name }}</strong>
             <span class="tag ml-12" :class="platform.inheritable ? 'tag-success' : 'tag-danger'">
@@ -114,12 +120,12 @@
 
         <div class="grid grid-2">
           <div class="form-group">
-            <label class="form-label">账号标识（不含密码）</label>
-            <input class="form-input" v-model="assetForms[platform.id].identifier" placeholder="如：手机号/用户名/ID" />
+            <label class="form-label" :for="'identifier-' + platform.id">账号标识（不含密码）</label>
+            <input class="form-input" :id="'identifier-' + platform.id" v-model="assetForms[platform.id].identifier" placeholder="如：手机号/用户名/ID" />
           </div>
           <div class="form-group">
-            <label class="form-label">资产类别</label>
-            <select class="form-select" v-model="assetForms[platform.id].category">
+            <label class="form-label" :for="'category-' + platform.id">资产类别</label>
+            <select class="form-select" :id="'category-' + platform.id" v-model="assetForms[platform.id].category">
               <option value="property">💰 财产型（有经济价值）</option>
               <option value="personality">📷 人格型（情感价值为主）</option>
               <option value="mixed">🔗 混合型（兼具两者）</option>
@@ -129,12 +135,12 @@
 
         <div class="grid grid-2">
           <div class="form-group">
-            <label class="form-label">预估价值（元）</label>
-            <input class="form-input" type="number" v-model.number="assetForms[platform.id].value" placeholder="如不了解可填0" />
+            <label class="form-label" :for="'value-' + platform.id">预估价值（元）</label>
+            <input class="form-input" :id="'value-' + platform.id" type="number" v-model.number="assetForms[platform.id].value" placeholder="如不了解可填0" />
           </div>
           <div class="form-group">
-            <label class="form-label">希望如何处置</label>
-            <select class="form-select" v-model="assetForms[platform.id].disposal">
+            <label class="form-label" :for="'disposal-' + platform.id">希望如何处置</label>
+            <select class="form-select" :id="'disposal-' + platform.id" v-model="assetForms[platform.id].disposal">
               <option value="inherit">指定继承人继承</option>
               <option value="liquidate">变现后分配</option>
               <option value="memorialize">保留为纪念</option>
@@ -147,18 +153,18 @@
 
         <div class="grid grid-2" v-if="assetForms[platform.id].disposal === 'inherit'">
           <div class="form-group">
-            <label class="form-label">继承人姓名</label>
-            <input class="form-input" v-model="assetForms[platform.id].heirName" placeholder="继承人姓名" />
+            <label class="form-label" :for="'heir-name-' + platform.id">继承人姓名</label>
+            <input class="form-input" :id="'heir-name-' + platform.id" v-model="assetForms[platform.id].heirName" placeholder="继承人姓名" />
           </div>
           <div class="form-group">
-            <label class="form-label">继承人联系方式</label>
-            <input class="form-input" v-model="assetForms[platform.id].heirContact" placeholder="电话或邮箱" />
+            <label class="form-label" :for="'heir-contact-' + platform.id">继承人联系方式</label>
+            <input class="form-input" :id="'heir-contact-' + platform.id" v-model="assetForms[platform.id].heirContact" placeholder="电话或邮箱" />
           </div>
         </div>
       </div>
 
       <div class="card" style="text-align: center;">
-        <p v-if="saveError" class="text-muted" style="color: var(--danger); font-size: 13px; margin-bottom: 12px;">{{ saveError }}</p>
+        <p v-if="saveError" class="text-muted" role="alert" style="color: var(--danger); font-size: 13px; margin-bottom: 12px;">{{ saveError }}</p>
         <button class="btn btn-success btn-lg" :disabled="saving" @click="saveAllAssets">
           {{ saving ? '保存中...' : '💾 保存全部资产' }}
         </button>
@@ -184,6 +190,7 @@ import { ref, computed, reactive, onMounted } from 'vue';
 
 import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
+import { categoryIcon } from '../utils/format';
 import CollapseGroup from '../components/CollapseGroup.vue';
 import type { Platform } from '../types';
 
@@ -287,13 +294,6 @@ const assetForms = reactive<Record<number, AssetForm>>({});
 const saving = ref(false);
 const saveError = ref('');
 
-const platformIcons: Record<string, string> = {
-  '支付金融': '💳', '社交通讯': '💬', '游戏': '🎮', '电商': '🛒',
-  '金融证券': '📈', '知识付费': '📚', '工具订阅': '🔧', '出行住宿': '✈️',
-  '生活工具': '🏠', '内容创作': '✍️', '存储云服务': '☁️', '政务服务': '🏛️',
-  '音视频': '🎬', '学习与考试': '🎓', '汽车服务': '🚗', '生活服务': '🍜',
-};
-
 const selectedPlatformList = computed(() =>
   platforms.platforms.filter(p => platforms.isSelected(p.id))
 );
@@ -367,7 +367,7 @@ onMounted(async () => {
 .step-item { flex: 1; display: flex; align-items: center; gap: 8px; }
 .step-circle {
   width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
-  justify-content: center; font-weight: 700; font-size: 14px; background: var(--gray-200); color: var(--gray-500);
+  justify-content: center; font-weight: 700; font-size: 14px; background: var(--gray-200); color: var(--gray-700);
 }
 .step-item.active .step-circle { background: var(--primary); color: white; }
 
@@ -385,12 +385,16 @@ onMounted(async () => {
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
+  /* 由 div 改为 button 后抵消浏览器默认样式，保持视觉不变 */
+  font: inherit;
+  color: inherit;
+  width: 100%;
 }
-.category-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.category-card:hover, .category-card:focus-visible { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 .category-card.selected { border-color: var(--primary); background: var(--primary-light); }
 .category-icon { font-size: 36px; margin-bottom: 8px; }
 .category-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-.category-desc { font-size: 12px; color: var(--gray-500); line-height: 1.4; }
+.category-desc { font-size: 12px; color: var(--gray-600); line-height: 1.4; }
 .category-check {
   position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
   border-radius: 50%; background: var(--primary); color: white; display: flex;

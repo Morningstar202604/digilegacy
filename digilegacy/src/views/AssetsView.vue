@@ -9,15 +9,18 @@
     </div>
 
     <div class="card mb-24">
-      <div class="flex items-center gap-12" style="flex-wrap: wrap;">
-        <button class="btn btn-sm" :class="filter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="filter = 'all'">全部 ({{ assets.assets.length }})</button>
-        <button class="btn btn-sm" :class="filter === 'property' ? 'btn-primary' : 'btn-secondary'" @click="filter = 'property'">💰 财产型 ({{ assets.propertyCount }})</button>
-        <button class="btn btn-sm" :class="filter === 'personality' ? 'btn-primary' : 'btn-secondary'" @click="filter = 'personality'">📷 人格型 ({{ assets.personalityCount }})</button>
-        <button class="btn btn-sm" :class="filter === 'mixed' ? 'btn-primary' : 'btn-secondary'" @click="filter = 'mixed'">🔗 混合型 ({{ assets.mixedCount }})</button>
+      <div class="flex items-center gap-12" style="flex-wrap: wrap;" role="group" aria-label="按类别筛选资产">
+        <button class="btn btn-sm" :class="filter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'all'" @click="filter = 'all'">全部 ({{ assets.assets.length }})</button>
+        <button class="btn btn-sm" :class="filter === 'property' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'property'" @click="filter = 'property'">💰 财产型 ({{ assets.propertyCount }})</button>
+        <button class="btn btn-sm" :class="filter === 'personality' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'personality'" @click="filter = 'personality'">📷 人格型 ({{ assets.personalityCount }})</button>
+        <button class="btn btn-sm" :class="filter === 'mixed' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'mixed'" @click="filter = 'mixed'">🔗 混合型 ({{ assets.mixedCount }})</button>
       </div>
     </div>
 
-    <div v-for="asset in filteredAssets" :key="asset.id" class="card mb-16 asset-row" @click="$router.push(`/assets/${asset.id}`)">
+    <div v-for="asset in filteredAssets" :key="asset.id" class="card mb-16 asset-row"
+         role="link" tabindex="0" :aria-label="`查看资产 ${asset.platform_name} 详情`"
+         @click="$router.push(`/assets/${asset.id}`)"
+         @keydown.enter="$router.push(`/assets/${asset.id}`)">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div style="display: flex; gap: 16px;">
           <div class="asset-icon">{{ platformIcon(asset.platform_name) }}</div>
@@ -50,6 +53,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useAssetsStore } from '../stores/assets';
+import { formatMoney, categoryLabel, disposalLabel, platformIcon } from '../utils/format';
 
 const assets = useAssetsStore();
 const filter = ref<string>('all');
@@ -58,24 +62,6 @@ const filteredAssets = computed(() => {
   if (filter.value === 'all') return assets.assets;
   return assets.assets.filter(a => a.category === filter.value);
 });
-
-function formatMoney(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
-  return n.toLocaleString('zh-CN');
-}
-
-function categoryLabel(cat: string): string {
-  return { property: '财产型', personality: '人格型', mixed: '混合型' }[cat] || cat;
-}
-
-function disposalLabel(method: string): string {
-  return { inherit: '指定继承', liquidate: '变现分配', memorialize: '保留纪念', authorize_view: '授权查阅', delete: '彻底删除', donate: '捐赠', no_action: '待设定' }[method] || method;
-}
-
-function platformIcon(name: string): string {
-  const map: Record<string, string> = { '支付宝': '💳', '微信': '💬', '微博': '📰', '淘宝': '🛒', '王者荣耀': '🎮', '原神': '⚔️', '同花顺': '📈' };
-  return map[name] || '📱';
-}
 
 onMounted(async () => {
   if (assets.assets.length === 0) await assets.loadAssets();

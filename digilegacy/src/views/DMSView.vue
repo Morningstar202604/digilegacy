@@ -6,7 +6,7 @@
     <!-- 状态卡片 -->
     <div class="card mb-32" :class="statusClass">
       <div class="flex items-center gap-12">
-        <div style="font-size: 48px;">{{ statusIcon }}</div>
+        <div style="font-size: 48px;" aria-hidden="true">{{ statusIcon }}</div>
         <div>
           <div style="font-size: 20px; font-weight: 700;" :style="{ color: statusColor }">{{ statusTitle }}</div>
           <div class="text-muted mt-16" style="font-size: 13px;">{{ statusSubtitle }}</div>
@@ -27,8 +27,8 @@
       <div class="card">
         <div class="card-title mb-16">⚙️ 检查设置</div>
         <div class="form-group">
-          <label class="form-label">检查间隔</label>
-          <select class="form-select" v-model.number="settings.interval">
+          <label class="form-label" for="dms-interval">检查间隔</label>
+          <select class="form-select" id="dms-interval" v-model.number="settings.interval">
             <option :value="7">每周确认一次</option>
             <option :value="14">每两周确认一次</option>
             <option :value="30">每月确认一次</option>
@@ -44,12 +44,12 @@
       <div class="card-title mb-16">🔔 本地提醒</div>
       <ul class="dms-note-list">
         <li>应用运行期间每 30 分钟自动检查：距确认到期 <strong>3 天内或已逾期</strong>，会弹出系统通知（每天至多一条）。</li>
-        <li>分级通知同步写入<strong>本地发件箱</strong>（应用数据目录 `dms_outbox`）；配置邮件环境变量 DMS_SMTP_HOST / DMS_SMTP_PORT / SMTP_FROM 后可同时发送邮件。</li>
+        <li>分级通知同步写入<strong>本地发件箱</strong>（应用数据目录 `dms_outbox`）；配置邮件环境变量 DMS_SMTP_HOST / DMS_SMTP_PORT / SMTP_FROM（可选 DMS_SMTP_USER / DMS_SMTP_PASS）后可同时发送邮件，默认要求 STARTTLS 加密。</li>
         <li>短信与跨设备推送属于后续<strong>云端计划</strong>：服务端接入后启用，本地数据已为其预留。</li>
       </ul>
       <div style="display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap;">
         <button class="btn btn-secondary btn-sm" :disabled="testingNotify" @click="handleTestNotify">{{ testingNotify ? '发送中...' : '发送测试提醒' }}</button>
-        <span v-if="testResult" style="font-size: 12px;" :style="{ color: testResult === 'ok' ? 'var(--success)' : 'var(--warning)' }">
+        <span v-if="testResult" style="font-size: 12px;" aria-live="polite" :style="{ color: testResult === 'ok' ? 'var(--success)' : 'var(--danger)' }">
           {{ testResult === 'ok' ? '已发送，请查看系统通知' : '发送失败或当前环境不支持（浏览器预览不发系统通知）' }}
         </span>
       </div>
@@ -65,11 +65,11 @@
         </div>
         <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 2 }">
           <span class="dms-stage-num">2️⃣</span>
-          <div><strong>第二阶段（再7天后）</strong><p class="text-muted">写信通知紧急联系人确认你的状态（邮件 / 本地发件箱）</p></div>
+          <div><strong>第二阶段（再7天后）</strong><p class="text-muted">写信通知紧急联系人确认你的状态（优先发至其邮箱；邮件 / 本地发件箱）</p></div>
         </div>
         <div class="dms-stage" :class="{ 'dms-stage-active': dmsEvaluation?.current_stage === 3 }">
           <span class="dms-stage-num">3️⃣</span>
-          <div><strong>第三阶段（再14天后）</strong><p class="text-muted">向遗产执行人发送"数字遗产密钥信封"（邮件 / 本地发件箱）</p></div>
+          <div><strong>第三阶段（再14天后）</strong><p class="text-muted">向遗产执行人发送数字遗产继承指引邮件（不含任何账号凭据；邮件 / 本地发件箱）</p></div>
         </div>
       </div>
     </div>
@@ -145,7 +145,7 @@ const statusSubtitle = computed(() => {
   }[dmsState.value] || '';
 });
 const statusColor = computed(() => ({
-  ok: 'var(--success)', warning: 'var(--warning)', overdue: 'var(--danger)', disabled: 'var(--gray-500)',
+  ok: 'var(--success-strong)', warning: 'var(--warning-strong)', overdue: 'var(--danger-strong)', disabled: 'var(--gray-600)',
 }[dmsState.value]));
 const statusClass = computed(() => ({
   ok: 'dms-ok', warning: 'dms-warning', overdue: 'dms-overdue', disabled: 'dms-disabled',
@@ -161,8 +161,12 @@ async function handleCheckIn() {
 }
 
 async function saveSettings() {
-  await dashboard.configureDms(settings.value.enabled, settings.value.interval);
-  alert('设置已保存');
+  try {
+    await dashboard.configureDms(settings.value.enabled, settings.value.interval);
+    alert('设置已保存');
+  } catch (e) {
+    alert('设置保存失败：' + String(e));
+  }
 }
 
 onMounted(async () => {

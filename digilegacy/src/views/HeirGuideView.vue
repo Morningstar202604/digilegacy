@@ -8,7 +8,7 @@
     <!-- 使用前提 -->
     <div class="card mb-32" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b;">
       <div class="flex items-center gap-12">
-        <span style="font-size: 36px;">⚠️</span>
+        <span style="font-size: 36px;" aria-hidden="true">⚠️</span>
         <div>
           <strong style="font-size: 16px;">重要前提</strong>
           <p style="font-size: 13px; margin-top: 4px; color: var(--gray-700);">
@@ -44,20 +44,20 @@
     <!-- Tab 切换 -->
     <div class="card mb-24">
       <div class="card-title mb-16">
-        <div class="flex gap-4">
-          <button class="tab-btn" :class="{ active: activeTab === 'guide' }" @click="activeTab = 'guide'">📋 继承指引</button>
-          <button class="tab-btn" :class="{ active: activeTab === 'monetization' }" @click="activeTab = 'monetization'">💰 变现/过户路径卡</button>
+        <div class="flex gap-4" role="tablist" aria-label="向导内容切换">
+          <button class="tab-btn" :class="{ active: activeTab === 'guide' }" role="tab" :aria-selected="activeTab === 'guide'" @click="activeTab = 'guide'">📋 继承指引</button>
+          <button class="tab-btn" :class="{ active: activeTab === 'monetization' }" role="tab" :aria-selected="activeTab === 'monetization'" @click="activeTab = 'monetization'">💰 变现/过户路径卡</button>
         </div>
       </div>
 
       <!-- Tab 1: 继承指引 (原内容) -->
       <div v-if="activeTab === 'guide'">
         <div class="flex items-center justify-between flex-wrap gap-12 mb-16">
-          <div class="flex gap-8">
-            <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = 'all'">全部</button>
-            <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '简单'">简单</button>
-            <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '中等'">中等</button>
-            <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" @click="difficultyFilter = '困难'">困难</button>
+          <div class="flex gap-8" role="group" aria-label="按难度筛选">
+            <button class="btn btn-sm" :class="difficultyFilter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="difficultyFilter === 'all'" @click="difficultyFilter = 'all'">全部</button>
+            <button class="btn btn-sm" :class="difficultyFilter === '简单' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="difficultyFilter === '简单'" @click="difficultyFilter = '简单'">简单</button>
+            <button class="btn btn-sm" :class="difficultyFilter === '中等' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="difficultyFilter === '中等'" @click="difficultyFilter = '中等'">中等</button>
+            <button class="btn btn-sm" :class="difficultyFilter === '困难' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="difficultyFilter === '困难'" @click="difficultyFilter = '困难'">困难</button>
           </div>
           <button class="collapse-all" @click="toggleAllGuide">{{ guideAllOpen ? '收起全部' : '展开全部' }}</button>
         </div>
@@ -105,9 +105,9 @@
       <!-- Tab 2: 变现/过户路径卡 (新增) -->
       <div v-if="activeTab === 'monetization'">
         <div class="flex items-center justify-between flex-wrap gap-12 mb-8">
-          <div class="flex gap-8 flex-wrap">
-            <button class="btn btn-sm" :class="categoryFilter === 'all' ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = 'all'">全部</button>
-            <button class="btn btn-sm" v-for="cat in categories" :key="cat" :class="categoryFilter === cat ? 'btn-primary' : 'btn-secondary'" @click="categoryFilter = cat">{{ cat }}</button>
+          <div class="flex gap-8 flex-wrap" role="group" aria-label="按类别筛选">
+            <button class="btn btn-sm" :class="categoryFilter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="categoryFilter === 'all'" @click="categoryFilter = 'all'">全部</button>
+            <button class="btn btn-sm" v-for="cat in categories" :key="cat" :class="categoryFilter === cat ? 'btn-primary' : 'btn-secondary'" :aria-pressed="categoryFilter === cat" @click="categoryFilter = cat">{{ cat }}</button>
           </div>
           <button class="collapse-all" @click="toggleAllExt">{{ extAllOpen ? '收起全部' : '展开全部' }}</button>
         </div>

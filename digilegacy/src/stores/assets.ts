@@ -72,10 +72,8 @@ export const useAssetsStore = defineStore('assets', () => {
   async function updateAsset(id: number, req: AssetRequest) {
     try {
       const res = await invoke<ApiResponse<void>>('update_asset', { id, req });
-      if (res.success) {
-        await loadAssets();
-      }
       if (!res.success) throw new Error(res.message);
+      await loadAssets();
       return res;
     } catch (e) {
       console.error('更新资产失败:', e);

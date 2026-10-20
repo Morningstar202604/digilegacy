@@ -5,9 +5,9 @@
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">
-            你好，{{ displayName }} 👋
+            你好，{{ displayName }} <span aria-hidden="true">👋</span>
           </h2>
-          <p style="font-size: 14px; opacity: 0.85; line-height: 1.6;">
+          <p style="font-size: 14px; line-height: 1.6;">
             数字遗产管理不仅是财产问题，更是对家人的关爱与责任。<br>
             你的数字人生，值得一个有归处的终点。
           </p>
@@ -16,7 +16,7 @@
             <router-link to="/report" class="btn btn-lg btn-ghost">📄 查看继承报告</router-link>
           </div>
         </div>
-        <div style="font-size: 64px; opacity: 0.3;">🌐</div>
+        <div style="font-size: 64px; opacity: 0.3;" aria-hidden="true">🌐</div>
       </div>
     </div>
 
@@ -121,6 +121,7 @@ import { computed, onMounted } from 'vue';
 
 import { useDashboardStore } from '../stores/dashboard';
 import { useAssetsStore } from '../stores/assets';
+import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
 
 const dashboard = useDashboardStore();
 const assetsStore = useAssetsStore();
@@ -129,23 +130,6 @@ const stats = computed(() => dashboard.stats);
 const displayName = computed(() => dashboard.user?.full_name || '朋友');
 const recentAssets = computed(() => assetsStore.assets.slice(0, 5));
 
-function formatMoney(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
-  return n.toLocaleString('zh-CN');
-}
-
-function categoryLabel(cat: string): string {
-  return { property: '财产型', personality: '人格型', mixed: '混合型' }[cat] || cat;
-}
-
-function disposalLabel(method: string): string {
-  const map: Record<string, string> = {
-    inherit: '指定继承', liquidate: '变现分配', memorialize: '保留纪念',
-    authorize_view: '授权查阅', delete: '彻底删除', donate: '捐赠', no_action: '待定',
-  };
-  return map[method] || method;
-}
-
 onMounted(async () => {
   await Promise.all([dashboard.refreshAll(), assetsStore.loadAssets()]);
 });
@@ -153,7 +137,8 @@ onMounted(async () => {
 
 <style scoped>
 .hero-card {
-  background: linear-gradient(135deg, #8a4534 0%, #c56a58 100%);
+  /* 浅端压深至 #b45c4a：白字正文（14px）对比度 4.59:1，满足 WCAG AA */
+  background: linear-gradient(135deg, #8a4534 0%, #b45c4a 100%);
   border: none;
   color: white;
 }

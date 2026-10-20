@@ -84,9 +84,11 @@ function defaultState(): MockState {
       emergency_contact_name: '演示联系人',
       emergency_contact_phone: '139****0000',
       emergency_contact_relation: '子女',
+      emergency_contact_email: 'contact@example.com',
       heir_primary_name: '演示继承人',
       heir_primary_phone: '137****0000',
       heir_primary_relation: '子女',
+      heir_primary_email: 'heir@example.com',
       check_in_interval_days: 30,
       last_check_in: null,
       dms_enabled: true,
@@ -351,7 +353,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       state.masterPassword = password;
       saveState(state);
       sessionStorage.setItem(SS_UNLOCK, '1');
-      return ok({ has_master_password: true, unlocked: true }, '加密已启用（预览模式为演示实现）') as T;
+      // 与桌面端一致：恢复密钥放在 data 字段返回（预览模式为演示数据）
+      return ok({ status: { has_master_password: true, unlocked: true }, recovery_code: 'ABCD-EFGH-JKLM-NPQR-STUV-WXYZ' }, '加密已启用（预览模式为演示实现）') as T;
     }
 
     case 'unlock': {

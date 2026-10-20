@@ -21,18 +21,19 @@ export const useSecurityStore = defineStore('security', () => {
     }
   }
 
-  async function setMasterPassword(password: string): Promise<string> {
+  async function setMasterPassword(password: string): Promise<{ ok: boolean; message: string; recoveryCode: string }> {
     busy.value = true;
     try {
-      const res = await invoke<ApiResponse<SecurityStatus>>('set_master_password', { password });
+      const res = await invoke<ApiResponse<{ status: SecurityStatus; recovery_code: string }>>('set_master_password', { password });
       if (res.success && res.data) {
         hasMasterPassword.value = true;
         unlocked.value = true;
-        return '';
+        // 恢复密钥只在此响应中出现一次，必须原样交给 UI 强制展示
+        return { ok: true, message: res.message, recoveryCode: res.data.recovery_code };
       }
-      return res.message;
+      return { ok: false, message: res.message, recoveryCode: '' };
     } catch (e) {
-      return String(e);
+      return { ok: false, message: String(e), recoveryCode: '' };
     } finally {
       busy.value = false;
     }

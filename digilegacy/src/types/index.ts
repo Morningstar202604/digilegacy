@@ -71,9 +71,11 @@ export interface UserProfile {
   emergency_contact_name: string;
   emergency_contact_phone: string;
   emergency_contact_relation: string;
+  emergency_contact_email: string;
   heir_primary_name: string;
   heir_primary_phone: string;
   heir_primary_relation: string;
+  heir_primary_email: string;
   check_in_interval_days: number;
   last_check_in: string | null;
   dms_enabled: boolean;
