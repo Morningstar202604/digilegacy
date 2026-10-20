@@ -1,8 +1,7 @@
 # DigiLegacy 归零 — Open-Source Digital Legacy & Inheritance Manager
 
-[![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/cargo%20test-39%20passed-brightgreen.svg)](#development--verification)
+[![Tests](https://img.shields.io/badge/cargo%20test-40%20passed-brightgreen.svg)](#development--verification)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#development)
 [![No servers](https://img.shields.io/badge/servers-none-4a7c8c.svg)](#privacy-model)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-4a7c8c.svg)](#privacy-model)
@@ -58,7 +57,7 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 | 2 | **Classification & registration** | Every asset is classified as *property*, *personality* or *mixed*. Platform passwords are never stored — the app records *where* an account exists, not *how to break into it* |
 | 3 | **Disposal planning** | Per asset: inherit by a named person · liquidate and distribute · memorialize · authorize viewing · delete permanently · donate · take no action |
 | 4 | **Inheritance report & toolkit** | One-click HTML report plus a ZIP toolkit (report, asset list, summary, instructions). Open formats — readable without this application |
-| 5 | **Dead man's switch** | Periodic check-in with a **three-stage confirmation chain** (remind you → notify your emergency contact → send the key envelope to your executor). Runs in the system tray, re-evaluating every 30 minutes; optional **zero-content** cloud heartbeat |
+| 5 | **Dead man's switch** | Periodic check-in with a **three-stage confirmation chain** (remind you → notify your emergency contact → send inheritance instructions to your executor). Runs in the system tray, re-evaluating every 30 minutes; optional **zero-content** cloud heartbeat |
 | 6 | **Heir guidance wizard** | Walks family members through each platform's procedure, required documents and transfer path |
 | 7 | **Legal template library** | Six categories of legal document templates (will clause, inheritance declaration, authorization, affidavit, application, agreement) |
 | 8 | **Encrypted vault & recovery key** | Field-level AES-256-GCM encryption, master password lock with idle auto-lock, one-time recovery key, encrypted backup export/import |
@@ -75,8 +74,8 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 | *Registered assets with disposal status* | *Profile, encryption & backup* |
 | ![Dead man's switch](docs/screenshots/05-dms.png) | ![Inheritance report](docs/screenshots/08-report.png) |
 | *Dead man's switch & local reminders* | *Generated inheritance report* |
-| ![Heir guidance](docs/screenshots/06-heir-guide.png) | ![Legal templates](docs/screenshots/07-legal.png) |
-| *Heir guidance wizard* | *Legal template library* |
+| ![Heir guidance](docs/screenshots/06-heir-guide.png) | |
+| *Heir guidance wizard* | *（法律模板页截图待补充）* |
 
 > The interface is currently in Simplified Chinese (the primary target locale); an English UI is on the roadmap. All screens are also viewable on the [website](https://badhope.github.io/digilegacy/#screenshots).
 
@@ -152,7 +151,7 @@ The reference server does three things: record the last heartbeat time per token
 
 ```
 Vue 3 + TypeScript + Pinia + Vue Router        frontend
-        │  Tauri invoke (29 commands)
+        │  Tauri invoke (37 commands)
 Tauri 2 (Rust)                                 desktop shell
         │
 rusqlite (SQLite, bundled)                     local storage
@@ -173,7 +172,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 │   │   ├── src/
 │   │   │   ├── platform_data.rs           # 150+ platform policy database
 │   │   │   ├── db.rs                      # schema, queries, migrations
-│   │   │   ├── commands.rs                # 29 Tauri commands
+│   │   │   ├── commands.rs                # 37 Tauri commands
 │   │   │   ├── vault.rs                   # master password & field encryption
 │   │   │   ├── recovery.rs                # one-time recovery key
 │   │   │   ├── heartbeat.rs               # zero-content cloud heartbeat
@@ -188,13 +187,12 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 | Check | Command | Status |
 |---|---|---|
-| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **39 / 39 passing** |
+| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **40 / 40 passing** |
 | Frontend type check | `npx vue-tsc --noEmit` | passing |
 | Production build | `npm run build` | passing |
 | Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
-| CI | GitHub Actions (3 jobs) | green on every push |
 
-CI runs the frontend type check and build, the full Rust test suite, and a syntax check of the reference server on every push to `main`.
+> The CI workflow was removed in commit `23d6ebb`; the checks above are the project's verification baseline. Run them locally before submitting changes.
 
 ## Data storage
 
@@ -282,6 +280,6 @@ MIT — see [LICENSE](LICENSE).
 - **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
 - **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（绝不进入导出物）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 39/39 通过；CI 在每次推送时运行
+- **测试**：`cargo test` 40/40 通过（本地与提交前手动运行；CI 工作流已于 `23d6ebb` 移除）
 
 *数字有数，归处有路。*
