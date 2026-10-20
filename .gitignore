@@ -46,5 +46,10 @@ pnpm-debug.log*
 参赛材料/
 .research_tmp/
 
+# ---- 工作区本地材料（WorkBuddy 会话状态与分析报告，不入仓库） ----
+.workbuddy/
+digilegacy-analysis-report.html
+digilegacy-hardening-report.html
+
 # ---- AQG 本地施工状态 ----
 .aqg/
