@@ -134,6 +134,14 @@ pub struct SecurityStatus {
     pub unlocked: bool,
 }
 
+/// 设置主密码的返回：安全状态 + 一次性恢复密钥。
+/// 恢复密钥只在此响应中返回一次，UI 必须立即展示给用户抄录。
+#[derive(Debug, Clone, Serialize)]
+pub struct MasterPasswordSetup {
+    pub status: SecurityStatus,
+    pub recovery_code: String,
+}
+
 /// 创建/更新资产的请求
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetRequest {
@@ -159,9 +167,11 @@ pub struct UserProfile {
     pub emergency_contact_name: String,
     pub emergency_contact_phone: String,
     pub emergency_contact_relation: String,
+    pub emergency_contact_email: String,
     pub heir_primary_name: String,
     pub heir_primary_phone: String,
     pub heir_primary_relation: String,
+    pub heir_primary_email: String,
     pub check_in_interval_days: i64,
     pub last_check_in: Option<String>,
     pub dms_enabled: bool,

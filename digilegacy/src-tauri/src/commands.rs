@@ -1,4 +1,5 @@
 use tauri::{command, Manager, AppHandle};
+use zeroize::Zeroize;
 use crate::models::*;
 use crate::db;
 use crate::db::CheckInStatus;
@@ -155,7 +156,15 @@ pub fn export_report_to_file(app_handle: AppHandle, content: String) -> Result<A
 #[command]
 pub fn export_zip_to_file(content: String, app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
     use base64::{Engine, engine::general_purpose::STANDARD as base64};
+    // IPC 入口参数上限：解码后 200MB（对应 base64 约 267MB）。
+    // 无上限时恶意/失控前端可凭一次 IPC 请求拖垮进程内存。
+    if content.len() > 270_000_000 {
+        return Ok(ApiResponse::fail("工具包体积超出上限（200MB）"));
+    }
     let decoded = base64.decode(&content).map_err(|e| format!("Base64解码失败: {}", e))?;
+    if decoded.len() > 200 * 1024 * 1024 {
+        return Ok(ApiResponse::fail("工具包体积超出上限（200MB）"));
+    }
     let app_dir = app_handle.path().app_data_dir()
         .map_err(|e| format!("获取目录失败: {}", e))?;
     
@@ -217,42 +226,50 @@ pub fn security_status() -> Result<ApiResponse<SecurityStatus>, String> {
 }
 
 #[command]
-pub fn set_master_password(password: String) -> Result<ApiResponse<SecurityStatus>, String> {
+pub fn set_master_password(mut password: String) -> Result<ApiResponse<MasterPasswordSetup>, String> {
     use base64::{Engine, engine::general_purpose::STANDARD as base64};
 
     if password.chars().count() < 8 {
+        password.zeroize();
         return Ok(ApiResponse::fail("主密码至少需要 8 个字符"));
     }
     if db::get_security_config_db()?.is_some() {
+        password.zeroize();
         return Ok(ApiResponse::fail("已设置主密码，暂不支持修改"));
     }
 
-    let salt = crate::crypto::generate_salt();
-    let key = crate::crypto::derive_key_bytes(&password, &salt);
+    // v2 盐（自描述前缀）：新装一律 60 万次迭代
+    let salt = crate::crypto::generate_salt_v2();
+    let (salt_bytes, iterations) = crate::crypto::resolve_salt(&salt)?;
+    let key = crate::crypto::derive_key_bytes_v(&password, &salt_bytes, iterations);
+    password.zeroize(); // 派生完成后立即擦除明文密码
     let verifier = crate::vault::make_verifier(&key)?;
     let (recovery_code, recovery_seal) = crate::recovery::create_recovery_seal(&key)?;
-    db::set_security_config_db(&base64.encode(salt), &verifier)?;
+    db::set_security_config_db(&salt, &verifier)?;
     db::set_recovery_seal_db(&recovery_seal)?;
     crate::vault::set_key(key);
 
     let encrypted_rows = db::encrypt_existing_data_db()?;
 
-    return Ok(ApiResponse {
+    Ok(ApiResponse {
         success: true,
-        message: format!("加密已启用，存量数据已加密 {} 条。请立即抄写恢复密钥：{}", encrypted_rows, recovery_code),
-        data: Some(SecurityStatus { has_master_password: true, unlocked: true }),
-    });
+        message: format!("加密已启用，存量数据已加密 {} 条。请立即抄写恢复密钥。", encrypted_rows),
+        data: Some(MasterPasswordSetup {
+            status: SecurityStatus { has_master_password: true, unlocked: true },
+            recovery_code,
+        }),
+    })
 }
 
 #[command]
-pub fn unlock(password: String) -> Result<ApiResponse<SecurityStatus>, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD as base64};
-
+pub fn unlock(mut password: String) -> Result<ApiResponse<SecurityStatus>, String> {
     let Some((salt_b64, verifier)) = db::get_security_config_db()? else {
+        password.zeroize();
         return Ok(ApiResponse::fail("尚未设置主密码"));
     };
-    let salt = base64.decode(&salt_b64).map_err(|_| "安全配置损坏".to_string())?;
-    let key = crate::crypto::derive_key_bytes(&password, &salt);
+    let (salt_bytes, iterations) = crate::crypto::resolve_salt(&salt_b64)?;
+    let key = crate::crypto::derive_key_bytes_v(&password, &salt_bytes, iterations);
+    password.zeroize(); // 派生完成后立即擦除明文密码
 
     if crate::vault::verify_key(&verifier, &key) {
         crate::vault::set_key(key);
@@ -273,6 +290,10 @@ pub fn lock() -> Result<ApiResponse<SecurityStatus>, String> {
 
 #[command]
 pub fn set_asset_credential(id: i64, credential: String) -> Result<ApiResponse<()>, String> {
+    // IPC 入口参数上限：单条凭据 64KB，正常凭据远小于此
+    if credential.len() > 64 * 1024 {
+        return Ok(ApiResponse::fail("凭据内容过长（上限 64KB）"));
+    }
     if db::get_asset_by_id_db(id)?.is_none() {
         return Ok(ApiResponse::fail("资产不存在或已被删除"));
     }
@@ -288,16 +309,30 @@ pub fn get_asset_credential(id: i64) -> Result<ApiResponse<String>, String> {
 
 #[command]
 pub fn change_master_password(
-    old_password: String,
-    new_password: String,
-    confirm_password: String,
-) -> Result<ApiResponse<SecurityStatus>, String> {
+    mut old_password: String,
+    mut new_password: String,
+    mut confirm_password: String,
+) -> Result<ApiResponse<MasterPasswordSetup>, String> {
     match db::change_master_password_db(&old_password, &new_password, &confirm_password) {
-        Ok(()) => Ok(ApiResponse::ok_with_msg(
-            SecurityStatus { has_master_password: true, unlocked: true },
-            "主密码已更新，全部数据已用新密钥重新加密",
-        )),
-        Err(e) => Ok(ApiResponse::fail(&e)),
+        Ok(recovery_code) => {
+            old_password.zeroize();
+            new_password.zeroize();
+            confirm_password.zeroize();
+            Ok(ApiResponse {
+                success: true,
+                message: "主密码已更新，全部数据已用新密钥重新加密。请立即抄写新的恢复密钥。".to_string(),
+                data: Some(MasterPasswordSetup {
+                    status: SecurityStatus { has_master_password: true, unlocked: true },
+                    recovery_code,
+                }),
+            })
+        }
+        Err(e) => {
+            old_password.zeroize();
+            new_password.zeroize();
+            confirm_password.zeroize();
+            Ok(ApiResponse::fail(&e))
+        }
     }
 }
 
@@ -352,30 +387,42 @@ pub fn start_recovery(recovery_code: String) -> Result<ApiResponse<SecurityStatu
 /// 恢复流程第二步：处于恢复解锁态时设置新密码（重派生验证器并轮换恢复码）
 #[command]
 pub fn complete_recovery(
-    new_password: String,
-    confirm_password: String,
+    mut new_password: String,
+    mut confirm_password: String,
 ) -> Result<ApiResponse<String>, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD as base64};
-
     if !crate::vault::is_unlocked() {
+        new_password.zeroize();
+        confirm_password.zeroize();
         return Ok(ApiResponse::fail("请先通过恢复密钥解锁"));
     }
     if new_password.chars().count() < 8 {
+        new_password.zeroize();
+        confirm_password.zeroize();
         return Ok(ApiResponse::fail("新主密码至少需要 8 个字符"));
     }
     if new_password != confirm_password {
+        new_password.zeroize();
+        confirm_password.zeroize();
         return Ok(ApiResponse::fail("两次输入的新主密码不一致"));
     }
     let Some(master_key) = crate::vault::get_key() else {
+        new_password.zeroize();
+        confirm_password.zeroize();
         return Ok(ApiResponse::fail("解锁状态异常"));
     };
 
-    let salt_new = crate::crypto::generate_salt();
-    let key_new = crate::crypto::derive_key_bytes(&new_password, &salt_new);
+    // v2 盐与迭代数；恢复封印必须封住"新数据密钥"（数据即将被重加密到 key_new）
+    let salt_new = crate::crypto::generate_salt_v2();
+    let (salt_new_bytes, iterations) = crate::crypto::resolve_salt(&salt_new)?;
+    let key_new = crate::crypto::derive_key_bytes_v(&new_password, &salt_new_bytes, iterations);
+    new_password.zeroize();
+    confirm_password.zeroize();
     let verifier_new = crate::vault::make_verifier(&key_new)?;
-    let (recovery_code_new, recovery_seal_new) = crate::recovery::create_recovery_seal(&master_key)?;
+    let (recovery_code_new, recovery_seal_new) = crate::recovery::create_recovery_seal(&key_new)?;
 
-    db::reset_security_config_db(&base64.encode(salt_new), &verifier_new, &recovery_seal_new, &master_key, &key_new)?;
+    db::reset_security_config_db(&salt_new, &verifier_new, &recovery_seal_new, &master_key, &key_new)?;
+    // 重加密完成后会话密钥切换为新密钥，保证当前解锁态下数据立即可读
+    crate::vault::set_key(key_new);
 
     Ok(ApiResponse::ok_with_msg(
         recovery_code_new,
@@ -468,4 +515,40 @@ pub fn open_external(url: String) -> Result<ApiResponse<()>, String> {
     }
 
     Ok(ApiResponse::ok_with_msg((), "已在浏览器打开"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn set_master_password_returns_recovery_code_in_data_and_it_unseals() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        let res = set_master_password("test-master-123".to_string()).unwrap();
+        assert!(res.success);
+        // 恢复密钥必须放在 data 字段中交给 UI 展示，而不是塞进 message 里被丢弃
+        let recovery_code = res.data.as_ref().expect("data 必须存在").recovery_code.clone();
+        assert!(!recovery_code.is_empty(), "恢复密钥不得为空");
+        assert_eq!(recovery_code.matches('-').count(), 5, "恢复密钥应为 XXXX-…-XXXX 分组格式");
+        assert!(!res.message.contains(&recovery_code), "恢复密钥不得明文出现在 message 中");
+
+        // 用返回的恢复密钥应能解封主密钥（模拟用户忘记主密码后的恢复路径）
+        let seal = db::get_recovery_seal_db().unwrap();
+        let unsealed = crate::recovery::unseal_with_recovery(&recovery_code, &seal).unwrap();
+        assert_eq!(unsealed, crate::vault::get_key().unwrap(), "恢复密钥必须能解出当前主密钥");
+
+        // 重复设置应被拒绝
+        let second = set_master_password("another-pass-456".to_string()).unwrap();
+        assert!(!second.success);
+        assert!(second.data.is_none());
+
+        crate::vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
 }

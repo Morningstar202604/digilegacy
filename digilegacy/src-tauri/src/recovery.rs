@@ -7,10 +7,13 @@
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use rand::RngCore;
+use zeroize::Zeroizing;
 
 use crate::crypto;
 
 const SPLIT_DASH_EVERY: usize = 4;
+/// v2 封印前缀：恢复码派生使用 PBKDF2 600k；无前缀 = v1 旧封印（100k，兼容读取）
+const SEAL_PREFIX_V2: &str = "RS2.";
 
 /// 生成 24 字符恢复码（16 字节随机 → base32 风格字母表），4 位一组用 - 连接
 pub fn generate_recovery_code() -> String {
@@ -53,29 +56,34 @@ pub fn normalize_recovery_code(input: &str) -> String {
         .collect()
 }
 
-/// 设置流程：以恢复码派生密钥封装主密钥，返回 (恢复码, 密文)
+/// 设置流程：以恢复码派生密钥（v2 迭代数）封装主密钥，返回 (恢复码, 带版本前缀的密文)
 pub fn create_recovery_seal(master_key: &[u8; 32]) -> Result<(String, String), String> {
     let code = generate_recovery_code();
     let salt = crypto::generate_salt();
-    let rec_key = crypto::derive_key_bytes(&normalize_recovery_code(&code), &salt);
+    let rec_key = crypto::derive_key_bytes_v(&normalize_recovery_code(&code), &salt, crypto::PBKDF2_ITERATIONS_V2);
     let sealed = crypto::encrypt_with_key(&BASE64.encode(master_key), &rec_key)?;
-    // 密文格式: base64(salt(16) || sealed)
+    // 密文格式: RS2. + base64(salt(16) || sealed)
     let mut combined = salt.to_vec();
     combined.extend_from_slice(&BASE64.decode(&sealed).map_err(|e| format!("封装修理失败: {}", e))?);
-    Ok((code, BASE64.encode(&combined)))
+    Ok((code, format!("{}{}", SEAL_PREFIX_V2, BASE64.encode(&combined))))
 }
 
-/// 恢复流程：以恢复码解开主密钥
-pub fn unseal_with_recovery(code: &str, sealed_b64: &str) -> Result<[u8; 32], String> {
+/// 恢复流程：以恢复码解开主密钥；按封印前缀选择迭代数（v1 旧封印继续可解）
+pub fn unseal_with_recovery(code: &str, sealed_b64: &str) -> Result<Zeroizing<[u8; 32]>, String> {
+    let (iterations, body) = if let Some(rest) = sealed_b64.strip_prefix(SEAL_PREFIX_V2) {
+        (crypto::PBKDF2_ITERATIONS_V2, rest)
+    } else {
+        (crypto::PBKDF2_ITERATIONS_V1, sealed_b64)
+    };
     let combined = BASE64
-        .decode(sealed_b64)
+        .decode(body)
         .map_err(|_| "恢复密钥数据损坏".to_string())?;
     if combined.len() < 16 {
         return Err("恢复密钥数据长度不合法".to_string());
     }
     let salt = &combined[0..16];
     let sealed = BASE64.encode(&combined[16..]);
-    let rec_key = crypto::derive_key_bytes(&normalize_recovery_code(code), salt);
+    let rec_key = crypto::derive_key_bytes_v(&normalize_recovery_code(code), salt, iterations);
     let master_b64 = crypto::decrypt_with_key(&sealed, &rec_key)?;
     let master = BASE64
         .decode(master_b64)
@@ -85,7 +93,7 @@ pub fn unseal_with_recovery(code: &str, sealed_b64: &str) -> Result<[u8; 32], St
     }
     let mut key = [0u8; 32];
     key.copy_from_slice(&master);
-    Ok(key)
+    Ok(Zeroizing::new(key))
 }
 
 #[cfg(test)]
@@ -106,7 +114,7 @@ mod tests {
         let master = [7u8; 32];
         let (code, sealed) = create_recovery_seal(&master).unwrap();
         let unsealed = unseal_with_recovery(&code, &sealed).unwrap();
-        assert_eq!(unsealed, master);
+        assert_eq!(*unsealed, master);
     }
 
     #[test]

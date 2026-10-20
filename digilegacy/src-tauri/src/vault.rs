@@ -5,13 +5,14 @@
 
 use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::crypto;
 
 pub const ENC_PREFIX: &str = "enc:v1:";
 const VERIFIER_PLAINTEXT: &str = "digilegacy-verifier-v1";
 
-static MASTER_KEY: Lazy<Mutex<Option<[u8; 32]>>> = Lazy::new(|| Mutex::new(None));
+static MASTER_KEY: Lazy<Mutex<Option<Zeroizing<[u8; 32]>>>> = Lazy::new(|| Mutex::new(None));
 
 /// 测试串行锁：跨模块共享，避免并行测试互相污染全局状态
 #[cfg(test)]
@@ -22,8 +23,8 @@ pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// 解锁后驻留内存的主密钥
-pub fn set_key(k: [u8; 32]) {
+/// 解锁后驻留内存的主密钥（Zeroizing：所有副本离开作用域即清零）
+pub fn set_key(k: Zeroizing<[u8; 32]>) {
     let mut guard = MASTER_KEY.lock().unwrap();
     *guard = Some(k);
 }
@@ -32,15 +33,14 @@ pub fn set_key(k: [u8; 32]) {
 pub fn clear_key() {
     let mut guard = MASTER_KEY.lock().unwrap();
     if let Some(k) = guard.as_mut() {
-        for b in k.iter_mut() {
-            *b = 0;
-        }
+        k.zeroize();
     }
     *guard = None;
 }
 
-pub fn get_key() -> Option<[u8; 32]> {
-    *MASTER_KEY.lock().unwrap()
+/// 取出主密钥的临时副本（Zeroizing：用完即清，不残留裸副本）
+pub fn get_key() -> Option<Zeroizing<[u8; 32]>> {
+    MASTER_KEY.lock().unwrap().clone()
 }
 
 pub fn is_unlocked() -> bool {
@@ -138,7 +138,7 @@ pub fn validate_external_url(url: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    fn unlocked_key() -> [u8; 32] {
+    fn unlocked_key() -> Zeroizing<[u8; 32]> {
         crypto::derive_key_bytes("master-pw-123", &[9u8; 16])
     }
 

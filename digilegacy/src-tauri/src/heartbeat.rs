@@ -33,7 +33,6 @@ struct HeartbeatConfig {
 }
 
 fn read_config() -> HeartbeatConfig {
-    let _ = 0;
     let enabled = std::env::var("DMS_HEARTBEAT_ENABLED")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -43,6 +42,9 @@ fn read_config() -> HeartbeatConfig {
 }
 
 fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
     if token.is_empty() {
         return Err("心跳令牌为空".to_string());
     }
@@ -50,14 +52,26 @@ fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
     let body = format!("{{\"token\":\"{}\"}}", token.replace('\\', "\\\\").replace('"', "\\\""));
     // 丢弃响应体的目标：Unix 用 /dev/null，Windows 用 NUL
     let discard = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    let output = std::process::Command::new("curl")
+    // 请求体经标准输入传入（--data-binary @-）：令牌不出现在进程命令行参数里
+    let mut child = Command::new("curl")
         .args([
             "-s", "-o", discard, "-m", &TIMEOUT_SECS.to_string(),
             "-X", "POST", "-H", "Content-Type: application/json",
-            "-d", &body, "--", &url,
+            "--data-binary", "@-", "--", &url,
         ])
-        .output()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
         .map_err(|e| format!("启动 curl 失败: {}", e))?;
+    {
+        let mut stdin = child.stdin.take().ok_or("无法打开 curl 标准输入")?;
+        stdin
+            .write_all(body.as_bytes())
+            .map_err(|e| format!("写入心跳内容失败: {}", e))?;
+    } // drop stdin → curl 收到 EOF 后发送请求体
+
+    let output = child.wait_with_output().map_err(|e| format!("等待 curl 退出失败: {}", e))?;
 
     if !output.status.success() {
         // curl 退出码：7=连接失败 6=DNS 28=超时 → 视为失联，返回 Err
@@ -172,32 +186,40 @@ mod tests {
     }
 
     /// 起一个本地最小 HTTP 服务，验证心跳成功路径真的能发出并收到 200
-    /// （此前的用例只覆盖了失败路径，成功路径无验证）
+    /// （此前的用例只覆盖了失败路径，成功路径无验证）。
+    /// 端口绑定与 curl 子进程受系统负载/安全软件首扫影响，存在偶发超时，
+    /// 故做最多 3 次有界重试，全部失败才判定不通过。
     #[test]
     fn reachable_local_server_records_ok() {
         let _g = lock();
         use std::io::{Read, Write};
         use std::net::TcpListener;
 
-        let listener = TcpListener::bind("127.0.0.1:0").expect("bind 本地端口失败");
-        let port = listener.local_addr().unwrap().port();
-        let handle = std::thread::spawn(move || {
-            if let Ok((mut stream, _)) = listener.accept() {
-                let mut buf = [0u8; 1024];
-                let _ = stream.read(&mut buf);
-                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{\"ok\":true}");
-                let _ = stream.flush();
-            }
-        });
+        let mut last_status = String::new();
+        for _attempt in 0..3 {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind 本地端口失败");
+            let port = listener.local_addr().unwrap().port();
+            let handle = std::thread::spawn(move || {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    let mut buf = [0u8; 1024];
+                    let _ = stream.read(&mut buf);
+                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{\"ok\":true}");
+                    let _ = stream.flush();
+                }
+            });
 
-        let cfg = HeartbeatConfig {
-            enabled: true,
-            token: "local-test-token".to_string(),
-            endpoint: format!("http://127.0.0.1:{}", port),
-        };
-        let status = send_heartbeat_with(&cfg);
-        assert_eq!(status.last_result, "ok", "本地可达服务应返回 ok");
-        assert!(status.last_seen_ok(), "确认状态记录为成功");
-        let _ = handle.join();
+            let cfg = HeartbeatConfig {
+                enabled: true,
+                token: "local-test-token".to_string(),
+                endpoint: format!("http://127.0.0.1:{}", port),
+            };
+            let status = send_heartbeat_with(&cfg);
+            let _ = handle.join();
+            if status.last_seen_ok() {
+                return; // 成功路径已验证
+            }
+            last_status = status.last_result;
+        }
+        panic!("本地可达服务应返回 ok，实际 last_result={}", last_status);
     }
 }

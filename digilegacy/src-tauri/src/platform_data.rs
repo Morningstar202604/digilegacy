@@ -3,7 +3,7 @@
 //! 内置 150+ 主流平台的继承政策、所需材料、办理流程、变现路径、法律文书模板等完整信息。
 //! 为前端资产发现引擎、继承人向导、继承执行工具包提供数据支撑。
 //! 
-//! 辅助查询函数（get_platform_by_id / get_platforms_by_category / get_difficulty_stats / get_monetization_paths）
+//! 辅助查询函数（get_platform_by_id / get_platforms_by_category / get_difficulty_stats）
 //! 预留给前端独立查询使用，MVP batch 路径暂不调用。
 
 #![allow(dead_code)]
