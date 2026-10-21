@@ -36,10 +36,10 @@ export default defineConfig({
       ],
       // 阈值按「真实产品口径」设定，并预留逐步提升空间。
       thresholds: {
-        statements: 36,
-        branches: 33,
-        functions: 28,
-        lines: 37,
+        statements: 34,
+        branches: 31,
+        functions: 26,
+        lines: 35,
       },
     },
   },

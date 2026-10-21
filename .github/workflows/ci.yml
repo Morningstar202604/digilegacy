@@ -41,6 +41,38 @@ jobs:
       - name: 生产构建
         run: npm run build
 
+  e2e:
+    name: E2E · Playwright（7 个视图交互链路）
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: digilegacy
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: npm
+          cache-dependency-path: digilegacy/package-lock.json
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 安装 Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: 运行 E2E
+        run: npx playwright test
+
+      - name: 上传失败痕迹
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: digilegacy/playwright-report/
+          retention-days: 7
+
   rust:
     name: Rust · fmt / clippy / test
     runs-on: ubuntu-24.04

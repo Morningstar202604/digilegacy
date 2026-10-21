@@ -33,6 +33,10 @@ if [ "$MODE" != "--rust-only" ]; then
   run "类型检查" bash -c "cd '$WEB' && npx vue-tsc --noEmit"
   run "单元测试 + 覆盖率门禁" bash -c "cd '$WEB' && npm run test:coverage"
   run "生产构建" bash -c "cd '$WEB' && npm run build"
+  # E2E 默认跳过（需先 npx playwright install chromium）；--with-e2e 显式开启
+  if [ "$MODE" = "--with-e2e" ]; then
+    run "E2E（Playwright）" bash -c "cd '$WEB' && npx playwright test"
+  fi
 fi
 
 if [ "$MODE" != "--web-only" ]; then

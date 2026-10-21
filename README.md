@@ -188,6 +188,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 |---|---|---|
 | Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **66 passing, 1 ignored** |
 | Frontend unit tests | `npm test` (in `digilegacy/`) | **122 passing** |
+| Frontend E2E | `npm run test:e2e` (in `digilegacy/`) | **18 passing** |
 | Frontend type check | `npx vue-tsc --noEmit` | passing |
 | Production build | `npm run build` | passing |
 | Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
@@ -202,10 +203,14 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 ### Test coverage — what the numbers actually cover
 
-Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 36 / branches 33 / functions 28 / lines 37), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured coverage is 36.77% statements (33.84% branches, 28.77% functions, 38.36% lines):
+Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 34 / branches 31 / functions 26 / lines 35), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured unit coverage is ~36.6% statements (33.5% branches, 28.5% functions, 38.2% lines). A separate Playwright E2E suite covers the view layer end-to-end (see below):
 
 - **`src/api/mock.ts` is development-preview code only.** It is not in the production bundle (`npm run build` does not include it — verified by grepping `dist/`). Its 14 tests exercise the browser demo backend, not the shipped app. They are still useful as a regression net for the preview, but they must not be counted as product coverage.
-- **The view layer had zero tests** before this round. `App.vue`, `AssetsView`, `ProfileView` and `CollapseGroup` now have real render tests (ProfileView ~58% statements). `DiscoverView`, `DMSView`, `DashboardView`, `ReportView`, `HeirGuideView`, `LegalTemplates` and `AssetDetailView` remain at 0% — closing that gap needs E2E, not more unit tests.
+- **The view layer** now has two layers of protection:
+  - *Unit/render tests* for `App.vue`, `AssetsView`, `ProfileView` and `CollapseGroup`.
+  - *Playwright E2E* for the seven views that unit tests cannot reach: `DiscoverView`, `DMSView`, `DashboardView`, `ReportView`, `HeirGuideView`, `LegalTemplates` and `AssetDetailView`. The suite drives a real Chromium browser through the actual components, stores and router (only the IPC backend is the preview mock), covering the full asset-discovery chain, DMS check-in, report export, heir-guide tabs, legal-template preview and asset detail navigation.
+
+  E2E does not feed the v8 coverage numbers above — it is a behavioural net, not a line-coverage instrument. Run it with `npm run test:e2e` (first time: `npx playwright install chromium`).
 
 Four real defects were found by the newly added tests (all fixed):
 

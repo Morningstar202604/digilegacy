@@ -8,8 +8,9 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 122 tests / 12 files，statements 36.77%（33.84 / 28.77 / 38.36，阈值 36/33/28/37） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 122 tests / 12 files，statements ~36.6%（33.5 / 28.5 / 38.2，阈值 34/31/26/35） |
 | 生产构建 | `npm run build` | PASS |
+| E2E（Playwright） | `npx playwright test` | **18 passed**（7 个视图 + 完整发现链路） |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
 | Rust 测试 | `cargo test --locked` | 66 passed, 0 failed, 1 ignored |
@@ -24,6 +25,16 @@ Ubuntu 24.04 容器内用 Rust 1.99.1 完整复跑：
 | `cargo fmt --check` | PASS |
 | `cargo clippy --all-targets -- -D warnings` | PASS，0 warnings |
 | `cargo test --locked` | 59 passed, 0 failed, 1 ignored（68.04s，当时套件；此后用例增加至 66，容器未重跑） |
+
+## E2E 变异验证
+
+E2E 的价值在于能抓住视图层变异（单测覆盖不到）：
+
+| 变异 | 结果 |
+|---|---|
+| DashboardView 统计卡片 class 改名 | 失败（被抓住） |
+| ReportView 报告正文容器改名 | 失败（被抓住） |
+| LegalTemplates 预览按钮去掉 click 绑定 | 失败（被抓住） |
 
 ## 心跳服务器 job
 
