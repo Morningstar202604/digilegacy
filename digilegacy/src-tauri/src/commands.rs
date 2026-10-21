@@ -954,4 +954,88 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
     }
+
+    /// 解锁命令：正确密码放行、错误密码拒绝、未设密码时明确报错。
+    #[test]
+    fn unlock_command_accepts_only_correct_password() {
+        use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_unlock_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        // 未设主密码
+        let r = unlock("anything".to_string()).unwrap();
+        assert!(!r.success);
+        assert!(r.message.contains("尚未设置主密码"));
+
+        // 设置主密码后再锁定
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("unlock-master-1", &salt);
+        let verifier = crate::vault::make_verifier(&key).unwrap();
+        db::set_security_config_db(&b64.encode(salt), &verifier).unwrap();
+        crate::vault::clear_key();
+
+        // 错误密码
+        let r = unlock("wrong-password".to_string()).unwrap();
+        assert!(!r.success);
+        assert_eq!(r.message, "主密码错误");
+        assert!(!crate::vault::is_unlocked(), "错误密码不得留下密钥");
+
+        // 正确密码
+        let r = unlock("unlock-master-1".to_string()).unwrap();
+        assert!(r.success);
+        assert!(r.data.as_ref().unwrap().unlocked);
+        assert!(crate::vault::is_unlocked());
+
+        crate::vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 恢复命令：未启用恢复密钥时明确拒绝；错误恢复码不得留下密钥。
+    #[test]
+    fn start_recovery_rejects_without_seal_and_on_bad_code() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_rec_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        // 未启用恢复密钥
+        let r = start_recovery("AAAA-BBBB-CCCC-DDDD-EEEE-FFFF".to_string()).unwrap();
+        assert!(!r.success);
+        assert!(r.message.contains("未启用恢复密钥"));
+
+        // 有封印但恢复码错误。
+        // 前置：set_recovery_seal_db 是 UPDATE，必须先有 security_config 行。
+        {
+            use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+            let salt = crate::crypto::generate_salt();
+            let key = crate::crypto::derive_key_bytes("rec-master-1", &salt);
+            let verifier = crate::vault::make_verifier(&key).unwrap();
+            db::set_security_config_db(&b64.encode(salt), &verifier).unwrap();
+        }
+        let master = [5u8; 32];
+        let (code, seal) = crate::recovery::create_recovery_seal(&master).unwrap();
+        db::set_recovery_seal_db(&seal).unwrap();
+
+        let r = start_recovery("AAAA-BBBB-CCCC-DDDD-EEEE-FFFF".to_string()).unwrap();
+        assert!(!r.success, "错误恢复码必须拒绝");
+        assert!(!crate::vault::is_unlocked(), "失败不得留下密钥");
+
+        // 正确恢复码
+        let r = start_recovery(code).unwrap();
+        assert!(r.success);
+        assert_eq!(
+            *crate::vault::get_key().unwrap(),
+            master,
+            "必须解出原主密钥"
+        );
+
+        crate::vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
 }

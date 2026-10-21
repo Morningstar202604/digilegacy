@@ -13,7 +13,7 @@
 | E2E（Playwright） | `npx playwright test` | **18 passed**（7 个视图 + 完整发现链路） |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
-| Rust 测试 | `cargo test --locked` | 72 passed, 0 failed, 1 ignored |
+| Rust 测试 | `cargo test --locked` | 74 passed, 0 failed, 1 ignored |
 
 ## 跨平台验证（Ubuntu 24.04 容器，真实 Linux）
 
