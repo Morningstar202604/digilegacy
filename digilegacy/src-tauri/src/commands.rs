@@ -872,4 +872,86 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
     }
+
+    /// 心跳配置校验：命令层独有的规则（db 层只负责存取）。
+    #[test]
+    fn heartbeat_config_validates_before_saving() {
+        let _g = crate::vault::test_lock();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_hb_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        // 启用但无令牌 → 拒绝
+        let r = set_heartbeat_config(true, String::new(), "https://hb.example.org".to_string())
+            .unwrap();
+        assert!(!r.success);
+        assert!(r.message.contains("令牌"));
+
+        // 启用但无端点 → 拒绝
+        let r = set_heartbeat_config(true, "tok".to_string(), String::new()).unwrap();
+        assert!(!r.success);
+        assert!(r.message.contains("服务器地址"));
+
+        // 端点协议不对 → 拒绝
+        for bad in ["ftp://x", "hb.example.org", "javascript:alert(1)"] {
+            let r = set_heartbeat_config(true, "tok".to_string(), bad.to_string()).unwrap();
+            assert!(!r.success, "非法端点必须拒绝: {}", bad);
+        }
+
+        // 合法 → 保存成功，且读取一致
+        let r = set_heartbeat_config(
+            true,
+            "tok-1".to_string(),
+            "https://hb.example.org".to_string(),
+        )
+        .unwrap();
+        assert!(r.success);
+        let (enabled, token, ep) = db::get_heartbeat_config_db().unwrap();
+        assert!(enabled);
+        assert_eq!(token, "tok-1");
+        assert_eq!(ep, "https://hb.example.org");
+
+        // 传空令牌表示「保持原值」（界面用掩码，不回写真令牌）
+        let r = set_heartbeat_config(true, String::new(), "https://hb.example.org".to_string())
+            .unwrap();
+        assert!(r.success);
+        assert_eq!(
+            db::get_heartbeat_config_db().unwrap().1,
+            "tok-1",
+            "空令牌不得清空已有令牌"
+        );
+
+        // 关闭时不做端点校验，允许清空
+        let r = set_heartbeat_config(false, String::new(), String::new()).unwrap();
+        assert!(r.success);
+        assert!(!db::get_heartbeat_config_db().unwrap().0);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 未解锁时凭据类命令与锁定命令的状态一致性。
+    #[test]
+    fn lock_and_status_commands_are_consistent() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_lock_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        // 未设主密码：has_master_password=false。
+        // 注意 unlocked 反映的是「内存里是否有主密钥」，此时必然为 false；
+        // 「未设密码视为可用」是前端的呈现规则（security.ts: unlocked = has ? data.unlocked : true），
+        // 两层的职责不同，这里只锁后端的真实语义。
+        let st = security_status().unwrap().data.unwrap();
+        assert!(!st.has_master_password);
+        assert!(!st.unlocked, "无主密钥时 unlocked 必须为 false");
+
+        // 锁定命令在无主密码时也不得崩溃
+        let l = lock().unwrap();
+        assert!(l.success);
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

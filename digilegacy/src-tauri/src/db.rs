@@ -2599,4 +2599,211 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
     }
+
+    /// 按类别查询：只返回该类别，且按估值降序。
+    #[test]
+    fn assets_by_category_filters_and_sorts() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("bycat");
+        init_database_at(path.clone()).unwrap();
+
+        for (cat, val) in [
+            ("property", 100.0),
+            ("property", 900.0),
+            ("personality", 500.0),
+        ] {
+            add_asset_db(&AssetRequest {
+                platform_id: 1,
+                account_identifier: format!("acc-{}-{}", cat, val),
+                account_description: String::new(),
+                category: cat.to_string(),
+                estimated_value: Some(val),
+                disposal_method: "inherit".to_string(),
+                heir_name: None,
+                heir_contact: None,
+                notes: String::new(),
+            })
+            .unwrap();
+        }
+
+        let prop = get_assets_by_category_db("property").unwrap();
+        assert_eq!(prop.len(), 2, "只应返回 property");
+        assert!(prop.iter().all(|a| a.category == "property"));
+        assert_eq!(prop[0].estimated_value, Some(900.0), "必须按估值降序");
+        assert_eq!(prop[1].estimated_value, Some(100.0));
+
+        let per = get_assets_by_category_db("personality").unwrap();
+        assert_eq!(per.len(), 1);
+
+        let none = get_assets_by_category_db("mixed").unwrap();
+        assert!(none.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// DMS 配置读写：enabled 与 interval 必须持久化并回读一致。
+    #[test]
+    fn dms_config_roundtrip() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("dmscfg");
+        init_database_at(path.clone()).unwrap();
+
+        // 默认值
+        let st = get_check_in_status_db().unwrap();
+        assert_eq!(st.interval_days, 30);
+        assert!(!st.dms_enabled);
+
+        set_dms_config_db(true, 14).unwrap();
+        let st = get_check_in_status_db().unwrap();
+        assert!(st.dms_enabled);
+        assert_eq!(st.interval_days, 14);
+
+        set_dms_config_db(false, 7).unwrap();
+        let st = get_check_in_status_db().unwrap();
+        assert!(!st.dms_enabled);
+        assert_eq!(st.interval_days, 7);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 仪表板统计：各类计数与完成度必须与库内真实数据一致。
+    #[test]
+    fn dashboard_stats_reflect_real_data() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("stats");
+        init_database_at(path.clone()).unwrap();
+
+        let empty = get_dashboard_stats_db().unwrap();
+        assert_eq!(empty.total_assets, 0);
+        assert_eq!(empty.completion_percentage, 0, "空库完成度应为 0，不能除零");
+
+        // 两条已设处置（inherit）、一条未设（no_action）
+        for (method, cat) in [
+            ("inherit", "property"),
+            ("inherit", "personality"),
+            ("no_action", "mixed"),
+        ] {
+            add_asset_db(&AssetRequest {
+                platform_id: 1,
+                account_identifier: format!("a-{}-{}", method, cat),
+                account_description: String::new(),
+                category: cat.to_string(),
+                estimated_value: Some(10.0),
+                disposal_method: method.to_string(),
+                heir_name: None,
+                heir_contact: None,
+                notes: String::new(),
+            })
+            .unwrap();
+        }
+
+        let s = get_dashboard_stats_db().unwrap();
+        assert_eq!(s.total_assets, 3);
+        assert_eq!(s.property_count, 1);
+        assert_eq!(s.personality_count, 1);
+        assert_eq!(s.mixed_count, 1);
+        assert_eq!(s.disposal_planned_count, 2, "no_action 不计入已规划");
+        assert_eq!(s.total_estimated_value, 30.0);
+        assert_eq!(s.completion_percentage, 66, "2/3 应四舍五入为 66");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 恢复流程的重加密：用旧主密钥解密 → 新主密钥加密，且新密码可正常解锁。
+    ///
+    /// 这是「忘记主密码后用恢复码重设」的最后一公里：若这里漏掉某张表或某个字段，
+    /// 用户重设成功后会发现部分数据永久无法解密。
+    #[test]
+    fn reset_security_reencrypts_assets_and_profile() {
+        use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("reset");
+        init_database_at(path.clone()).unwrap();
+
+        // 旧密钥体系
+        let salt_old = crate::crypto::generate_salt();
+        let key_old = crate::crypto::derive_key_bytes("old-master-111", &salt_old);
+        let verifier_old = vault::make_verifier(&key_old).unwrap();
+        set_security_config_db(&b64.encode(salt_old), &verifier_old).unwrap();
+        vault::set_key(key_old.clone());
+
+        let id = add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "reset-acc".to_string(),
+            account_description: "desc-reset".to_string(),
+            category: "property".to_string(),
+            estimated_value: Some(77.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: Some("继承人X".to_string()),
+            heir_contact: Some("x@example.com".to_string()),
+            notes: "notes-reset".to_string(),
+        })
+        .unwrap();
+        set_asset_credential_db(id, "cred-reset").unwrap();
+        save_user_profile_db(&UserProfile {
+            full_name: "档案姓名".to_string(),
+            phone: "13800000000".to_string(),
+            ..Default::default()
+        })
+        .unwrap();
+
+        // 关键前置：确认换密钥前，档案与资产确实是以旧密钥加密存储的
+        {
+            let guard = get_conn().unwrap();
+            let conn = guard.as_ref().unwrap();
+            let raw: String = conn
+                .query_row(
+                    "SELECT full_name FROM user_profile ORDER BY id DESC LIMIT 1",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert!(vault::is_encrypted(&raw), "前置：档案字段必须是密文");
+        }
+
+        // 新密钥体系（salt 与密钥必须配对）
+        let salt_new = crate::crypto::generate_salt();
+        let key_new = crate::crypto::derive_key_bytes("new-master-222", &salt_new);
+        let verifier_new = vault::make_verifier(&key_new).unwrap();
+        let salt_v2 = crate::crypto::generate_salt_v2();
+
+        reset_security_config_db(&salt_v2, &verifier_new, "", &key_old, &key_new)
+            .expect("重加密必须成功");
+
+        // 切到新密钥后，所有数据必须可读且值不变
+        vault::set_key(key_new.clone());
+        let asset = get_asset_by_id_db(id).unwrap().unwrap();
+        assert_eq!(asset.account_identifier, "reset-acc");
+        assert_eq!(asset.account_description, "desc-reset");
+        assert_eq!(asset.heir_name.as_deref(), Some("继承人X"));
+        assert_eq!(asset.heir_contact.as_deref(), Some("x@example.com"));
+        assert_eq!(asset.notes, "notes-reset");
+        assert_eq!(get_asset_credential_db(id).unwrap(), "cred-reset");
+
+        // 档案表是独立的一条 UPDATE，漏掉它时资产仍能读，所以必须单独断言
+        let profile = get_user_profile_db().unwrap().expect("档案必须存在");
+        assert_eq!(profile.full_name, "档案姓名", "档案必须用新密钥重新加密");
+        assert_eq!(profile.phone, "13800000000");
+
+        // 旧密钥不再能解开任何数据（证明密钥真的换了）
+        vault::set_key(key_old);
+        let stale = get_asset_by_id_db(id).unwrap().unwrap();
+        assert!(
+            stale.account_identifier.contains("加密数据"),
+            "旧密钥必须解不开新密文，实际拿到: {}",
+            stale.account_identifier
+        );
+        let stale_profile = get_user_profile_db().unwrap().unwrap();
+        assert!(
+            stale_profile.full_name.contains("加密数据"),
+            "旧密钥必须解不开档案，实际拿到: {}",
+            stale_profile.full_name
+        );
+
+        vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
 }
