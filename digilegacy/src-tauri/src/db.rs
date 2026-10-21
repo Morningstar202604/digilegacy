@@ -2440,4 +2440,97 @@ mod tests {
         vault::clear_key();
         let _ = std::fs::remove_file(&path);
     }
+
+    /// 签到必须复位 DMS 计时。
+    ///
+    /// 删掉 `UPDATE dms_config SET last_check_in` 这一句，60 个测试仍全绿
+    /// （变异实测确认）。而真实后果是：用户点了「我还安好」，三级升级链
+    /// 却仍按旧时间继续升级，持续误报——这是会直接伤害用户的高危缺口。
+    #[test]
+    fn check_in_resets_dms_countdown() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("checkin");
+        init_database_at(path.clone()).unwrap();
+
+        // 造一个「已逾期」的初始状态：上次签到在 100 天前，间隔 30 天
+        let old = (chrono::Local::now() - chrono::Duration::days(100))
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        {
+            let guard = get_conn().unwrap();
+            let conn = guard.as_ref().unwrap();
+            conn.execute("UPDATE dms_config SET enabled=1, check_in_interval_days=30, last_check_in=?1 WHERE id=1", params![old])
+                .unwrap();
+        }
+        let before = get_check_in_status_db().unwrap();
+        assert!(before.days_until_due.unwrap_or(0) < 0, "前置：应已逾期");
+
+        record_check_in_db().unwrap();
+
+        let after = get_check_in_status_db().unwrap();
+        assert!(
+            after.days_until_due.unwrap_or(-1) > 0,
+            "签到后剩余天数必须重新变正，实际 {:?}",
+            after.days_until_due
+        );
+        assert_ne!(
+            after.last_check_in.as_deref(),
+            Some(old.as_str()),
+            "dms_config.last_check_in 必须被更新"
+        );
+
+        // 签到日志也必须有记录
+        let logs: i64 = {
+            let guard = get_conn().unwrap();
+            let conn = guard.as_ref().unwrap();
+            conn.query_row("SELECT COUNT(*) FROM check_in_log", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(logs, 1, "签到必须写日志");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 报告的类别统计必须准确，尤其 mixed 不能被算进 property。
+    #[test]
+    fn inheritance_report_counts_mixed_separately() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("report_mixed");
+        init_database_at(path.clone()).unwrap();
+
+        for (cat, val) in [
+            ("property", 100.0),
+            ("personality", 50.0),
+            ("mixed", 25.0),
+            ("mixed", 25.0),
+        ] {
+            add_asset_db(&AssetRequest {
+                platform_id: 1,
+                account_identifier: format!("acc-{}", cat),
+                account_description: String::new(),
+                category: cat.to_string(),
+                estimated_value: Some(val),
+                disposal_method: "inherit".to_string(),
+                heir_name: None,
+                heir_contact: None,
+                notes: String::new(),
+            })
+            .unwrap();
+        }
+
+        let report = get_inheritance_report_db().unwrap();
+        assert_eq!(
+            report.property_assets_count, 1,
+            "property 只应统计 property"
+        );
+        assert_eq!(
+            report.personality_assets_count, 1,
+            "personality 只应统计 personality"
+        );
+        assert_eq!(report.mixed_assets_count, 2, "mixed 必须单独统计");
+        assert_eq!(report.assets.len(), 4);
+        assert_eq!(report.total_estimated_value, 200.0);
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

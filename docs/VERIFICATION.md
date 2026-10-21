@@ -12,7 +12,7 @@
 | 生产构建 | `npm run build` | PASS |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
-| Rust 测试 | `cargo test --locked` | 60 passed, 0 failed, 1 ignored |
+| Rust 测试 | `cargo test --locked` | 62 passed, 0 failed, 1 ignored |
 
 ## 跨平台验证（Ubuntu 24.04 容器，真实 Linux）
 
@@ -23,7 +23,7 @@ Ubuntu 24.04 容器内用 Rust 1.99.1 完整复跑：
 |---|---|
 | `cargo fmt --check` | PASS |
 | `cargo clippy --all-targets -- -D warnings` | PASS，0 warnings |
-| `cargo test --locked` | **59 passed, 0 failed, 1 ignored**（68.04s） |
+| `cargo test --locked` | 59 passed, 0 failed, 1 ignored（68.04s，当时套件；后续新增用例后为 62，未重跑容器） |
 
 ## 心跳服务器 job
 
