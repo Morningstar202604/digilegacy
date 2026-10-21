@@ -2365,4 +2365,79 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
     }
+
+    /// 新增资产时每个敏感字段必须立即以密文落库。
+    ///
+    /// 此前的加密断言全部集中在 `encrypt_existing_data_db`（存量收编），
+    /// 「已解锁状态下 add_asset 写入」这条主路径没有断言——
+    /// 把 encrypt_if_needed 从 add_asset_db 摘掉，59 个测试仍全绿（变异实测确认）。
+    #[test]
+    fn add_asset_encrypts_every_sensitive_column_on_write() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("write_enc");
+        init_database_at(path.clone()).unwrap();
+
+        // 启用加密并解锁
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("write-enc-master", &salt);
+        let verifier = vault::make_verifier(&key).unwrap();
+        let salt_b64 = {
+            use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+            b64.encode(salt)
+        };
+        set_security_config_db(&salt_b64, &verifier).unwrap();
+        vault::set_key(key);
+
+        let id = add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "PLAINTEXT-ID".to_string(),
+            account_description: "PLAINTEXT-DESC".to_string(),
+            category: "property".to_string(),
+            estimated_value: Some(42.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: Some("PLAINTEXT-HEIR".to_string()),
+            heir_contact: Some("PLAINTEXT-CONTACT".to_string()),
+            notes: "PLAINTEXT-NOTES".to_string(),
+        })
+        .unwrap();
+
+        // 直接读原始行，绕过读取层的自动解密
+        let guard = get_conn().unwrap();
+        let conn = guard.as_ref().unwrap();
+        let row: (String, String, String, String, String) = conn
+            .query_row(
+                "SELECT account_identifier, account_description, COALESCE(heir_name,''), COALESCE(heir_contact,''), notes FROM digital_assets WHERE id=?1",
+                params![id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        drop(guard);
+
+        let (acc, desc, heir, contact, notes) = row;
+        for (name, value, plain) in [
+            ("account_identifier", &acc, "PLAINTEXT-ID"),
+            ("account_description", &desc, "PLAINTEXT-DESC"),
+            ("heir_name", &heir, "PLAINTEXT-HEIR"),
+            ("heir_contact", &contact, "PLAINTEXT-CONTACT"),
+            ("notes", &notes, "PLAINTEXT-NOTES"),
+        ] {
+            assert!(
+                vault::is_encrypted(value),
+                "{} 必须以 enc:v1 密文落库，实际: {}",
+                name,
+                value
+            );
+            assert!(!value.contains(plain), "{} 不得以明文出现在库里", name);
+        }
+
+        // 读取层仍应解密还原
+        let asset = get_asset_by_id_db(id).unwrap().unwrap();
+        assert_eq!(asset.account_identifier, "PLAINTEXT-ID");
+        assert_eq!(asset.notes, "PLAINTEXT-NOTES");
+        assert_eq!(asset.heir_contact.as_deref(), Some("PLAINTEXT-CONTACT"));
+
+        vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
 }

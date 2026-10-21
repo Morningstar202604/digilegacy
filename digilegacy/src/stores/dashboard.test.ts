@@ -37,6 +37,18 @@ describe('只读加载：失败不覆盖既有数据', () => {
     expect(s.stats).toEqual({ total_assets: 7 });
   });
 
+  it('loadStats 抛异常（catch 分支）时保留旧值', async () => {
+    // 上面那条测的是 success:false（不进 catch）；这里覆盖真正的异常路径，
+    // 否则在 catch 里写 stats.value = null 不会被任何用例发现（变异实测存活）。
+    const s = useDashboardStore();
+    s.stats = { total_assets: 5 } as never;
+
+    mockedInvoke.mockRejectedValueOnce(new Error('IPC 断开'));
+    await s.loadStats();
+
+    expect(s.stats).toEqual({ total_assets: 5 });
+  });
+
   it('loadCheckInStatus 失败时保留旧值', async () => {
     const s = useDashboardStore();
     s.checkInStatus = { interval_days: 30 } as never;

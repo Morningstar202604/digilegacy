@@ -8,11 +8,11 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 110 tests / 11 files，statements 34.33%（阈值 33） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 111 tests / 11 files，statements 34.33%（阈值 33） |
 | 生产构建 | `npm run build` | PASS |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
-| Rust 测试 | `cargo test --locked` | 59 passed, 0 failed, 1 ignored |
+| Rust 测试 | `cargo test --locked` | 60 passed, 0 failed, 1 ignored |
 
 ## 跨平台验证（Ubuntu 24.04 容器，真实 Linux）
 
@@ -39,12 +39,12 @@ Ubuntu 24.04 容器内用 Rust 1.99.1 完整复跑：
 ## Node 版本
 
 依赖链 engines 要求 `^22.22.2 || ^24.15.0 || >=26`。本机 Node 24.14.0 **不满足**，
-CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通过、覆盖率一致。
+CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通过、覆盖率一致（补测后为 111）。
 
 ## 未能在本机验证的部分
 
 - **GitHub Actions 运行结果**：`api.github.com` 在本机 TLS 不可达（curl exit 35），
-  代理 `ghfast.top` 仅支持 git 协议，不支持 HTTPS API/网页查询。
-  已确认代码推送到 `github.com/badhope/digilegacy` 的 main（`995056c..3fc3b68`），
-  工作流会在推送时触发，但**运行结论需要在 Actions 页面确认**：
+  代理 `ghfast.top` 仅支持 git 协议。首次成功运行已由独立评审通过 GitHub API
+  核实：run `39558924027`（sha `3fc3b68`）**completed / success**，三个 job 全绿。
+  后续提交的构建结果需在 Actions 页面确认：
   https://github.com/badhope/digilegacy/actions

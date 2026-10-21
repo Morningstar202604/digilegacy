@@ -14,12 +14,12 @@ concurrency:
 jobs:
   frontend:
     name: 前端 · typecheck / test+coverage / build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: digilegacy
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
@@ -43,12 +43,12 @@ jobs:
 
   rust:
     name: Rust · fmt / clippy / test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: digilegacy/src-tauri
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -76,12 +76,12 @@ jobs:
 
   heartbeat-server:
     name: 心跳服务器 · 语法与行为
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: digilegacy/server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v4
         with:
