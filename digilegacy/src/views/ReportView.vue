@@ -87,6 +87,9 @@
     <div v-if="exportPath" class="card mt-24 tag-success" style="background: var(--success-light); border-color: var(--success);">
       报告已保存到：{{ exportPath }}
     </div>
+    <div v-if="exportError" class="card mt-24 tag-danger" style="background: var(--danger-light, #fdecea); border-color: var(--danger);" role="alert">
+      {{ exportError }}
+    </div>
 
     <div class="mt-24 text-center">
       <button class="btn btn-primary btn-lg" @click="exportReport">📥 导出报告到文件</button>
@@ -121,6 +124,7 @@ interface InheritanceReportData {
 const platforms = usePlatformsStore();
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
+const exportError = ref('');
 
 const inheritableAssets = computed(() =>
   (report.value?.assets || []).filter(a => a.disposal_method !== 'no_action')
@@ -160,12 +164,20 @@ tr:hover td{background:#f6f3ee}
 .report-section-title{font-size:16px;font-weight:600;padding-bottom:8px;border-bottom:2px solid #e4ddd3;margin-bottom:12px}
 @media print{body{padding:0}.report-page{border:none}}
 </style></head><body>${htmlContent}</body></html>`;
+  exportError.value = '';
+  exportPath.value = '';
   try {
     const res = await invoke<ApiResponse<string>>('export_report_to_file', { content: fullHtml });
     if (res.success && res.data) {
       exportPath.value = res.data;
+    } else {
+      // 导出失败必须让用户看见：静默失败会让人以为文件已生成
+      exportError.value = res.message || '导出失败';
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error('导出报告失败:', e);
+    exportError.value = '导出失败：' + String(e);
+  }
 }
 
 async function exportZip() {
@@ -221,9 +233,18 @@ async function exportZip() {
       .join('')
   );
   // 通过 Tauri 命令保存文件
-  const res = await invoke<ApiResponse<string>>('export_zip_to_file', { content: base64 });
-  if (res.success && res.data) {
-    exportPath.value = res.data;
+  exportError.value = '';
+  exportPath.value = '';
+  try {
+    const res = await invoke<ApiResponse<string>>('export_zip_to_file', { content: base64 });
+    if (res.success && res.data) {
+      exportPath.value = res.data;
+    } else {
+      exportError.value = res.message || '导出工具包失败';
+    }
+  } catch (e) {
+    console.error('导出工具包失败:', e);
+    exportError.value = '导出工具包失败：' + String(e);
   }
 }
 

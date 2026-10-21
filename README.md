@@ -63,7 +63,7 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 | 7 | **Legal template library** | Six categories of legal document templates (will clause, inheritance declaration, authorization, affidavit, application, agreement) |
 | 8 | **Encrypted vault & recovery key** | Field-level AES-256-GCM encryption, master password lock with idle auto-lock, one-time recovery key, encrypted backup export/import |
 | 9 | **Onboarding & help centre** | First-run guided tour; built-in help explaining the encryption model and the **real** capability boundaries of reminders |
-| 10 | **Credential vault** | Optional encrypted storage of account credentials — deliberately excluded from every export |
+| 10 | **Credential vault** | Optional encrypted storage of account credentials. Excluded from the **report and toolkit** exports; the **encrypted backup** carries the ciphertext so credentials survive a device migration (they stay unreadable without your master password) |
 
 ## Screenshots
 
@@ -91,7 +91,7 @@ Digital legacy data is the most private data a person owns — it contains both 
 | **Recovery** | A one-time **24-character recovery key** seals the master key, so forgetting the password is recoverable; the recovery key rotates automatically on every password change |
 | **No server, no telemetry** | There is no backend. Apart from the optional heartbeat you configure yourself, the app makes no network requests — "open platform website" hands a URL to your system browser (http/https only) |
 | **Zero-content heartbeat (optional, self-hosted)** | If you want reminders while the machine is off, the heartbeat sends **only a token**. You must point it at a server you run (`server/heartbeat-server.mjs` is a complete reference); configure it in **Profile → cloud heartbeat**. No default endpoint is shipped — the project does not operate a public server |
-| **Exports** | Reports and toolkits are open HTML/JSON/ZIP and contain **no credentials**, stated explicitly in the generated toolkit instructions |
+| **Exports** | Reports and toolkits are open HTML/JSON/ZIP and contain **no credentials**, stated explicitly in the generated toolkit instructions. The separate **backup file** does include credential *ciphertext* (never plaintext) so a restore keeps your vault intact |
 
 **Honest limitations.** Local encryption protects data at rest; it cannot stop malware running as your user or someone who knows your master password. Credentials you choose to save live on the same machine — the same trade-off every password manager makes. Reports and toolkits are plain files: treat them like paper documents.
 
@@ -231,7 +231,7 @@ On first launch the database is created and seeded with the platform policy data
 
 1. **Field-level encryption.** Account identifiers, credentials, profile fields and heir contact details are encrypted with AES-256-GCM before storage; the master key is derived with PBKDF2-SHA256 and held in memory only.
 2. **Master-password lock.** Manual lock, or automatic after 10 minutes idle. While locked, credential decryption is refused at the Rust layer — the UI overlay is only the visible half.
-3. **Credential vault.** Optional encrypted storage with copy-to-clipboard (clipboard cleared after 30 seconds when possible). Credentials never enter reports, toolkits or backups of reports.
+3. **Credential vault.** Optional encrypted storage with copy-to-clipboard. Credentials never enter reports or toolkits; the encrypted backup stores them only as ciphertext, which stays unreadable without the master password.
 4. **No server, no telemetry, no cloud sync.** External links are restricted to `http`/`https`.
 5. Application permissions are narrowed to an allowlist in `src-tauri/capabilities/default.json`.
 
@@ -303,7 +303,7 @@ MIT — see [LICENSE](LICENSE).
 
 - **官网**：[badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)
 - **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
-- **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（绝不进入导出物）
+- **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（报告与工具包导出不含凭据；加密备份含密文以支持换机迁移）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
 - **测试**：`cargo test` 74 项通过（另有 1 项 ignored）、前端 `npm test` 122 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
 
