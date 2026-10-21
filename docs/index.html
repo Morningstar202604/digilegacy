@@ -186,7 +186,7 @@ footer li{margin-bottom:6px}
     </div>
     <div class="badges">
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
-      <img src="https://img.shields.io/badge/tests-40%20passed-brightgreen.svg" alt="40 tests passing">
+      <img src="https://img.shields.io/badge/tests-59%20Rust%20%C2%B7%20110%20frontend-brightgreen.svg" alt="59 Rust tests and 110 frontend tests passing">
       <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows 10/11">
       <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
       <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -279,12 +279,16 @@ footer li{margin-bottom:6px}
         <figcaption>Dead man's switch &amp; local reminders</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/06-heir-guide.png" alt="Heir guidance wizard with per-platform inheritance procedures" loading="lazy">
+        <img src="screenshots/07-heir-guide.png" alt="Heir guidance wizard with per-platform inheritance procedures" loading="lazy">
         <figcaption>Heir guidance wizard</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/08-report.png" alt="Generated inheritance report document" loading="lazy">
+        <img src="screenshots/06-report.png" alt="Generated inheritance report document" loading="lazy">
         <figcaption>Generated inheritance report</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/08-legal.png" alt="Legal document template library with six categories" loading="lazy">
+        <figcaption>Legal template library</figcaption>
       </figure>
     </div>
   </div>
@@ -297,7 +301,7 @@ footer li{margin-bottom:6px}
     <div class="grid g2">
       <div class="card">
         <h3>Field-level AES-256-GCM encryption</h3>
-        <p>A <strong>zero-knowledge, local-first design</strong>: after you set a master password, account identifiers, credentials, profile fields and heir contacts are encrypted <em>before</em> they reach the database. The key is derived with PBKDF2-SHA256 (100,000 iterations) and lives only in memory — locking the app wipes it.</p>
+        <p>A <strong>zero-knowledge, local-first design</strong>: after you set a master password, account identifiers, credentials, profile fields and heir contacts are encrypted <em>before</em> they reach the database. The key is derived with PBKDF2-SHA256 (600,000 iterations) and lives only in memory — locking the app wipes it.</p>
       </div>
       <div class="card">
         <h3>Recovery key, not a dead end</h3>
@@ -367,7 +371,7 @@ npm run dev            # http://localhost:1420
 
 # Tests
 cd src-tauri &amp;&amp; cargo test</code></pre>
-        <p class="note">Stack: <strong>Tauri 2 (Rust)</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>. 40 automated tests, all passing.</p>
+        <p class="note">Stack: <strong>Tauri 2 (Rust)</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>. 59 Rust tests and 110 frontend tests, all passing.</p>
       </div>
     </div>
   </div>
@@ -377,8 +381,8 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
   <div class="wrap">
     <h2>Roadmap</h2>
     <div class="grid g3">
-      <div class="card"><h3>Shipped</h3><p>Asset discovery, encrypted vault, disposal planning, report &amp; toolkit export, dead man's switch with tray residency, recovery key, onboarding tour, help centre, zero-content heartbeat client &amp; reference server.</p></div>
-      <div class="card"><h3>Next</h3><p>English and multilingual UI, encrypted cloud backup (user-held keys), mobile companion for check-ins, policy database update channel, notification action buttons.</p></div>
+      <div class="card"><h3>Shipped</h3><p>Asset discovery, encrypted vault, disposal planning, report &amp; toolkit export, dead man's switch with tray residency, recovery key, onboarding tour, help centre, zero-content heartbeat client &amp; reference server, <strong>offline policy-patch channel</strong> (import/export JSON overrides for the built-in platform database).</p></div>
+      <div class="card"><h3>Next</h3><p>English and multilingual UI (no i18n layer yet), encrypted cloud backup (requires a server you host or trust), mobile companion for check-ins (separate codebase), notification action buttons (native notification actions). <strong>None of these are started.</strong></p></div>
       <div class="card"><h3>Later</h3><p>AI-assisted policy Q&amp;A (interface reserved), institution integrations, patent filings, community-contributed policy database.</p></div>
     </div>
   </div>

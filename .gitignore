@@ -4,6 +4,7 @@ dist/
 dist-ssr/
 *.local
 .vite/
+coverage/
 
 # ---- Rust / Tauri ----
 **/src-tauri/target/
@@ -53,3 +54,7 @@ digilegacy-hardening-report.html
 
 # ---- AQG 本地施工状态 ----
 .aqg/
+
+# ---- 心跳服务器运行时状态（含 token 与时间戳，不得入库） ----
+digilegacy/server/state.json
+digilegacy/server/registrations.json

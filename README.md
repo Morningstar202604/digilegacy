@@ -1,7 +1,7 @@
 # DigiLegacy 归零 — Open-Source Digital Legacy & Inheritance Manager
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/cargo%20test-40%20passed-brightgreen.svg)](#development--verification)
+[![Tests](https://img.shields.io/badge/cargo%20test-59%20passed-brightgreen.svg)](#development--verification)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#development)
 [![No servers](https://img.shields.io/badge/servers-none-4a7c8c.svg)](#privacy-model)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-4a7c8c.svg)](#privacy-model)
@@ -72,10 +72,10 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 | *Dashboard — overview & planning progress* | *Guided discovery questionnaire* |
 | ![Assets](docs/screenshots/03-assets.png) | ![Profile](docs/screenshots/04-profile.png) |
 | *Registered assets with disposal status* | *Profile, encryption & backup* |
-| ![Dead man's switch](docs/screenshots/05-dms.png) | ![Inheritance report](docs/screenshots/08-report.png) |
+| ![Dead man's switch](docs/screenshots/05-dms.png) | ![Inheritance report](docs/screenshots/06-report.png) |
 | *Dead man's switch & local reminders* | *Generated inheritance report* |
-| ![Heir guidance](docs/screenshots/06-heir-guide.png) | |
-| *Heir guidance wizard* | *（法律模板页截图待补充）* |
+| ![Heir guidance](docs/screenshots/07-heir-guide.png) | ![Legal templates](docs/screenshots/08-legal.png) |
+| *Heir guidance wizard* | *Legal template library* |
 
 > The interface is currently in Simplified Chinese (the primary target locale); an English UI is on the roadmap. All screens are also viewable on the [website](https://badhope.github.io/digilegacy/#screenshots).
 
@@ -85,11 +85,11 @@ Digital legacy data is the most private data a person owns — it contains both 
 
 | Layer | Implementation |
 |---|---|
-| **Field-level encryption** | Sensitive fields are encrypted with **AES-256-GCM** *before* they reach the database (`enc:v1:` prefixed ciphertext). The key is derived with **PBKDF2-SHA256, 100,000 iterations** |
+| **Field-level encryption** | Sensitive fields are encrypted with **AES-256-GCM** *before* they reach the database (`enc:v1:` prefixed ciphertext). The master key is derived with **PBKDF2-SHA256, 600,000 iterations** (100,000 for vaults created before v2; the salt is self-describing, so old vaults keep unlocking) |
 | **Key lifetime** | The derived key lives only in memory. Locking the app (manually or after 10 minutes idle) zeroes and drops it; credential reads are refused at the decryption layer while locked |
 | **Recovery** | A one-time **24-character recovery key** seals the master key, so forgetting the password is recoverable; the recovery key rotates automatically on every password change |
-| **No server, no telemetry** | There is no backend. The app makes no network requests of its own — "open platform website" hands a URL to your system browser (http/https only) |
-| **Zero-content heartbeat (optional)** | If you want reminders while the machine is off, the heartbeat sends **only a token**. The server learns "this token is alive" and nothing else — never an asset, a credential, a name or an address |
+| **No server, no telemetry** | There is no backend. Apart from the optional heartbeat you configure yourself, the app makes no network requests — "open platform website" hands a URL to your system browser (http/https only) |
+| **Zero-content heartbeat (optional, self-hosted)** | If you want reminders while the machine is off, the heartbeat sends **only a token**. You must point it at a server you run (`server/heartbeat-server.mjs` is a complete reference); configure it in **Profile → cloud heartbeat**. No default endpoint is shipped — the project does not operate a public server |
 | **Exports** | Reports and toolkits are open HTML/JSON/ZIP and contain **no credentials**, stated explicitly in the generated toolkit instructions |
 
 **Honest limitations.** Local encryption protects data at rest; it cannot stop malware running as your user or someone who knows your master password. Credentials you choose to save live on the same machine — the same trade-off every password manager makes. Reports and toolkits are plain files: treat them like paper documents.
@@ -130,6 +130,7 @@ npm run tauri:dev        # desktop development mode
 npm run tauri:build      # produce installers
 
 npm run dev              # frontend only — browser preview at http://localhost:1420
+node capture.mjs         # regenerate docs/screenshots (needs `npm run dev` running)
 cd src-tauri && cargo test
 ```
 
@@ -138,12 +139,9 @@ cd src-tauri && cargo test
 ```bash
 cd digilegacy/server
 node heartbeat-server.mjs            # default port 8080
-
-# Client environment variables:
-#   DMS_HEARTBEAT_ENABLED=1
-#   DMS_HEARTBEAT_TOKEN=<your token>
-#   DMS_HEARTBEAT_ENDPOINT=http://<host>:8080
 ```
+
+Point the client at it in **Profile → cloud heartbeat** (endpoint + token, stored in the local database). Environment variables `DMS_HEARTBEAT_ENABLED` / `DMS_HEARTBEAT_TOKEN` / `DMS_HEARTBEAT_ENDPOINT` are still honoured as a fallback for headless deployments, but the in-app form takes precedence.
 
 The reference server does three things: record the last heartbeat time per token, emit an alert payload when a token goes silent (default 21 days), and hand that payload to your scheduled job for delivery. **It never receives or stores user content.**
 
@@ -151,7 +149,7 @@ The reference server does three things: record the last heartbeat time per token
 
 ```
 Vue 3 + TypeScript + Pinia + Vue Router        frontend
-        │  Tauri invoke (37 commands)
+        │  Tauri invoke (42 commands)
 Tauri 2 (Rust)                                 desktop shell
         │
 rusqlite (SQLite, bundled)                     local storage
@@ -172,7 +170,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 │   │   ├── src/
 │   │   │   ├── platform_data.rs           # 150+ platform policy database
 │   │   │   ├── db.rs                      # schema, queries, migrations
-│   │   │   ├── commands.rs                # 37 Tauri commands
+│   │   │   ├── commands.rs                # 42 registered Tauri commands
 │   │   │   ├── vault.rs                   # master password & field encryption
 │   │   │   ├── recovery.rs                # one-time recovery key
 │   │   │   ├── heartbeat.rs               # zero-content cloud heartbeat
@@ -187,12 +185,22 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 | Check | Command | Status |
 |---|---|---|
-| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **40 / 40 passing** |
+| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **59 passing, 1 ignored** |
+| Frontend unit tests | `npm test` (in `digilegacy/`) | **110 passing** |
 | Frontend type check | `npx vue-tsc --noEmit` | passing |
 | Production build | `npm run build` | passing |
 | Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
 
-> The CI workflow was removed in commit `23d6ebb`; the checks above are the project's verification baseline. Run them locally before submitting changes.
+> `.github/workflows/ci.yml` runs these on every push to `main` and on every pull request: the frontend type check, unit tests and production build, plus the full Rust test suite on Linux. The heartbeat server syntax check and the manual type check above are not part of CI.
+
+### Test coverage — what the numbers actually cover
+
+Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 33 / branches 31 / functions 25 / lines 34), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured coverage is 34.33% statements (32.05% branches, 26.45% functions, 35.65% lines):
+
+- **`src/api/mock.ts` is development-preview code only.** It is not in the production bundle (`npm run build` does not include it — verified by grepping `dist/`). Its 14 tests exercise the browser demo backend, not the shipped app. They are still useful as a regression net for the preview, but they must not be counted as product coverage.
+- **The view layer had zero tests** before this round. `App.vue`, `AssetsView` and `CollapseGroup` now have real render tests; the remaining views (Discover, DMS, LegalTemplates, HeirGuide, Report, Profile) are still uncovered — closing that gap needs E2E, not more unit tests.
+
+Two real defects were found by the newly added tests (both fixed): `dashboard.saveUser` reported success on a rejected write (locked vault), and `CollapseGroup`'s `defaultOpen` was swallowed by Vue's boolean prop coercion, so the discovery page's platform groups rendered collapsed.
 
 ## Data storage
 
@@ -280,6 +288,6 @@ MIT — see [LICENSE](LICENSE).
 - **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
 - **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（绝不进入导出物）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 40/40 通过（本地与提交前手动运行；CI 工作流已于 `23d6ebb` 移除）
+- **测试**：`cargo test` 56 项通过（另有 1 项 ignored）、前端 `npm test` 110 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
 
 *数字有数，归处有路。*
