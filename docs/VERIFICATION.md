@@ -26,6 +26,21 @@ Ubuntu 24.04 容器内用 Rust 1.99.1 完整复跑：
 | `cargo clippy --all-targets -- -D warnings` | PASS，0 warnings |
 | `cargo test --locked` | 59 passed, 0 failed, 1 ignored（68.04s，当时套件；此后用例增加至 66，容器未重跑） |
 
+## E2E 跨平台验证（Ubuntu 24.04 容器）
+
+E2E 首次在 Linux 容器内运行时 18 个用例全失败，排查后确认**不是测试代码问题**：
+容器内 Playwright 浏览器二进制版本（1243）与 lockfile 要求（1248）不匹配，
+`npx playwright install` 因 191MB 包在容器网络下超时未完成。
+
+改用容器内已存在的 chromium 显式指定 `executablePath` 后复跑：
+
+| 结果 | 耗时 |
+|---|---|
+| **18 passed / 0 failed** | 27.5s |
+
+结论：E2E 用例本身跨平台可跑通；CI 上浏览器由 `npx playwright install --with-deps chromium`
+安装，job 已设 `timeout-minutes: 15` 避免大包下载被截断。
+
 ## E2E 变异验证
 
 E2E 的价值在于能抓住视图层变异（单测覆盖不到）：

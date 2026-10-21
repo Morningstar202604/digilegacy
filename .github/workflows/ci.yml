@@ -60,6 +60,8 @@ jobs:
         run: npm ci
 
       - name: 安装 Chromium
+        # GitHub runner 的 CDN 速度正常；显式给足超时，避免大包下载被默认阈值截断
+        timeout-minutes: 15
         run: npx playwright install --with-deps chromium
 
       - name: 运行 E2E
