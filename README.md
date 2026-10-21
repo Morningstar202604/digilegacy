@@ -1,5 +1,6 @@
 # DigiLegacy 归零 — Open-Source Digital Legacy & Inheritance Manager
 
+[![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/cargo%20test-59%20passed-brightgreen.svg)](#development--verification)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#development)
