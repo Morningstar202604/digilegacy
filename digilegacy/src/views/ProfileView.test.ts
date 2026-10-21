@@ -12,6 +12,7 @@ vi.mock('../api/invoke', () => ({
 
 import ProfileView from './ProfileView.vue';
 import { invoke } from '../api/invoke';
+import { useSecurityStore } from '../stores/security';
 
 const mockedInvoke = invoke as unknown as Mock;
 
@@ -37,7 +38,12 @@ async function mountProfile(over?: Record<string, (args?: Record<string, unknown
   const pinia = createPinia();
   setActivePinia(pinia);
   const w = mount(ProfileView, { global: { plugins: [pinia] } });
-  await flushPromises();
+  // onMounted 里有多条 await（loadUser / get_recovery_seal_exists / heartbeat / patch），
+  // 单次 flushPromises 不够，需要多轮让 security.refresh 落地后 DOM 才切到已加密分支。
+  for (let i = 0; i < 3; i++) {
+    await flushPromises();
+    await w.vm.$nextTick();
+  }
   return w;
 }
 
@@ -170,5 +176,96 @@ describe('政策补丁', () => {
     const w = await mountProfile();
     const clearBtn = w.findAll('button').find(b => b.text().includes('清除全部补丁'))!;
     expect(clearBtn.attributes('disabled')).toBeDefined();
+  });
+});
+
+describe('档案保存（saveProfile）', () => {
+  it('保存成功时必须同时提交 DMS 配置', async () => {
+    // 变异守卫：删掉 configureDms 调用后，UI 仍报「保存成功」，
+    // 但 DMS 间隔/开关不会落库（111 个测试曾对此全绿）。
+    const calls: string[] = [];
+    const w = await mountProfile({
+      set_user_profile: () => { calls.push('set_user_profile'); return { success: true, message: 'ok', data: null }; },
+      set_dead_mans_switch: () => { calls.push('set_dead_mans_switch'); return { success: true, message: 'ok', data: null }; },
+    });
+
+    const btn = w.findAll('button').find(b => b.text().includes('保存档案'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(calls).toContain('set_user_profile');
+    expect(calls).toContain('set_dead_mans_switch');
+  });
+
+  it('保存失败必须明确报错，不得静默', async () => {
+    // 变异守卫：把 catch 改成空块后，111 个测试曾全绿，
+    // 而用户会以为保存成功、实际什么都没写。
+    const w = await mountProfile({
+      set_user_profile: () => ({ success: false, message: '主密码已设置但处于锁定状态', data: null }),
+    });
+
+    const btn = w.findAll('button').find(b => b.text().includes('保存档案'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    const alerts = (globalThis.alert as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const texts = alerts.map(c => String(c[0]));
+    expect(texts.some(t => t.includes('保存失败')), `alert 应含失败提示，实际: ${JSON.stringify(texts)}`).toBe(true);
+  });
+});
+
+describe('改主密码（changeMasterPassword）', () => {
+  it('成功后必须展示轮换的新恢复码', async () => {
+    // 变异守卫：不展示新码时旧码已失效，用户将永久失去恢复能力。
+    const w = await mountProfile({
+      security_status: () => ({ success: true, message: '', data: { has_master_password: true, unlocked: true } }),
+      change_master_password: () => ({
+        success: true,
+        message: '主密码已更新',
+        data: {
+          status: { has_master_password: true, unlocked: true },
+          recovery_code: 'ROTA-TED1-CODE-2345-6789-ABCD',
+        },
+      }),
+    });
+
+    // 改密区块受 v-if="security.hasMasterPassword" 控制；
+    // 直接置位 store 再等一拍渲染，避免依赖 onMounted 的 refresh 时序
+    const sec = useSecurityStore();
+    sec.hasMasterPassword = true;
+    sec.unlocked = true;
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    await w.find('#pf-old-pw').setValue('old-master-1');
+    await w.find('#pf-new-pw').setValue('new-master-22');
+    await w.find('#pf-new-pw2').setValue('new-master-22');
+    const btn = w.findAll('button').find(b => b.text().includes('更新主密码'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('ROTA-TED1-CODE-2345-6789-ABCD');
+  });
+
+  it('新密码不足 8 位时本地拦截，不调用后端', async () => {
+    const w = await mountProfile({
+      security_status: () => ({ success: true, message: '', data: { has_master_password: true, unlocked: true } }),
+    });
+
+    const sec = useSecurityStore();
+    sec.hasMasterPassword = true;
+    sec.unlocked = true;
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    await w.find('#pf-old-pw').setValue('old-master-1');
+    await w.find('#pf-new-pw').setValue('short');
+    await w.find('#pf-new-pw2').setValue('short');
+    const btn = w.findAll('button').find(b => b.text().includes('更新主密码'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke).not.toHaveBeenCalledWith('change_master_password', expect.anything());
+    expect(w.text()).toContain('至少 8 位');
   });
 });

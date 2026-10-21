@@ -2533,4 +2533,70 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
     }
+
+    /// 备份里含签到记录时必须能完整导入。
+    ///
+    /// 此前 `backup_export_contains_real_rows_and_reimports` 没先签到，
+    /// 所以永远造不出「check_in_log 有行」的场景；删掉导入里的
+    /// `DELETE FROM check_in_log` 后 62 个测试仍全绿，而真实后果是：
+    /// 任何用过签到的用户，备份在灾难恢复时都会因主键冲突整体失败。
+    #[test]
+    fn backup_with_checkin_log_reimports_cleanly() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("backup_checkin");
+        init_database_at(path.clone()).unwrap();
+
+        add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "acc-ci".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap();
+        // 产生至少一条签到记录（这是旧测试缺失的前置）
+        record_check_in_db().unwrap();
+        record_check_in_db().unwrap();
+
+        let logs_before: i64 = {
+            let guard = get_conn().unwrap();
+            guard
+                .as_ref()
+                .unwrap()
+                .query_row("SELECT COUNT(*) FROM check_in_log", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(logs_before, 2);
+
+        let json = export_backup_json_db().unwrap();
+        assert!(json.contains("check_in_log"), "备份必须包含签到表");
+
+        // 再签到一次，让本地记录比备份多，验证导入是整体替换而非追加
+        record_check_in_db().unwrap();
+
+        import_backup_json_db(&json).expect("含签到记录的备份必须可导入");
+
+        let logs_after: i64 = {
+            let guard = get_conn().unwrap();
+            guard
+                .as_ref()
+                .unwrap()
+                .query_row("SELECT COUNT(*) FROM check_in_log", [], |r| r.get(0))
+                .unwrap()
+        };
+        assert_eq!(
+            logs_after, 2,
+            "导入后签到记录应与备份一致（不追加、不冲突）"
+        );
+
+        let assets = get_all_assets_db().unwrap();
+        assert_eq!(assets.len(), 1, "资产也要一并恢复");
+
+        let _ = std::fs::remove_file(&path);
+    }
 }

@@ -8,11 +8,11 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 111 tests / 11 files，statements 34.33%（阈值 33） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 115 tests / 11 files，statements 36.14%（32.87 / 27.90 / 37.66，阈值 35/31/27/36） |
 | 生产构建 | `npm run build` | PASS |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
-| Rust 测试 | `cargo test --locked` | 62 passed, 0 failed, 1 ignored |
+| Rust 测试 | `cargo test --locked` | 65 passed, 0 failed, 1 ignored |
 
 ## 跨平台验证（Ubuntu 24.04 容器，真实 Linux）
 

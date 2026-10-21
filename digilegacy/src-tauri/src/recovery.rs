@@ -150,4 +150,53 @@ mod tests {
         let b = generate_recovery_code();
         assert_ne!(a, b);
     }
+
+    /// v1 旧封印兼容：无 RS2. 前缀的封印必须用 10 万次迭代解开。
+    ///
+    /// 这条分支没有任何测试时，把 v1 迭代数改成 600k，62 个测试仍全绿——
+    /// 而真实后果是：v2 升级前生成过恢复码的用户，升级后恢复码全部失效。
+    #[test]
+    fn legacy_v1_seal_without_prefix_still_opens() {
+        let master = [3u8; 32];
+        let code = "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ";
+        let salt = crypto::generate_salt();
+
+        // 手工构造 v1 封印：base64(salt(16) || AES-GCM 密文)，无前缀，10 万次迭代
+        let rec_key = crypto::derive_key_bytes_v(
+            &normalize_recovery_code(code),
+            &salt,
+            crypto::PBKDF2_ITERATIONS_V1,
+        );
+        let sealed = crypto::encrypt_with_key(&BASE64.encode(master), &rec_key).unwrap();
+        let mut combined = salt.to_vec();
+        combined.extend_from_slice(&BASE64.decode(&sealed).unwrap());
+        let legacy_seal = BASE64.encode(&combined);
+        assert!(!legacy_seal.starts_with(SEAL_PREFIX_V2));
+
+        let opened = unseal_with_recovery(code, &legacy_seal).expect("v1 旧封印必须仍可解开");
+        assert_eq!(*opened, master);
+    }
+
+    /// v1 与 v2 封印互不干扰：同一恢复码在两种格式下都能解出同一主密钥。
+    #[test]
+    fn v1_and_v2_seals_coexist() {
+        let master = [9u8; 32];
+        let (code, v2_seal) = create_recovery_seal(&master).unwrap();
+        assert!(v2_seal.starts_with(SEAL_PREFIX_V2));
+        assert_eq!(*unseal_with_recovery(&code, &v2_seal).unwrap(), master);
+
+        // 同一个恢复码手工做成 v1 封印
+        let salt = crypto::generate_salt();
+        let rec_key = crypto::derive_key_bytes_v(
+            &normalize_recovery_code(&code),
+            &salt,
+            crypto::PBKDF2_ITERATIONS_V1,
+        );
+        let sealed = crypto::encrypt_with_key(&BASE64.encode(master), &rec_key).unwrap();
+        let mut combined = salt.to_vec();
+        combined.extend_from_slice(&BASE64.decode(&sealed).unwrap());
+        let v1_seal = BASE64.encode(&combined);
+
+        assert_eq!(*unseal_with_recovery(&code, &v1_seal).unwrap(), master);
+    }
 }

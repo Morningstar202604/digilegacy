@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/cargo%20test-62%20passed-brightgreen.svg)](#development--verification)
+[![Tests](https://img.shields.io/badge/cargo%20test-65%20passed-brightgreen.svg)](#development--verification)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#development)
 [![No servers](https://img.shields.io/badge/servers-none-4a7c8c.svg)](#privacy-model)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-4a7c8c.svg)](#privacy-model)
@@ -186,8 +186,8 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 | Check | Command | Status |
 |---|---|---|
-| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **62 passing, 1 ignored** |
-| Frontend unit tests | `npm test` (in `digilegacy/`) | **111 passing** |
+| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **65 passing, 1 ignored** |
+| Frontend unit tests | `npm test` (in `digilegacy/`) | **115 passing** |
 | Frontend type check | `npx vue-tsc --noEmit` | passing |
 | Production build | `npm run build` | passing |
 | Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
@@ -202,7 +202,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 ### Test coverage — what the numbers actually cover
 
-Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 33 / branches 31 / functions 25 / lines 34), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured coverage is 34.33% statements (32.05% branches, 26.45% functions, 35.65% lines):
+Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 35 / branches 31 / functions 27 / lines 36), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured coverage is 36.14% statements (32.87% branches, 27.90% functions, 37.66% lines):
 
 - **`src/api/mock.ts` is development-preview code only.** It is not in the production bundle (`npm run build` does not include it — verified by grepping `dist/`). Its 14 tests exercise the browser demo backend, not the shipped app. They are still useful as a regression net for the preview, but they must not be counted as product coverage.
 - **The view layer had zero tests** before this round. `App.vue`, `AssetsView`, `ProfileView` and `CollapseGroup` now have real render tests (ProfileView ~47% statements). `DiscoverView`, `DMSView`, `DashboardView`, `ReportView`, `HeirGuideView`, `LegalTemplates` and `AssetDetailView` remain at 0% — closing that gap needs E2E, not more unit tests.
@@ -300,6 +300,6 @@ MIT — see [LICENSE](LICENSE).
 - **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
 - **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（绝不进入导出物）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 62 项通过（另有 1 项 ignored）、前端 `npm test` 111 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
+- **测试**：`cargo test` 65 项通过（另有 1 项 ignored）、前端 `npm test` 115 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
 
 *数字有数，归处有路。*
