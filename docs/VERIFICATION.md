@@ -8,7 +8,7 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 117 tests / 11 files，statements 36.14%（32.87 / 27.90 / 37.66，阈值 35/31/27/36） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 122 tests / 12 files，statements 36.77%（33.84 / 28.77 / 38.36，阈值 36/33/28/37） |
 | 生产构建 | `npm run build` | PASS |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
@@ -39,7 +39,7 @@ Ubuntu 24.04 容器内用 Rust 1.99.1 完整复跑：
 ## Node 版本
 
 依赖链 engines 要求 `^22.22.2 || ^24.15.0 || >=26`。本机 Node 24.14.0 **不满足**，
-CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通过、覆盖率一致（补测后为 117）。
+CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通过、覆盖率一致（补测后为 122）。
 
 ## 未能在本机验证的部分
 

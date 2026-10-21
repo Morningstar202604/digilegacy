@@ -13,6 +13,9 @@ vi.mock('../api/invoke', () => ({
 import ProfileView from './ProfileView.vue';
 import { invoke } from '../api/invoke';
 import { useSecurityStore } from '../stores/security';
+import { silenceExpectedErrors } from '../test-utils/silence';
+
+silenceExpectedErrors();
 
 const mockedInvoke = invoke as unknown as Mock;
 
