@@ -11,6 +11,9 @@ vi.mock('../api/invoke', () => ({
 
 import { invoke } from '../api/invoke';
 import { useAssetsStore } from './assets';
+import { silenceExpectedErrors } from '../test-utils/silence';
+
+silenceExpectedErrors();
 
 const mockedInvoke = invoke as unknown as Mock;
 

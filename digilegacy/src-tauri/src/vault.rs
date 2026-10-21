@@ -3,8 +3,8 @@
 //! 主密码经 PBKDF2 派生 32 字节密钥驻留内存（锁定即清除）；
 //! 用户敏感字段以 `enc:v1:` + base64(nonce||ciphertext) 形式写入数据库。
 
-use std::sync::Mutex;
 use once_cell::sync::Lazy;
+use std::sync::Mutex;
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::crypto;
@@ -53,7 +53,11 @@ pub fn is_encrypted(s: &str) -> bool {
 
 /// 用指定密钥加密字段，输出带 `enc:v1:` 前缀的密文
 pub fn encrypt_field(plain: &str, key: &[u8; 32]) -> Result<String, String> {
-    Ok(format!("{}{}", ENC_PREFIX, crypto::encrypt_with_key(plain, key)?))
+    Ok(format!(
+        "{}{}",
+        ENC_PREFIX,
+        crypto::encrypt_with_key(plain, key)?
+    ))
 }
 
 /// 解密带 `enc:v1:` 前缀的字段
@@ -213,7 +217,10 @@ mod tests {
         let enc_new = rekey_value(&enc_old, &old, &new).unwrap();
         assert!(is_encrypted(&enc_new));
         assert_eq!(decrypt_field(&enc_new, &new).unwrap(), "敏感内容");
-        assert!(decrypt_field(&enc_new, &old).is_err(), "旧密钥不得解开新密文");
+        assert!(
+            decrypt_field(&enc_new, &old).is_err(),
+            "旧密钥不得解开新密文"
+        );
 
         let upgraded = rekey_value("历史明文", &old, &new).unwrap();
         assert!(is_encrypted(&upgraded), "明文在重加密时应被顺带加密");

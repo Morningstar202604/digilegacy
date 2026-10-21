@@ -89,13 +89,16 @@
           <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">恢复访问</h2>
           <p class="text-muted" style="font-size: 13px; margin-top: 8px;">输入设置主密码时保存的恢复密钥（形如 XXXX-XXXX-XXXX-XXXX-XXXX-XXXX）。</p>
           <input class="form-input" v-model="recoveryCode" aria-label="恢复密钥" placeholder="恢复密钥" style="margin-top: 16px;" @keyup.enter="handleStartRecovery" />
+          <button v-if="!recoveryUnlocked" class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleStartRecovery">{{ recoveryBusy ? '验证中...' : '验证恢复密钥' }}</button>
           <template v-if="recoveryUnlocked">
             <input class="form-input" type="password" v-model="recoveryNewPassword" data-autofocus-pw aria-label="新主密码（至少 8 位）" placeholder="新主密码（至少 8 位）" style="margin-top: 12px;" />
             <input class="form-input" type="password" v-model="recoveryNewPassword2" aria-label="确认新主密码" placeholder="确认新主密码" style="margin-top: 12px;" />
             <p v-if="recoveryMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: recoveryOk ? 'var(--success)' : 'var(--danger)' }" class="recovery-msg">{{ recoveryMessage }}</p>
             <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleCompleteRecovery">{{ recoveryBusy ? '处理中...' : '重设主密码' }}</button>
-            <p v-if="recoveryNewCode" class="recovery-code-box" role="alert">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
           </template>
+          <!-- 新恢复密钥必须在重设成功后仍然可见：旧码一次性失效，
+               若此处随 recoveryUnlocked 一起隐藏，用户将永远拿不到新码。 -->
+          <p v-else-if="recoveryNewCode" class="recovery-code-box" role="alert">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
           <p v-else-if="recoveryError" role="alert" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ recoveryError }}</p>
           <button class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="backToUnlock">返回主密码解锁</button>
         </template>

@@ -71,9 +71,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function saveUser(profile: UserProfile) {
     try {
       const res = await invoke<ApiResponse<void>>('set_user_profile', { profile });
-      if (res.success) {
-        user.value = { ...user.value, ...profile };
+      if (!res.success) {
+        // 写路径失败必须以异常上抛：ProfileView 依赖它来提示失败，
+        // 否则锁定态拒写会被 UI 报成「保存成功」。
+        throw new Error(res.message || '保存档案失败');
       }
+      user.value = { ...user.value, ...profile };
       return res;
     } catch (e) {
       console.error('保存用户档案失败:', e);
@@ -87,9 +90,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
         enabled,
         intervalDays,
       });
-      if (res.success) {
-        await loadCheckInStatus();
+      if (!res.success) {
+        throw new Error(res.message || '保存设置失败');
       }
+      await loadCheckInStatus();
       return res;
     } catch (e) {
       console.error('配置 DMS 失败:', e);

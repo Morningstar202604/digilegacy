@@ -49,22 +49,42 @@ fn read_config() -> Result<DmsConfig, String> {
     let guard = db::get_conn()?;
     let conn = guard.as_ref().unwrap();
     let enabled: i64 = conn
-        .query_row("SELECT enabled FROM dms_config WHERE id=1", [], |r| r.get(0))
+        .query_row("SELECT enabled FROM dms_config WHERE id=1", [], |r| {
+            r.get(0)
+        })
         .unwrap_or(0);
     let interval: i64 = conn
-        .query_row("SELECT check_in_interval_days FROM dms_config WHERE id=1", [], |r| r.get(0))
+        .query_row(
+            "SELECT check_in_interval_days FROM dms_config WHERE id=1",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(30);
     let s1: i64 = conn
-        .query_row("SELECT stage1_wait_days FROM dms_config WHERE id=1", [], |r| r.get(0))
+        .query_row(
+            "SELECT stage1_wait_days FROM dms_config WHERE id=1",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(3);
     let s2: i64 = conn
-        .query_row("SELECT stage2_wait_days FROM dms_config WHERE id=1", [], |r| r.get(0))
+        .query_row(
+            "SELECT stage2_wait_days FROM dms_config WHERE id=1",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(7);
     let s3: i64 = conn
-        .query_row("SELECT stage3_wait_days FROM dms_config WHERE id=1", [], |r| r.get(0))
+        .query_row(
+            "SELECT stage3_wait_days FROM dms_config WHERE id=1",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or(14);
     let last: Option<String> = conn
-        .query_row("SELECT last_check_in FROM dms_config WHERE id=1", [], |r| r.get(0))
+        .query_row("SELECT last_check_in FROM dms_config WHERE id=1", [], |r| {
+            r.get(0)
+        })
         .ok();
     Ok(DmsConfig {
         enabled: enabled != 0,
@@ -109,7 +129,8 @@ fn already_notified(path: &std::path::Path, stage: i64, recipient: &str) -> bool
         return false;
     };
     content.lines().any(|line| {
-        line.contains(&format!("\"stage\":{}", stage)) && line.contains(&format!("\"recipient\":\"{}\"", recipient))
+        line.contains(&format!("\"stage\":{}", stage))
+            && line.contains(&format!("\"recipient\":\"{}\"", recipient))
     })
 }
 
@@ -125,7 +146,14 @@ fn append_outbox(path: &std::path::Path, entry: &DmsNotification) -> Result<(), 
     Ok(())
 }
 
-fn try_smtp(host: &str, port: u16, from: &str, to: &str, subject: &str, body: &str) -> Result<(), String> {
+fn try_smtp(
+    host: &str,
+    port: u16,
+    from: &str,
+    to: &str,
+    subject: &str,
+    body: &str,
+) -> Result<(), String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
@@ -133,29 +161,45 @@ fn try_smtp(host: &str, port: u16, from: &str, to: &str, subject: &str, body: &s
     let url = format!("smtp://{}:{}", host, port);
     let mut cmd = Command::new("curl");
     cmd.args([
-        "-s", "-S",
-        "-m", "20",
-        "--url", &url,
-        "--mail-from", from,
-        "--mail-rcpt", to,
-        "--upload-file", "-",
+        "-s",
+        "-S",
+        "-m",
+        "20",
+        "--url",
+        &url,
+        "--mail-from",
+        from,
+        "--mail-rcpt",
+        to,
+        "--upload-file",
+        "-",
     ]);
     // 默认要求 STARTTLS（curl --ssl-reqd：服务器不提供即中止，拒绝明文投递）
-    if std::env::var("DMS_SMTP_ALLOW_INSECURE").map(|v| v != "1").unwrap_or(true) {
+    if std::env::var("DMS_SMTP_ALLOW_INSECURE")
+        .map(|v| v != "1")
+        .unwrap_or(true)
+    {
         cmd.arg("--ssl-reqd");
     }
     // 凭据经临时 netrc 文件传入：密码不出现在命令行参数里（同机进程可枚举 argv）
     let netrc_path = build_smtp_netrc(host);
     if let Ok(Some(path)) = &netrc_path {
-        cmd.arg("--netrc").arg("--netrc-optional").arg("--netrc-file").arg(path);
+        cmd.arg("--netrc")
+            .arg("--netrc-optional")
+            .arg("--netrc-file")
+            .arg(path);
     }
-    cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
 
     let spawn_result = cmd.spawn();
     let mut child = match spawn_result {
         Ok(c) => c,
         Err(e) => {
-            if let Ok(Some(p)) = &netrc_path { let _ = std::fs::remove_file(p); }
+            if let Ok(Some(p)) = &netrc_path {
+                let _ = std::fs::remove_file(p);
+            }
             return Err(format!("启动 curl 失败: {}", e));
         }
     };
@@ -168,14 +212,18 @@ fn try_smtp(host: &str, port: u16, from: &str, to: &str, subject: &str, body: &s
     })();
     if let Err(e) = write_result {
         let _ = child.kill();
-        if let Ok(Some(p)) = &netrc_path { let _ = std::fs::remove_file(p); }
+        if let Ok(Some(p)) = &netrc_path {
+            let _ = std::fs::remove_file(p);
+        }
         return Err(e);
     } // drop stdin → curl 收到 EOF 后自行追加终止符并结束 DATA
 
     let output = match child.wait_with_output() {
         Ok(o) => o,
         Err(e) => {
-            if let Ok(Some(p)) = &netrc_path { let _ = std::fs::remove_file(p); }
+            if let Ok(Some(p)) = &netrc_path {
+                let _ = std::fs::remove_file(p);
+            }
             return Err(format!("等待 curl 退出失败: {}", e));
         }
     };
@@ -201,7 +249,10 @@ fn netrc_entry(host: &str, user: &str, pass: &str) -> String {
 
 /// 若配置了 SMTP 凭据环境变量则生成临时 netrc 文件；调用方负责在 curl 结束后删除
 fn build_smtp_netrc(host: &str) -> Result<Option<std::path::PathBuf>, String> {
-    let (Ok(user), Ok(pass)) = (std::env::var("DMS_SMTP_USER"), std::env::var("DMS_SMTP_PASS")) else {
+    let (Ok(user), Ok(pass)) = (
+        std::env::var("DMS_SMTP_USER"),
+        std::env::var("DMS_SMTP_PASS"),
+    ) else {
         return Ok(None);
     };
     if user.is_empty() || pass.is_empty() {
@@ -222,7 +273,10 @@ fn build_smtp_netrc(host: &str) -> Result<Option<std::path::PathBuf>, String> {
 
 /// 邮件头净化：剥离 CR/LF，阻断 SMTP 头注入（头部拆分可注入 Bcc 等恶意头）
 fn sanitize_header(value: &str) -> String {
-    value.chars().map(|c| if c == '\r' || c == '\n' { ' ' } else { c }).collect()
+    value
+        .chars()
+        .map(|c| if c == '\r' || c == '\n' { ' ' } else { c })
+        .collect()
 }
 
 /// DATA 正文 dot-stuffing：以 . 开头的行前额外补一个点，避免提前终止 DATA；
@@ -231,7 +285,11 @@ fn dot_stuff_body(body: &str) -> String {
     body.split('\n')
         .map(|line| {
             let line = line.strip_suffix('\r').unwrap_or(line);
-            if line.starts_with('.') { format!(".{}", line) } else { line.to_string() }
+            if line.starts_with('.') {
+                format!(".{}", line)
+            } else {
+                line.to_string()
+            }
         })
         .collect::<Vec<_>>()
         .join("\r\n")
@@ -244,14 +302,23 @@ fn is_valid_email(addr: &str) -> bool {
     if s.is_empty() || s.len() > 254 || s.matches('@').count() != 1 {
         return false;
     }
-    if !s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '@' | '.' | '_' | '-' | '+')) {
+    if !s
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '@' | '.' | '_' | '-' | '+'))
+    {
         return false;
     }
-    let Some((local, domain)) = s.split_once('@') else { return false };
+    let Some((local, domain)) = s.split_once('@') else {
+        return false;
+    };
     if local.is_empty() || local.starts_with('.') || local.ends_with('.') {
         return false;
     }
-    if domain.is_empty() || !domain.contains('.') || domain.starts_with('.') || domain.ends_with('.') {
+    if domain.is_empty()
+        || !domain.contains('.')
+        || domain.starts_with('.')
+        || domain.ends_with('.')
+    {
         return false;
     }
     true
@@ -296,41 +363,50 @@ fn dispatch(
         if !is_valid_email(recipient) {
             // 收件人不是合法邮箱（如未填邮箱时的手机号回退）：
             // 不允许进入 SMTP 会话，直接写入本地发件箱供人工查看
-            let _ = append_outbox(&path, &DmsNotification {
-                stage,
-                recipient: recipient.to_string(),
-                subject: subject.to_string(),
-                body: body.to_string(),
-                sent_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                channel: "local_outbox".to_string(),
-            });
+            let _ = append_outbox(
+                &path,
+                &DmsNotification {
+                    stage,
+                    recipient: recipient.to_string(),
+                    subject: subject.to_string(),
+                    body: body.to_string(),
+                    sent_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    channel: "local_outbox".to_string(),
+                },
+            );
             "local_outbox".to_string()
         } else {
             let port: u16 = port.parse().unwrap_or(25);
             match try_smtp(&host, port, &from, recipient, subject, body) {
                 Ok(()) => "smtp".to_string(),
                 Err(_) => {
-                    let _ = append_outbox(&path, &DmsNotification {
-                        stage,
-                        recipient: recipient.to_string(),
-                        subject: subject.to_string(),
-                        body: body.to_string(),
-                        sent_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                        channel: "local_outbox".to_string(),
-                    });
+                    let _ = append_outbox(
+                        &path,
+                        &DmsNotification {
+                            stage,
+                            recipient: recipient.to_string(),
+                            subject: subject.to_string(),
+                            body: body.to_string(),
+                            sent_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                            channel: "local_outbox".to_string(),
+                        },
+                    );
                     "local_outbox".to_string()
                 }
             }
         }
     } else {
-        let _ = append_outbox(&path, &DmsNotification {
-            stage,
-            recipient: recipient.to_string(),
-            subject: subject.to_string(),
-            body: body.to_string(),
-            sent_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-            channel: "local_outbox".to_string(),
-        });
+        let _ = append_outbox(
+            &path,
+            &DmsNotification {
+                stage,
+                recipient: recipient.to_string(),
+                subject: subject.to_string(),
+                body: body.to_string(),
+                sent_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                channel: "local_outbox".to_string(),
+            },
+        );
         "local_outbox".to_string()
     };
 
@@ -374,7 +450,11 @@ pub fn evaluate_dms(app_handle: AppHandle) -> Result<DmsEvaluation, String> {
     let mut notifications = Vec::new();
 
     if overdue {
-        let name = if user.full_name.is_empty() { "用户".to_string() } else { user.full_name.clone() };
+        let name = if user.full_name.is_empty() {
+            "用户".to_string()
+        } else {
+            user.full_name.clone()
+        };
         // 二/三级收件人优先使用邮箱（SMTP 通道只认邮件地址）；未填邮箱时回退手机号，
         // 该值也会原样写入本地发件箱供人工查看，仅 SMTP 投递会失败并降级。
         let stage2_recipient = if user.emergency_contact_email.is_empty() {
@@ -508,7 +588,10 @@ mod tests {
     fn smtp_message_contains_headers_and_body_without_terminator() {
         let msg = smtp_message("a@x.com", "b@y.com", "主题", "正文");
         assert!(msg.starts_with("From: a@x.com\r\nTo: b@y.com\r\nSubject: 主题\r\n"));
-        assert!(msg.ends_with("正文"), "报文不得包含 DATA 终止符，由 curl 负责追加");
+        assert!(
+            msg.ends_with("正文"),
+            "报文不得包含 DATA 终止符，由 curl 负责追加"
+        );
         assert!(!msg.contains("\r\n.\r\n"));
     }
 
@@ -516,8 +599,14 @@ mod tests {
     #[test]
     fn header_injection_is_neutralized_in_smtp_message() {
         let msg = smtp_message("a@x.com", "b@y.com", "s1\r\nBcc: evil@x.com", "正文");
-        assert!(!msg.contains("\r\nBcc:"), "主题中的换行必须被剥离，不得拆出新头");
-        assert!(!msg.contains("\r\nSubject: s1\r\n"), "不得出现被拆分的重复 Subject 行");
+        assert!(
+            !msg.contains("\r\nBcc:"),
+            "主题中的换行必须被剥离，不得拆出新头"
+        );
+        assert!(
+            !msg.contains("\r\nSubject: s1\r\n"),
+            "不得出现被拆分的重复 Subject 行"
+        );
         // 头部行数固定：From/To/Subject/Content-Type + 空行分隔 + 单行正文
         assert_eq!(msg.matches("\r\n").count(), 5, "报文行数不得因注入而增加");
     }
@@ -526,7 +615,10 @@ mod tests {
     #[test]
     fn body_lines_starting_with_dot_are_stuffed() {
         let msg = smtp_message("a@x.com", "b@y.com", "s", "第一行\r\n.危险行\r\n结束");
-        assert!(msg.contains("\r\n..危险行\r\n"), "以点开头的行必须 dot-stuffing");
+        assert!(
+            msg.contains("\r\n..危险行\r\n"),
+            "以点开头的行必须 dot-stuffing"
+        );
         assert!(!msg.contains("\r\n.\r\n"), "不得出现提前的 DATA 终止符");
 
         // 混合 \n 行尾也必须被处理（正文来自 format! 拼接，常见 \n）
@@ -547,7 +639,10 @@ mod tests {
         assert!(!is_valid_email("a@b."), "域名以点结尾必须拒绝");
         assert!(!is_valid_email("a@b@c.com"), "双 @ 必须拒绝");
         assert!(!is_valid_email("a b@x.com"), "含空格必须拒绝");
-        assert!(!is_valid_email("a@x.com\r\nBcc: e@x.com"), "含 CRLF 必须拒绝");
+        assert!(
+            !is_valid_email("a@x.com\r\nBcc: e@x.com"),
+            "含 CRLF 必须拒绝"
+        );
         assert!(!is_valid_email(".a@x.com"), "本地部以点开头必须拒绝");
     }
 
@@ -580,14 +675,21 @@ mod tests {
                 let _ = stream.flush();
                 let mut buf = [0u8; 2048];
                 let _ = stream.read(&mut buf); // EHLO
-                // 不广告 STARTTLS
+                                               // 不广告 STARTTLS
                 let _ = stream.write_all(b"250-mock\r\n250 SIZE 10485760\r\n");
                 let _ = stream.flush();
                 // curl 因 --ssl-reqd 中止连接；无需更多应答
             }
         });
 
-        let result = try_smtp("127.0.0.1", port, "from@test.local", "to@test.local", "s", "b");
+        let result = try_smtp(
+            "127.0.0.1",
+            port,
+            "from@test.local",
+            "to@test.local",
+            "s",
+            "b",
+        );
         assert!(result.is_err(), "无 STARTTLS 能力时必须拒绝投递");
         let _ = handle.join();
     }

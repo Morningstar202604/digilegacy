@@ -1,9 +1,9 @@
-use tauri::{command, Manager, AppHandle};
-use zeroize::Zeroize;
-use crate::models::*;
 use crate::db;
 use crate::db::CheckInStatus;
+use crate::models::*;
 use crate::platform_data::get_all_platforms as get_all_platforms_data;
+use tauri::{command, AppHandle, Manager};
+use zeroize::Zeroize;
 
 // ========== 平台 ==========
 
@@ -14,34 +14,110 @@ pub fn get_all_platforms() -> Result<ApiResponse<Vec<Platform>>, String> {
 
 #[command]
 pub fn get_all_platforms_extended() -> Result<ApiResponse<Vec<PlatformExtended>>, String> {
-    let platforms = get_all_platforms_data()
+    // 必须从数据库读（而不是直接用内置 const 表），否则用户导入的政策补丁在
+    // 继承人向导 / 变现路径卡里完全不生效——两个入口会显示不一致的政策。
+    let platforms = db::get_all_platforms_db()?;
+    let extended = platforms
         .into_iter()
-        .map(|p| PlatformExtended {
-            base: Platform {
-                id: p.id,
-                name: p.name,
-                category: p.category,
-                subtype: p.subtype,
-                has_property: p.has_property,
-                has_personality: p.has_personality,
-                inheritable: p.inheritable,
-                required_documents: p.required_documents,
-                process_description: p.process_description,
-                estimated_difficulty: p.estimated_difficulty,
-                official_policy_url: p.official_policy_url,
-                estimated_time_days: p.estimated_time_days,
-                notes: p.notes,
-            },
-            name_en: p.name_en,
-            data_source: p.data_source,
-            inheritance_form_url: p.inheritance_form_url,
-            monetization_path: p.monetization_path,
-            legal_template_ids: p.legal_template_ids,
-            risk_warnings: p.risk_warnings,
-            tags: p.tags,
+        .map(|p| {
+            let meta = get_all_platforms_data()
+                .into_iter()
+                .find(|m| m.id == p.id)
+                .unwrap_or_else(|| {
+                    // 补丁新增的平台在内置库里没有扩展元数据，用空值占位
+                    crate::platform_data::PlatformEntry::new(
+                        p.id,
+                        &p.name,
+                        "",
+                        &p.category,
+                        &p.subtype,
+                        p.has_property,
+                        p.has_personality,
+                        p.inheritable,
+                        &p.required_documents,
+                        &p.process_description,
+                        &p.estimated_difficulty,
+                        &p.official_policy_url,
+                        &p.estimated_time_days,
+                        &p.notes,
+                    )
+                });
+            PlatformExtended {
+                base: Platform {
+                    id: p.id,
+                    name: p.name,
+                    category: p.category,
+                    subtype: p.subtype,
+                    has_property: p.has_property,
+                    has_personality: p.has_personality,
+                    inheritable: p.inheritable,
+                    required_documents: p.required_documents,
+                    process_description: p.process_description,
+                    estimated_difficulty: p.estimated_difficulty,
+                    official_policy_url: p.official_policy_url,
+                    estimated_time_days: p.estimated_time_days,
+                    notes: p.notes,
+                },
+                name_en: meta.name_en,
+                data_source: meta.data_source,
+                inheritance_form_url: meta.inheritance_form_url,
+                monetization_path: meta.monetization_path,
+                legal_template_ids: meta.legal_template_ids,
+                risk_warnings: meta.risk_warnings,
+                tags: meta.tags,
+            }
         })
         .collect();
-    Ok(ApiResponse::ok(platforms))
+    Ok(ApiResponse::ok(extended))
+}
+
+// ========== 政策库补丁（离线更新通道） ==========
+
+#[command]
+pub fn import_platform_patch(content: String) -> Result<ApiResponse<String>, String> {
+    // 与备份导入同一量级的上限：政策补丁是纯文本 JSON
+    if content.len() > 8 * 1024 * 1024 {
+        return Ok(ApiResponse::fail("政策补丁过大（上限 8MB）"));
+    }
+    match db::import_platform_overrides_db(&content) {
+        Ok((added, updated)) => Ok(ApiResponse::ok_with_msg(
+            format!("新增 {} 条，覆盖 {} 条", added, updated),
+            "政策库补丁已导入",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+#[command]
+pub fn export_platform_patch(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
+    let json = db::export_platform_overrides_db()?;
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取目录失败: {}", e))?;
+    let dir = app_dir.join("政策补丁");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {}", e))?;
+    let name = format!(
+        "digilegacy-platform-patch-{}.json",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    );
+    let path = dir.join(name);
+    // 与备份导出同样落在应用数据目录，不额外申请前端写文件权限
+    std::fs::write(&path, json).map_err(|e| format!("写入补丁失败: {}", e))?;
+    Ok(ApiResponse::ok_with_msg(
+        path.to_string_lossy().to_string(),
+        "政策补丁已导出",
+    ))
+}
+
+#[command]
+pub fn platform_patch_status() -> Result<ApiResponse<i64>, String> {
+    db::count_platform_overrides_db().map(ApiResponse::ok)
+}
+
+#[command]
+pub fn clear_platform_patch() -> Result<ApiResponse<usize>, String> {
+    db::clear_platform_overrides_db().map(ApiResponse::ok)
 }
 
 // ========== 数字资产 ==========
@@ -87,15 +163,14 @@ pub fn get_assets_by_category(category: String) -> Result<ApiResponse<Vec<Digita
 
 #[command]
 pub fn set_disposal_wish(
-    asset_id: i64, 
-    disposal_method: String, 
-    heir_name: Option<String>, 
+    asset_id: i64,
+    disposal_method: String,
+    heir_name: Option<String>,
     heir_contact: Option<String>,
-    notes: String
+    notes: String,
 ) -> Result<ApiResponse<()>, String> {
-    let asset = db::get_asset_by_id_db(asset_id)?
-        .ok_or("资产不存在")?;
-    
+    let asset = db::get_asset_by_id_db(asset_id)?.ok_or("资产不存在")?;
+
     let req = AssetRequest {
         platform_id: asset.platform_id,
         account_identifier: asset.account_identifier,
@@ -107,7 +182,7 @@ pub fn set_disposal_wish(
         heir_contact,
         notes,
     };
-    
+
     db::update_asset_db(asset_id, &req)?;
     Ok(ApiResponse::ok_with_msg((), "处置意愿已设定"))
 }
@@ -133,52 +208,64 @@ pub fn get_inheritance_report() -> Result<ApiResponse<InheritanceReport>, String
 }
 
 #[command]
-pub fn export_report_to_file(app_handle: AppHandle, content: String) -> Result<ApiResponse<String>, String> {
-    let app_dir = app_handle.path().app_data_dir()
+pub fn export_report_to_file(
+    app_handle: AppHandle,
+    content: String,
+) -> Result<ApiResponse<String>, String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("获取目录失败: {}", e))?;
-    
+
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建目录失败: {}", e))?;
-    
+
     let file_path = app_dir.join(format!(
         "归零继承报告_{}.html",
         chrono::Local::now().format("%Y%m%d_%H%M%S")
     ));
     std::fs::write(&file_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
-    
+
     Ok(ApiResponse::ok_with_msg(
         file_path.to_string_lossy().to_string(),
-        "报告已导出到应用数据目录"
+        "报告已导出到应用数据目录",
     ))
 }
 
 // ========== ZIP 工具包导出 ==========
 
 #[command]
-pub fn export_zip_to_file(content: String, app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD as base64};
+pub fn export_zip_to_file(
+    content: String,
+    app_handle: AppHandle,
+) -> Result<ApiResponse<String>, String> {
+    use base64::{engine::general_purpose::STANDARD as base64, Engine};
     // IPC 入口参数上限：解码后 200MB（对应 base64 约 267MB）。
     // 无上限时恶意/失控前端可凭一次 IPC 请求拖垮进程内存。
     if content.len() > 270_000_000 {
         return Ok(ApiResponse::fail("工具包体积超出上限（200MB）"));
     }
-    let decoded = base64.decode(&content).map_err(|e| format!("Base64解码失败: {}", e))?;
+    let decoded = base64
+        .decode(&content)
+        .map_err(|e| format!("Base64解码失败: {}", e))?;
     if decoded.len() > 200 * 1024 * 1024 {
         return Ok(ApiResponse::fail("工具包体积超出上限（200MB）"));
     }
-    let app_dir = app_handle.path().app_data_dir()
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("获取目录失败: {}", e))?;
-    
+
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建目录失败: {}", e))?;
-    
+
     let zip_path = app_dir.join(format!(
         "归零继承工具包_{}.zip",
         chrono::Local::now().format("%Y%m%d_%H%M%S")
     ));
     std::fs::write(&zip_path, &decoded).map_err(|e| format!("写入ZIP失败: {}", e))?;
-    
+
     Ok(ApiResponse::ok_with_msg(
         zip_path.to_string_lossy().to_string(),
-        "继承工具包已导出"
+        "继承工具包已导出",
     ))
 }
 
@@ -199,10 +286,10 @@ pub fn get_check_in_status() -> Result<ApiResponse<CheckInStatus>, String> {
 #[command]
 pub fn set_dead_mans_switch(enabled: bool, interval_days: i64) -> Result<ApiResponse<()>, String> {
     db::set_dms_config_db(enabled, interval_days)?;
-    let msg = if enabled { 
-        format!("Dead Man's Switch 已开启，每 {} 天检查一次", interval_days) 
-    } else { 
-        "Dead Man's Switch 已关闭".to_string() 
+    let msg = if enabled {
+        format!("Dead Man's Switch 已开启，每 {} 天检查一次", interval_days)
+    } else {
+        "Dead Man's Switch 已关闭".to_string()
     };
     Ok(ApiResponse::ok_with_msg((), &msg))
 }
@@ -226,9 +313,9 @@ pub fn security_status() -> Result<ApiResponse<SecurityStatus>, String> {
 }
 
 #[command]
-pub fn set_master_password(mut password: String) -> Result<ApiResponse<MasterPasswordSetup>, String> {
-    use base64::{Engine, engine::general_purpose::STANDARD as base64};
-
+pub fn set_master_password(
+    mut password: String,
+) -> Result<ApiResponse<MasterPasswordSetup>, String> {
     if password.chars().count() < 8 {
         password.zeroize();
         return Ok(ApiResponse::fail("主密码至少需要 8 个字符"));
@@ -253,9 +340,15 @@ pub fn set_master_password(mut password: String) -> Result<ApiResponse<MasterPas
 
     Ok(ApiResponse {
         success: true,
-        message: format!("加密已启用，存量数据已加密 {} 条。请立即抄写恢复密钥。", encrypted_rows),
+        message: format!(
+            "加密已启用，存量数据已加密 {} 条。请立即抄写恢复密钥。",
+            encrypted_rows
+        ),
         data: Some(MasterPasswordSetup {
-            status: SecurityStatus { has_master_password: true, unlocked: true },
+            status: SecurityStatus {
+                has_master_password: true,
+                unlocked: true,
+            },
             recovery_code,
         }),
     })
@@ -273,7 +366,10 @@ pub fn unlock(mut password: String) -> Result<ApiResponse<SecurityStatus>, Strin
 
     if crate::vault::verify_key(&verifier, &key) {
         crate::vault::set_key(key);
-        Ok(ApiResponse::ok(SecurityStatus { has_master_password: true, unlocked: true }))
+        Ok(ApiResponse::ok(SecurityStatus {
+            has_master_password: true,
+            unlocked: true,
+        }))
     } else {
         Ok(ApiResponse::fail("主密码错误"))
     }
@@ -283,7 +379,10 @@ pub fn unlock(mut password: String) -> Result<ApiResponse<SecurityStatus>, Strin
 pub fn lock() -> Result<ApiResponse<SecurityStatus>, String> {
     crate::vault::clear_key();
     Ok(ApiResponse::ok_with_msg(
-        SecurityStatus { has_master_password: true, unlocked: false },
+        SecurityStatus {
+            has_master_password: true,
+            unlocked: false,
+        },
         "已锁定",
     ))
 }
@@ -298,7 +397,11 @@ pub fn set_asset_credential(id: i64, credential: String) -> Result<ApiResponse<(
         return Ok(ApiResponse::fail("资产不存在或已被删除"));
     }
     db::set_asset_credential_db(id, &credential)?;
-    let msg = if credential.is_empty() { "凭据已清除" } else { "凭据已加密保存" };
+    let msg = if credential.is_empty() {
+        "凭据已清除"
+    } else {
+        "凭据已加密保存"
+    };
     Ok(ApiResponse::ok_with_msg((), msg))
 }
 
@@ -320,9 +423,13 @@ pub fn change_master_password(
             confirm_password.zeroize();
             Ok(ApiResponse {
                 success: true,
-                message: "主密码已更新，全部数据已用新密钥重新加密。请立即抄写新的恢复密钥。".to_string(),
+                message: "主密码已更新，全部数据已用新密钥重新加密。请立即抄写新的恢复密钥。"
+                    .to_string(),
                 data: Some(MasterPasswordSetup {
-                    status: SecurityStatus { has_master_password: true, unlocked: true },
+                    status: SecurityStatus {
+                        has_master_password: true,
+                        unlocked: true,
+                    },
                     recovery_code,
                 }),
             })
@@ -339,11 +446,16 @@ pub fn change_master_password(
 #[command]
 pub fn export_backup(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
     let json = db::export_backup_json_db()?;
-    let app_dir = app_handle.path().app_data_dir()
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("获取目录失败: {}", e))?;
     let dir = app_dir.join("备份");
     std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {}", e))?;
-    let name = format!("归零加密备份_{}.json", chrono::Local::now().format("%Y%m%d_%H%M%S"));
+    let name = format!(
+        "归零加密备份_{}.json",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    );
     let path = dir.join(name);
     std::fs::write(&path, json).map_err(|e| format!("写入备份失败: {}", e))?;
     Ok(ApiResponse::ok_with_msg(
@@ -378,7 +490,10 @@ pub fn start_recovery(recovery_code: String) -> Result<ApiResponse<SecurityStatu
     match crate::recovery::unseal_with_recovery(&recovery_code, &seal) {
         Ok(master_key) => {
             crate::vault::set_key(master_key);
-            Ok(ApiResponse::ok(SecurityStatus { has_master_password: true, unlocked: true }))
+            Ok(ApiResponse::ok(SecurityStatus {
+                has_master_password: true,
+                unlocked: true,
+            }))
         }
         Err(_) => Ok(ApiResponse::fail("恢复密钥不正确")),
     }
@@ -420,7 +535,13 @@ pub fn complete_recovery(
     let verifier_new = crate::vault::make_verifier(&key_new)?;
     let (recovery_code_new, recovery_seal_new) = crate::recovery::create_recovery_seal(&key_new)?;
 
-    db::reset_security_config_db(&salt_new, &verifier_new, &recovery_seal_new, &master_key, &key_new)?;
+    db::reset_security_config_db(
+        &salt_new,
+        &verifier_new,
+        &recovery_seal_new,
+        &master_key,
+        &key_new,
+    )?;
     // 重加密完成后会话密钥切换为新密钥，保证当前解锁态下数据立即可读
     crate::vault::set_key(key_new);
 
@@ -435,6 +556,57 @@ pub fn get_heartbeat_status() -> Result<ApiResponse<crate::heartbeat::HeartbeatS
     Ok(ApiResponse::ok(crate::heartbeat::current_status()))
 }
 
+/// 读取心跳配置（界面渲染用）。token 只回传「是否已配置」，不回传明文。
+#[command]
+pub fn get_heartbeat_config() -> Result<ApiResponse<serde_json::Value>, String> {
+    let (enabled, token, endpoint) = db::get_heartbeat_config_db()?;
+    Ok(ApiResponse::ok(serde_json::json!({
+        "enabled": enabled,
+        "has_token": !token.is_empty(),
+        "endpoint": endpoint,
+    })))
+}
+
+/// 保存心跳配置。token 传空串表示保持原值不变（避免界面把掩码值回写覆盖真令牌）。
+#[command]
+pub fn set_heartbeat_config(
+    enabled: bool,
+    token: String,
+    endpoint: String,
+) -> Result<ApiResponse<()>, String> {
+    let (_, current_token, _) = db::get_heartbeat_config_db()?;
+    let next_token = if token.trim().is_empty() {
+        current_token
+    } else {
+        token.trim().to_string()
+    };
+    if enabled && next_token.is_empty() {
+        return Ok(ApiResponse::fail("启用心跳前请先填写令牌"));
+    }
+    if enabled {
+        let ep = endpoint.trim();
+        if ep.is_empty() {
+            return Ok(ApiResponse::fail(
+                "启用心跳前请先填写服务器地址（可自建 server/heartbeat-server.mjs）",
+            ));
+        }
+        if !(ep.starts_with("http://") || ep.starts_with("https://")) {
+            return Ok(ApiResponse::fail(
+                "服务器地址必须以 http:// 或 https:// 开头",
+            ));
+        }
+    }
+    db::set_heartbeat_config_db(enabled, &next_token, endpoint.trim())?;
+    Ok(ApiResponse::ok_with_msg(
+        (),
+        if enabled {
+            "心跳已启用"
+        } else {
+            "心跳已关闭"
+        },
+    ))
+}
+
 #[command]
 pub fn send_heartbeat_now() -> Result<ApiResponse<crate::heartbeat::HeartbeatStatus>, String> {
     Ok(ApiResponse::ok(crate::heartbeat::send_heartbeat()))
@@ -444,9 +616,20 @@ pub fn send_heartbeat_now() -> Result<ApiResponse<crate::heartbeat::HeartbeatSta
 pub fn set_autostart(app_handle: AppHandle, enabled: bool) -> Result<ApiResponse<()>, String> {
     use tauri_plugin_autostart::ManagerExt as _;
     let manager = app_handle.autolaunch();
-    let result = if enabled { manager.enable() } else { manager.disable() };
+    let result = if enabled {
+        manager.enable()
+    } else {
+        manager.disable()
+    };
     match result {
-        Ok(()) => Ok(ApiResponse::ok_with_msg((), if enabled { "已设置开机自启" } else { "已关闭开机自启" })),
+        Ok(()) => Ok(ApiResponse::ok_with_msg(
+            (),
+            if enabled {
+                "已设置开机自启"
+            } else {
+                "已关闭开机自启"
+            },
+        )),
         Err(e) => Ok(ApiResponse::fail(&format!("设置自启失败: {}", e))),
     }
 }
@@ -479,7 +662,10 @@ pub fn open_external(url: String) -> Result<ApiResponse<()>, String> {
             ) -> *mut core::ffi::c_void;
         }
         let to_wide = |s: &str| -> Vec<u16> {
-            std::ffi::OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+            std::ffi::OsStr::new(s)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect()
         };
         let op = to_wide("open");
         let target = to_wide(&checked);
@@ -533,15 +719,31 @@ mod tests {
         let res = set_master_password("test-master-123".to_string()).unwrap();
         assert!(res.success);
         // 恢复密钥必须放在 data 字段中交给 UI 展示，而不是塞进 message 里被丢弃
-        let recovery_code = res.data.as_ref().expect("data 必须存在").recovery_code.clone();
+        let recovery_code = res
+            .data
+            .as_ref()
+            .expect("data 必须存在")
+            .recovery_code
+            .clone();
         assert!(!recovery_code.is_empty(), "恢复密钥不得为空");
-        assert_eq!(recovery_code.matches('-').count(), 5, "恢复密钥应为 XXXX-…-XXXX 分组格式");
-        assert!(!res.message.contains(&recovery_code), "恢复密钥不得明文出现在 message 中");
+        assert_eq!(
+            recovery_code.matches('-').count(),
+            5,
+            "恢复密钥应为 XXXX-…-XXXX 分组格式"
+        );
+        assert!(
+            !res.message.contains(&recovery_code),
+            "恢复密钥不得明文出现在 message 中"
+        );
 
         // 用返回的恢复密钥应能解封主密钥（模拟用户忘记主密码后的恢复路径）
         let seal = db::get_recovery_seal_db().unwrap();
         let unsealed = crate::recovery::unseal_with_recovery(&recovery_code, &seal).unwrap();
-        assert_eq!(unsealed, crate::vault::get_key().unwrap(), "恢复密钥必须能解出当前主密钥");
+        assert_eq!(
+            unsealed,
+            crate::vault::get_key().unwrap(),
+            "恢复密钥必须能解出当前主密钥"
+        );
 
         // 重复设置应被拒绝
         let second = set_master_password("another-pass-456".to_string()).unwrap();
@@ -549,6 +751,125 @@ mod tests {
         assert!(second.data.is_none());
 
         crate::vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 凭据命令：锁定态必须拒绝读取，且不得把明文回给前端。
+    #[test]
+    fn credential_commands_refuse_while_locked() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_cred_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        // 未启用加密时可直接写入
+        let req = crate::models::AssetRequest {
+            platform_id: 1,
+            account_identifier: "acc".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        };
+        let id = db::add_asset_db(&req).unwrap();
+
+        // 凭据的写入门槛比普通字段更严：即使未启用主密码也必须有会话密钥，
+        // 否则「保存了凭据」实际是明文直通。这里先启用加密并解锁再写入。
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("lock-master-123", &salt);
+        let verifier = crate::vault::make_verifier(&key).unwrap();
+        let salt_b64 = {
+            use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+            b64.encode(salt)
+        };
+        db::set_security_config_db(&salt_b64, &verifier).unwrap();
+        crate::vault::set_key(key);
+        db::encrypt_existing_data_db().unwrap();
+
+        set_asset_credential(id, "user:pass".to_string()).unwrap();
+        assert_eq!(
+            get_asset_credential(id).unwrap().data.as_deref(),
+            Some("user:pass")
+        );
+
+        // 锁定后读取必须被拒绝（不能返回明文，也不能返回成功空串）
+        crate::vault::clear_key();
+
+        // 读凭据在锁定态下以 Err 拒绝（fail-closed），而不是返回成功空串——
+        // 空串会和「用户确实没存凭据」混淆，Err 才是明确的安全信号。
+        let res = get_asset_credential(id);
+        assert!(res.is_err(), "锁定态读取凭据必须被拒绝");
+        assert!(res.unwrap_err().contains("解锁"), "拒绝原因应提示需要解锁");
+
+        // 写入同样 fail-closed：Err 而非 success:false
+        let write = set_asset_credential(id, "new-secret".to_string());
+        assert!(write.is_err(), "锁定态写入凭据必须被拒绝");
+        assert!(
+            write.unwrap_err().contains("解锁"),
+            "拒绝原因应提示需要解锁"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 备份导入：非法内容必须拒绝，且不得破坏既有数据。
+    #[test]
+    fn import_backup_rejects_invalid_without_data_loss() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_imp_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        let req = crate::models::AssetRequest {
+            platform_id: 1,
+            account_identifier: "keep-me".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(9.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        };
+        db::add_asset_db(&req).unwrap();
+
+        for bad in ["{not json", "", r#"{"app":"other","version":1}"#] {
+            let res = import_backup(bad.to_string()).unwrap();
+            assert!(!res.success, "非法备份必须被拒绝: {}", bad);
+        }
+
+        let assets = db::get_all_assets_db().unwrap();
+        assert_eq!(assets.len(), 1, "失败的导入不得清空既有数据");
+        assert_eq!(assets[0].account_identifier, "keep-me");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 平台补丁导入：超过 8MB 上限必须在解析前拒绝（防内存/CPU 放大）。
+    #[test]
+    fn import_platform_patch_rejects_oversized() {
+        let _g = crate::vault::test_lock();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_cmd_patch_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        let huge = "x".repeat(8 * 1024 * 1024 + 1);
+        let res = import_platform_patch(huge).unwrap();
+        assert!(!res.success);
+        assert!(
+            res.message.contains("过大"),
+            "应提示超过上限，实际: {}",
+            res.message
+        );
+
         let _ = std::fs::remove_file(&path);
     }
 }

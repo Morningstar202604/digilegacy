@@ -60,12 +60,23 @@ pub fn normalize_recovery_code(input: &str) -> String {
 pub fn create_recovery_seal(master_key: &[u8; 32]) -> Result<(String, String), String> {
     let code = generate_recovery_code();
     let salt = crypto::generate_salt();
-    let rec_key = crypto::derive_key_bytes_v(&normalize_recovery_code(&code), &salt, crypto::PBKDF2_ITERATIONS_V2);
+    let rec_key = crypto::derive_key_bytes_v(
+        &normalize_recovery_code(&code),
+        &salt,
+        crypto::PBKDF2_ITERATIONS_V2,
+    );
     let sealed = crypto::encrypt_with_key(&BASE64.encode(master_key), &rec_key)?;
     // 密文格式: RS2. + base64(salt(16) || sealed)
     let mut combined = salt.to_vec();
-    combined.extend_from_slice(&BASE64.decode(&sealed).map_err(|e| format!("封装修理失败: {}", e))?);
-    Ok((code, format!("{}{}", SEAL_PREFIX_V2, BASE64.encode(&combined))))
+    combined.extend_from_slice(
+        &BASE64
+            .decode(&sealed)
+            .map_err(|e| format!("封装修理失败: {}", e))?,
+    );
+    Ok((
+        code,
+        format!("{}{}", SEAL_PREFIX_V2, BASE64.encode(&combined)),
+    ))
 }
 
 /// 恢复流程：以恢复码解开主密钥；按封印前缀选择迭代数（v1 旧封印继续可解）
@@ -105,7 +116,10 @@ mod tests {
         let code = generate_recovery_code();
         assert_eq!(code.len(), 29, "24 字符 + 5 个连字符");
         assert_eq!(code.matches('-').count(), 5);
-        let bad: Vec<char> = code.chars().filter(|c| ['I', 'O', '0', '1'].contains(c)).collect();
+        let bad: Vec<char> = code
+            .chars()
+            .filter(|c| ['I', 'O', '0', '1'].contains(c))
+            .collect();
         assert!(bad.is_empty(), "出现易混字符: {:?} in {}", bad, code);
     }
 

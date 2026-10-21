@@ -8,7 +8,6 @@
 
 use serde::Serialize;
 
-const DEFAULT_ENDPOINT: &str = "https://heartbeat.digilegacy.example.com";
 const TIMEOUT_SECS: u64 = 8;
 
 #[derive(Debug, Clone, Serialize)]
@@ -20,25 +19,49 @@ pub struct HeartbeatStatus {
 }
 
 impl HeartbeatStatus {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn last_seen_ok(&self) -> bool {
         self.last_result == "ok"
     }
 }
 
 #[derive(Default)]
-struct HeartbeatConfig {
+pub(crate) struct HeartbeatConfig {
     enabled: bool,
     token: String,
     endpoint: String,
 }
 
+/// 读取心跳配置：本地库为权威来源（用户在界面里可配），
+/// 环境变量仅作后备（便于自托管部署与自动化场景）。
+/// 旧实现只认环境变量，普通用户装完应用后无法开启该功能。
 fn read_config() -> HeartbeatConfig {
-    let enabled = std::env::var("DMS_HEARTBEAT_ENABLED")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-    let token = std::env::var("DMS_HEARTBEAT_TOKEN").unwrap_or_default();
-    let endpoint = std::env::var("DMS_HEARTBEAT_ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string());
-    HeartbeatConfig { enabled, token, endpoint }
+    let from_db =
+        crate::db::get_heartbeat_config_db().unwrap_or((false, String::new(), String::new()));
+    let (db_enabled, db_token, db_endpoint) = from_db;
+
+    let enabled = if db_enabled {
+        true
+    } else {
+        std::env::var("DMS_HEARTBEAT_ENABLED")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    };
+    let token = if !db_token.is_empty() {
+        db_token
+    } else {
+        std::env::var("DMS_HEARTBEAT_TOKEN").unwrap_or_default()
+    };
+    let endpoint = if !db_endpoint.is_empty() {
+        db_endpoint
+    } else {
+        std::env::var("DMS_HEARTBEAT_ENDPOINT").unwrap_or_default()
+    };
+    HeartbeatConfig {
+        enabled,
+        token,
+        endpoint,
+    }
 }
 
 fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
@@ -48,16 +71,32 @@ fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
     if token.is_empty() {
         return Err("心跳令牌为空".to_string());
     }
+    if endpoint.trim().is_empty() {
+        return Err("未配置心跳服务器地址".to_string());
+    }
     let url = format!("{}/heartbeat", endpoint.trim_end_matches('/'));
-    let body = format!("{{\"token\":\"{}\"}}", token.replace('\\', "\\\\").replace('"', "\\\""));
+    let body = format!(
+        "{{\"token\":\"{}\"}}",
+        token.replace('\\', "\\\\").replace('"', "\\\"")
+    );
     // 丢弃响应体的目标：Unix 用 /dev/null，Windows 用 NUL
     let discard = if cfg!(windows) { "NUL" } else { "/dev/null" };
     // 请求体经标准输入传入（--data-binary @-）：令牌不出现在进程命令行参数里
     let mut child = Command::new("curl")
         .args([
-            "-s", "-o", discard, "-m", &TIMEOUT_SECS.to_string(),
-            "-X", "POST", "-H", "Content-Type: application/json",
-            "--data-binary", "@-", "--", &url,
+            "-s",
+            "-o",
+            discard,
+            "-m",
+            &TIMEOUT_SECS.to_string(),
+            "-X",
+            "POST",
+            "-H",
+            "Content-Type: application/json",
+            "--data-binary",
+            "@-",
+            "--",
+            &url,
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -71,11 +110,16 @@ fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
             .map_err(|e| format!("写入心跳内容失败: {}", e))?;
     } // drop stdin → curl 收到 EOF 后发送请求体
 
-    let output = child.wait_with_output().map_err(|e| format!("等待 curl 退出失败: {}", e))?;
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("等待 curl 退出失败: {}", e))?;
 
     if !output.status.success() {
         // curl 退出码：7=连接失败 6=DNS 28=超时 → 视为失联，返回 Err
-        return Err(format!("心跳请求失败 (curl exit {})", output.status.code().unwrap_or(-1)));
+        return Err(format!(
+            "心跳请求失败 (curl exit {})",
+            output.status.code().unwrap_or(-1)
+        ));
     }
     Ok(())
 }
@@ -95,7 +139,11 @@ fn record_attempt(endpoint: &str, enabled: bool, ok: bool) {
     guard.enabled = enabled;
     guard.endpoint = endpoint.to_string();
     guard.last_attempt = Some(chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
-    guard.last_result = if ok { "ok".to_string() } else { "failed".to_string() };
+    guard.last_result = if ok {
+        "ok".to_string()
+    } else {
+        "failed".to_string()
+    };
 }
 
 /// 发送一次心跳（后台线程与手动测试共用）；永不 panic
@@ -106,9 +154,10 @@ pub fn send_heartbeat() -> HeartbeatStatus {
 
 /// 可注入配置的心跳发送（便于测试，避免依赖进程级环境变量）
 pub fn send_heartbeat_with(cfg: &HeartbeatConfig) -> HeartbeatStatus {
-    if !cfg.enabled || cfg.token.is_empty() {
+    // 端点为空表示尚未配置服务器：这不是「发送失败」，而是「没有可发往的目标」。
+    if !cfg.enabled || cfg.token.is_empty() || cfg.endpoint.trim().is_empty() {
         let status = HeartbeatStatus {
-            enabled: cfg.enabled,
+            enabled: cfg.enabled && !cfg.token.is_empty() && !cfg.endpoint.trim().is_empty(),
             endpoint: cfg.endpoint.clone(),
             last_attempt: None,
             last_result: "never".to_string(),
@@ -134,12 +183,13 @@ pub fn current_status() -> HeartbeatStatus {
 mod tests {
     use super::*;
 
-    /// 测试串行锁：本模块的断言依赖全局 LAST_STATUS，避免与其他用例交叉污染
-    static HB_SERIAL: once_cell::sync::Lazy<std::sync::Mutex<()>> =
-        once_cell::sync::Lazy::new(|| std::sync::Mutex::new(()));
-
+    /// 测试串行锁：本模块的断言依赖全局 LAST_STATUS，避免与其他用例交叉污染。
+    ///
+    /// 必须复用 `vault::test_lock()` 而不是另起一把锁：`heartbeat_config_roundtrip_in_db`
+    /// 会调用 `db::init_database_at` 改写全局 DB_PATH/CONN，而 db 模块的用例都持这把锁。
+    /// 两把锁各管一半全局状态时会并行竞争（旧实现的隐患）。
     fn lock() -> std::sync::MutexGuard<'static, ()> {
-        HB_SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+        crate::vault::test_lock()
     }
 
     #[test]
@@ -148,7 +198,7 @@ mod tests {
         let cfg = HeartbeatConfig {
             enabled: false,
             token: String::new(),
-            endpoint: DEFAULT_ENDPOINT.to_string(),
+            endpoint: String::new(),
         };
         let status = send_heartbeat_with(&cfg);
         assert_eq!(status.last_result, "never");
@@ -161,9 +211,63 @@ mod tests {
         let cfg = HeartbeatConfig {
             enabled: true,
             token: String::new(),
-            endpoint: DEFAULT_ENDPOINT.to_string(),
+            endpoint: String::new(),
         };
         assert_eq!(send_heartbeat_with(&cfg).last_result, "never");
+    }
+
+    /// 端点未配置时必须报 never 而不是 failed：
+    /// 旧实现里默认端点是 example.com 保留域名，任何启用都会「永远失败」，
+    /// 用户看到的是坏掉的功能而不是「尚未配置」。
+    #[test]
+    fn enabled_without_endpoint_reports_never_not_failed() {
+        let _g = lock();
+        let cfg = HeartbeatConfig {
+            enabled: true,
+            token: "tok".to_string(),
+            endpoint: String::new(),
+        };
+        let status = send_heartbeat_with(&cfg);
+        assert_eq!(status.last_result, "never");
+        assert!(!status.enabled, "未配置端点不构成可用的心跳");
+    }
+
+    #[test]
+    fn post_heartbeat_rejects_blank_endpoint() {
+        assert!(post_heartbeat("", "tok").is_err());
+        assert!(post_heartbeat("   ", "tok").is_err());
+    }
+
+    /// 配置持久化：写入后能原样读回，且 upsert 不会产生多行。
+    #[test]
+    fn heartbeat_config_roundtrip_in_db() {
+        let _g = lock();
+        let mut path = std::env::temp_dir();
+        path.push(format!("digilegacy_hb_cfg_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+
+        crate::db::init_database_at(path.clone()).unwrap();
+
+        assert_eq!(
+            crate::db::get_heartbeat_config_db().unwrap(),
+            (false, String::new(), String::new())
+        );
+
+        crate::db::set_heartbeat_config_db(true, "tok-1", "https://hb.example.org").unwrap();
+        assert_eq!(
+            crate::db::get_heartbeat_config_db().unwrap(),
+            (
+                true,
+                "tok-1".to_string(),
+                "https://hb.example.org".to_string()
+            )
+        );
+
+        crate::db::set_heartbeat_config_db(false, "tok-2", "").unwrap();
+        assert_eq!(
+            crate::db::get_heartbeat_config_db().unwrap(),
+            (false, "tok-2".to_string(), String::new())
+        );
     }
 
     #[test]
@@ -176,7 +280,10 @@ mod tests {
             endpoint: "https://127.0.0.1:9".to_string(),
         };
         let status = send_heartbeat_with(&cfg);
-        assert_eq!(status.last_result, "failed", "失联必须被容忍并记录，不得 panic");
+        assert_eq!(
+            status.last_result, "failed",
+            "失联必须被容忍并记录，不得 panic"
+        );
     }
 
     #[test]
@@ -203,7 +310,8 @@ mod tests {
                 if let Ok((mut stream, _)) = listener.accept() {
                     let mut buf = [0u8; 1024];
                     let _ = stream.read(&mut buf);
-                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{\"ok\":true}");
+                    let _ = stream
+                        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n{\"ok\":true}");
                     let _ = stream.flush();
                 }
             });

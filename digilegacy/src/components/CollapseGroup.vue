@@ -14,17 +14,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 
-const props = defineProps<{
-  title: string;
-  count?: number;
-  /** 传入即受控（父组件用 v-model）；不传则自管理，初始值取 defaultOpen */
-  modelValue?: boolean;
-  defaultOpen?: boolean;
-}>();
+const props = defineProps({
+  title: { type: String, required: true },
+  count: { type: Number, default: undefined },
+  /**
+   * 受控值（父组件 v-model）。必须显式 default: undefined，
+   * 否则 Vue 的布尔转换会把「未传入」强制为 false，导致 defaultOpen 永远不生效。
+   */
+  modelValue: { type: Boolean, default: undefined },
+  defaultOpen: { type: Boolean, default: false },
+});
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>();
 
-const isOpen = ref(props.modelValue ?? props.defaultOpen ?? false);
+const isOpen = ref(props.modelValue ?? props.defaultOpen);
 
 watch(
   () => props.modelValue,

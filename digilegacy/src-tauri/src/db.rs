@@ -1,9 +1,9 @@
+use chrono::Local;
+use once_cell::sync::Lazy;
+use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use once_cell::sync::Lazy;
-use rusqlite::{Connection, params};
 use tauri::{AppHandle, Manager};
-use chrono::Local;
 
 use crate::models::*;
 use crate::platform_data::get_all_platforms;
@@ -16,7 +16,9 @@ static CONN: Lazy<Mutex<Option<Connection>>> = Lazy::new(|| Mutex::new(None));
 
 /// 初始化数据库
 pub fn init_database(app_handle: &AppHandle) -> Result<(), String> {
-    let app_dir = app_handle.path().app_data_dir()
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("获取应用数据目录失败: {}", e))?;
 
     std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建应用目录失败: {}", e))?;
@@ -32,7 +34,7 @@ pub(crate) fn init_database_at(db_path: PathBuf) -> Result<(), String> {
     }
 
     let conn = Connection::open(&db_path).map_err(|e| format!("打开数据库失败: {}", e))?;
-    
+
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| format!("设置 WAL 模式失败: {}", e))?;
     conn.pragma_update(None, "busy_timeout", "5000")
@@ -43,23 +45,24 @@ pub(crate) fn init_database_at(db_path: PathBuf) -> Result<(), String> {
     create_tables(&conn).map_err(|e| format!("创建表失败: {}", e))?;
     migrate_schema(&conn).map_err(|e| format!("数据库迁移失败: {}", e))?;
     sync_platforms(&conn)?;
-    
+
     conn.execute(
         "INSERT OR IGNORE INTO dms_config (id, enabled, check_in_interval_days, stage1_wait_days, stage2_wait_days, stage3_wait_days, last_check_in) VALUES (1, 0, 30, 3, 7, 14, NULL)",
         [],
     ).map_err(|e| format!("初始化DMS失败: {}", e))?;
-    
+
     {
         let mut conn_guard = CONN.lock().unwrap();
         *conn_guard = Some(conn);
     }
-    
+
     Ok(())
 }
 
 /// 创建数据库表
 fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
-    conn.execute_batch("
+    conn.execute_batch(
+        "
         CREATE TABLE IF NOT EXISTS platforms (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
@@ -76,7 +79,7 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             estimated_time_days TEXT,
             notes TEXT
         );
-        
+
         CREATE TABLE IF NOT EXISTS digital_assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             platform_id INTEGER NOT NULL,
@@ -103,7 +106,7 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             recovery_seal TEXT DEFAULT '',
             created_at TEXT NOT NULL
         );
-        
+
         CREATE TABLE IF NOT EXISTS user_profile (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT,
@@ -124,14 +127,14 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
-        
+
         CREATE TABLE IF NOT EXISTS check_in_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             checked_at TEXT NOT NULL,
             status TEXT NOT NULL,
             note TEXT
         );
-        
+
         CREATE TABLE IF NOT EXISTS dms_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             enabled INTEGER DEFAULT 0,
@@ -141,11 +144,39 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             stage3_wait_days INTEGER DEFAULT 14,
             last_check_in TEXT
         );
-        
+
+        CREATE TABLE IF NOT EXISTS heartbeat_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            enabled INTEGER DEFAULT 0,
+            token TEXT DEFAULT '',
+            endpoint TEXT DEFAULT ''
+        );
+
+        -- 政策库补丁：内置平台数据每次启动都会被 sync_platforms 覆盖，
+        -- 用户导入的更新必须单独存这里，并在读取时叠加到内置数据之上。
+        CREATE TABLE IF NOT EXISTS platform_overrides (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            name_en TEXT DEFAULT '',
+            category TEXT NOT NULL,
+            subtype TEXT DEFAULT '',
+            has_property INTEGER DEFAULT 0,
+            has_personality INTEGER DEFAULT 0,
+            inheritable INTEGER DEFAULT 0,
+            required_documents TEXT DEFAULT '',
+            process_description TEXT DEFAULT '',
+            estimated_difficulty TEXT DEFAULT '',
+            official_policy_url TEXT DEFAULT '',
+            estimated_time_days TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_assets_category ON digital_assets(category);
         CREATE INDEX IF NOT EXISTS idx_assets_platform ON digital_assets(platform_id);
         CREATE INDEX IF NOT EXISTS idx_assets_disposal ON digital_assets(disposal_method);
-    ")
+    ",
+    )
 }
 
 /// 增量迁移：为既有数据库补齐新列（幂等）
@@ -177,7 +208,10 @@ fn migrate_schema(conn: &Connection) -> rusqlite::Result<()> {
         .collect();
     for col in ["emergency_contact_email", "heir_primary_email"] {
         if !profile_columns.iter().any(|name| name == col) {
-            conn.execute_batch(&format!("ALTER TABLE user_profile ADD COLUMN {} TEXT DEFAULT ''", col))?;
+            conn.execute_batch(&format!(
+                "ALTER TABLE user_profile ADD COLUMN {} TEXT DEFAULT ''",
+                col
+            ))?;
         }
     }
     Ok(())
@@ -209,27 +243,27 @@ fn sync_platforms(conn: &Connection) -> Result<(), String> {
                 notes=excluded.notes",
         ).map_err(|e| format!("准备平台同步语句失败: {}", e))?;
         for platform in platforms {
-            stmt.execute(
-                params![
-                    platform.id,
-                    platform.name,
-                    platform.name_en,
-                    platform.category,
-                    platform.subtype,
-                    if platform.has_property { 1 } else { 0 },
-                    if platform.has_personality { 1 } else { 0 },
-                    if platform.inheritable { 1 } else { 0 },
-                    platform.required_documents,
-                    platform.process_description,
-                    platform.estimated_difficulty,
-                    platform.official_policy_url,
-                    platform.estimated_time_days,
-                    platform.notes,
-                ],
-            ).map_err(|e| format!("同步平台数据失败: {}", e))?;
+            stmt.execute(params![
+                platform.id,
+                platform.name,
+                platform.name_en,
+                platform.category,
+                platform.subtype,
+                if platform.has_property { 1 } else { 0 },
+                if platform.has_personality { 1 } else { 0 },
+                if platform.inheritable { 1 } else { 0 },
+                platform.required_documents,
+                platform.process_description,
+                platform.estimated_difficulty,
+                platform.official_policy_url,
+                platform.estimated_time_days,
+                platform.notes,
+            ])
+            .map_err(|e| format!("同步平台数据失败: {}", e))?;
         }
     }
-    tx.commit().map_err(|e| format!("提交平台同步事务失败: {}", e))?;
+    tx.commit()
+        .map_err(|e| format!("提交平台同步事务失败: {}", e))?;
 
     Ok(())
 }
@@ -280,11 +314,19 @@ fn row_to_asset(row: &rusqlite::Row) -> rusqlite::Result<DigitalAsset> {
         disposal_method: row.get(8)?,
         heir_name: {
             let v = dec(9)?;
-            if v.is_empty() { None } else { Some(v) }
+            if v.is_empty() {
+                None
+            } else {
+                Some(v)
+            }
         },
         heir_contact: {
             let v = dec(10)?;
-            if v.is_empty() { None } else { Some(v) }
+            if v.is_empty() {
+                None
+            } else {
+                Some(v)
+            }
         },
         notes: dec(11)?,
         has_credential: row.get::<_, i64>(15).unwrap_or(0) != 0,
@@ -301,13 +343,228 @@ pub fn get_all_platforms_db() -> Result<Vec<Platform>, String> {
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare("SELECT id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes FROM platforms ORDER BY category, name")
         .map_err(|e| format!("查询平台失败: {}", e))?;
-    
-    let platforms = stmt.query_map([], row_to_platform)
+
+    let mut platforms = stmt
+        .query_map([], row_to_platform)
         .map_err(|e| format!("平台数据解析失败: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("平台数据收集失败: {}", e))?;
-    
+
+    apply_platform_overrides(conn, &mut platforms)?;
+
     Ok(platforms)
+}
+
+// ========== 政策库补丁（离线更新通道） ==========
+
+/// 把用户导入的政策补丁叠加到内置平台列表上。
+/// 同一 id 的补丁整体覆盖内置条目；补丁里出现内置库没有的 id 则新增。
+fn apply_platform_overrides(
+    conn: &Connection,
+    platforms: &mut Vec<Platform>,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes FROM platform_overrides ORDER BY id",
+        )
+        .map_err(|e| format!("查询政策补丁失败: {}", e))?;
+
+    let overrides: Vec<Platform> = stmt
+        .query_map([], row_to_platform)
+        .map_err(|e| format!("政策补丁解析失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("政策补丁收集失败: {}", e))?;
+
+    for ov in overrides {
+        match platforms.iter_mut().find(|p| p.id == ov.id) {
+            Some(existing) => *existing = ov,
+            None => platforms.push(ov),
+        }
+    }
+    Ok(())
+}
+
+/// 导入政策补丁。返回 (新增数, 覆盖数)。
+/// 只接受结构完整、id 为正、字段非空的条目；整体事务，任一条不合法则全部回滚。
+pub fn import_platform_overrides_db(payload: &str) -> Result<(usize, usize), String> {
+    #[derive(serde::Deserialize)]
+    struct PatchFile {
+        #[serde(default)]
+        app: String,
+        platforms: Vec<PlatformPatch>,
+    }
+    #[derive(serde::Deserialize)]
+    struct PlatformPatch {
+        id: i64,
+        name: String,
+        #[serde(default)]
+        name_en: String,
+        category: String,
+        #[serde(default)]
+        subtype: String,
+        #[serde(default)]
+        has_property: bool,
+        #[serde(default)]
+        has_personality: bool,
+        #[serde(default)]
+        inheritable: bool,
+        #[serde(default)]
+        required_documents: String,
+        #[serde(default)]
+        process_description: String,
+        #[serde(default)]
+        estimated_difficulty: String,
+        #[serde(default)]
+        official_policy_url: String,
+        #[serde(default)]
+        estimated_time_days: String,
+        #[serde(default)]
+        notes: String,
+    }
+
+    let parsed: PatchFile = serde_json::from_str(payload)
+        .map_err(|e| format!("政策补丁解析失败（需为 JSON）: {}", e))?;
+    if !parsed.app.is_empty() && parsed.app != "digilegacy" {
+        return Err("不是归零政策库补丁（app 字段不匹配）".to_string());
+    }
+    if parsed.platforms.is_empty() {
+        return Err("政策补丁中没有平台条目".to_string());
+    }
+
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|e| format!("开启事务失败: {}", e))?;
+
+    // 「新增 vs 覆盖」的判定要把已存在的补丁也算进去，
+    // 否则重复导入同一份导出的补丁会被误报成全部新增。
+    let existing_ids: std::collections::HashSet<i64> = {
+        let mut stmt = tx
+            .prepare("SELECT id FROM platforms UNION SELECT id FROM platform_overrides")
+            .map_err(|e| format!("查询平台失败: {}", e))?;
+        let ids: Vec<i64> = stmt
+            .query_map([], |r| r.get::<_, i64>(0))
+            .map_err(|e| format!("平台 id 读取失败: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
+        ids.into_iter().collect()
+    };
+
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let mut added = 0usize;
+    let mut updated = 0usize;
+    {
+        let mut stmt = tx
+            .prepare(
+                "INSERT INTO platform_overrides (id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes, updated_at)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
+                 ON CONFLICT(id) DO UPDATE SET
+                    name=excluded.name, name_en=excluded.name_en, category=excluded.category,
+                    subtype=excluded.subtype, has_property=excluded.has_property,
+                    has_personality=excluded.has_personality, inheritable=excluded.inheritable,
+                    required_documents=excluded.required_documents,
+                    process_description=excluded.process_description,
+                    estimated_difficulty=excluded.estimated_difficulty,
+                    official_policy_url=excluded.official_policy_url,
+                    estimated_time_days=excluded.estimated_time_days,
+                    notes=excluded.notes, updated_at=excluded.updated_at",
+            )
+            .map_err(|e| format!("准备补丁写入失败: {}", e))?;
+
+        for p in &parsed.platforms {
+            if p.id <= 0 {
+                return Err(format!("平台 id 必须为正数（收到 {}）", p.id));
+            }
+            if p.name.trim().is_empty() || p.category.trim().is_empty() {
+                return Err(format!("平台 {} 缺少名称或类别", p.id));
+            }
+            stmt.execute(params![
+                p.id,
+                p.name,
+                p.name_en,
+                p.category,
+                p.subtype,
+                if p.has_property { 1 } else { 0 },
+                if p.has_personality { 1 } else { 0 },
+                if p.inheritable { 1 } else { 0 },
+                p.required_documents,
+                p.process_description,
+                p.estimated_difficulty,
+                p.official_policy_url,
+                p.estimated_time_days,
+                p.notes,
+                now,
+            ])
+            .map_err(|e| format!("写入政策补丁失败: {}", e))?;
+            if existing_ids.contains(&p.id) {
+                updated += 1
+            } else {
+                added += 1
+            }
+        }
+    }
+    tx.commit()
+        .map_err(|e| format!("提交政策补丁失败: {}", e))?;
+    Ok((added, updated))
+}
+
+/// 导出当前全部政策补丁（供用户备份或分发给他人）。
+pub fn export_platform_overrides_db() -> Result<String, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let mut stmt = conn
+        .prepare("SELECT id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes FROM platform_overrides ORDER BY id")
+        .map_err(|e| format!("查询政策补丁失败: {}", e))?;
+    let rows: Vec<serde_json::Value> = stmt
+        .query_map([], |r| {
+            Ok(serde_json::json!({
+                "id": r.get::<_, i64>(0)?,
+                "name": r.get::<_, String>(1)?,
+                "name_en": r.get::<_, String>(2)?,
+                "category": r.get::<_, String>(3)?,
+                "subtype": r.get::<_, String>(4)?,
+                "has_property": r.get::<_, i64>(5)? != 0,
+                "has_personality": r.get::<_, i64>(6)? != 0,
+                "inheritable": r.get::<_, i64>(7)? != 0,
+                "required_documents": r.get::<_, String>(8)?,
+                "process_description": r.get::<_, String>(9)?,
+                "estimated_difficulty": r.get::<_, String>(10)?,
+                "official_policy_url": r.get::<_, String>(11)?,
+                "estimated_time_days": r.get::<_, String>(12)?,
+                "notes": r.get::<_, String>(13)?,
+            }))
+        })
+        .map_err(|e| format!("政策补丁解析失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("政策补丁收集失败: {}", e))?;
+
+    serde_json::to_string_pretty(&serde_json::json!({
+        "app": "digilegacy",
+        "kind": "platform-policy-patch",
+        "version": 1,
+        "exported_at": chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        "platforms": rows,
+    }))
+    .map_err(|e| format!("序列化政策补丁失败: {}", e))
+}
+
+/// 清除全部政策补丁，回到内置库状态。
+pub fn clear_platform_overrides_db() -> Result<usize, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let n = conn
+        .execute("DELETE FROM platform_overrides", [])
+        .map_err(|e| format!("清除政策补丁失败: {}", e))?;
+    Ok(n)
+}
+
+/// 当前补丁条目数（界面显示用）。
+pub fn count_platform_overrides_db() -> Result<i64, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    conn.query_row("SELECT COUNT(*) FROM platform_overrides", [], |r| r.get(0))
+        .map_err(|e| format!("统计政策补丁失败: {}", e))
 }
 
 // ========== 数字资产 CRUD ==========
@@ -321,7 +578,9 @@ fn ensure_vault_writable(conn: &Connection) -> Result<(), String> {
         return Ok(());
     }
     let configured: i64 = conn
-        .query_row("SELECT COUNT(*) FROM security_config WHERE id=1", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM security_config WHERE id=1", [], |r| {
+            r.get(0)
+        })
         .unwrap_or(0);
     if configured > 0 {
         return Err("主密码已设置但处于锁定状态，请先解锁后再保存".to_string());
@@ -409,15 +668,16 @@ pub fn get_all_assets_db() -> Result<Vec<DigitalAsset>, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred 
+        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
          FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id ORDER BY a.created_at DESC"
     ).map_err(|e| format!("查询资产失败: {}", e))?;
-    
-    let assets = stmt.query_map([], row_to_asset)
+
+    let assets = stmt
+        .query_map([], row_to_asset)
         .map_err(|e| format!("解析资产数据失败: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("收集资产失败: {}", e))?;
-    
+
     Ok(assets)
 }
 
@@ -425,14 +685,18 @@ pub fn get_asset_by_id_db(id: i64) -> Result<Option<DigitalAsset>, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred 
+        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
          FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id WHERE a.id = ?1"
     ).map_err(|e| format!("查询资产失败: {}", e))?;
-    
-    let mut rows = stmt.query(params![id]).map_err(|e| format!("查询执行失败: {}", e))?;
-    
+
+    let mut rows = stmt
+        .query(params![id])
+        .map_err(|e| format!("查询执行失败: {}", e))?;
+
     if let Some(row) = rows.next().map_err(|e| format!("读取行失败: {}", e))? {
-        Ok(Some(row_to_asset(&row).map_err(|e| format!("解析资产失败: {}", e))?))
+        Ok(Some(
+            row_to_asset(row).map_err(|e| format!("解析资产失败: {}", e))?,
+        ))
     } else {
         Ok(None)
     }
@@ -442,15 +706,16 @@ pub fn get_assets_by_category_db(category: &str) -> Result<Vec<DigitalAsset>, St
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred 
+        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
          FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id WHERE a.category = ?1 ORDER BY a.estimated_value DESC"
     ).map_err(|e| format!("按类别查询失败: {}", e))?;
-    
-    let assets = stmt.query_map(params![category], row_to_asset)
+
+    let assets = stmt
+        .query_map(params![category], row_to_asset)
         .map_err(|e| format!("解析失败: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("收集失败: {}", e))?;
-    
+
     Ok(assets)
 }
 
@@ -466,7 +731,11 @@ pub fn get_user_profile_db() -> Result<Option<UserProfile>, String> {
 
     if let Some(row) = rows.next().map_err(|e| format!("读取失败: {}", e))? {
         let dec = |idx: usize| -> String {
-            let raw: String = row.get::<_, Option<String>>(idx).ok().flatten().unwrap_or_default();
+            let raw: String = row
+                .get::<_, Option<String>>(idx)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
             crate::vault::decrypt_or_placeholder(&raw)
         };
         Ok(Some(UserProfile {
@@ -552,7 +821,8 @@ pub fn save_user_profile_db(profile: &UserProfile) -> Result<(), String> {
 pub fn get_security_config_db() -> Result<Option<(String, String)>, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
-    let mut stmt = conn.prepare("SELECT kdf_salt, verifier FROM security_config WHERE id = 1")
+    let mut stmt = conn
+        .prepare("SELECT kdf_salt, verifier FROM security_config WHERE id = 1")
         .map_err(|e| format!("查询安全配置失败: {}", e))?;
     let mut rows = stmt.query([]).map_err(|e| format!("查询执行失败: {}", e))?;
     if let Some(row) = rows.next().map_err(|e| format!("读取失败: {}", e))? {
@@ -569,7 +839,11 @@ pub fn get_recovery_seal_db() -> Result<String, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let seal: String = conn
-        .query_row("SELECT COALESCE(recovery_seal, '') FROM security_config WHERE id = 1", [], |r| r.get(0))
+        .query_row(
+            "SELECT COALESCE(recovery_seal, '') FROM security_config WHERE id = 1",
+            [],
+            |r| r.get(0),
+        )
         .unwrap_or_default();
     Ok(seal)
 }
@@ -580,7 +854,37 @@ pub fn set_recovery_seal_db(seal: &str) -> Result<(), String> {
     conn.execute(
         "UPDATE security_config SET recovery_seal=?1 WHERE id=1",
         params![seal],
-    ).map_err(|e| format!("保存恢复密钥失败: {}", e))?;
+    )
+    .map_err(|e| format!("保存恢复密钥失败: {}", e))?;
+    Ok(())
+}
+
+/// 心跳配置（启用开关 / 令牌 / 端点）存本地库，替代只认环境变量的旧实现：
+/// 环境变量对普通用户不可达，等于该功能在发布版里无法开启。
+pub fn get_heartbeat_config_db() -> Result<(bool, String, String), String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let row = conn.query_row(
+        "SELECT enabled, COALESCE(token,''), COALESCE(endpoint,'') FROM heartbeat_config WHERE id=1",
+        [],
+        |r| Ok((r.get::<_, i64>(0)? != 0, r.get::<_, String>(1)?, r.get::<_, String>(2)?)),
+    );
+    match row {
+        Ok(v) => Ok(v),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok((false, String::new(), String::new())),
+        Err(e) => Err(format!("读取心跳配置失败: {}", e)),
+    }
+}
+
+pub fn set_heartbeat_config_db(enabled: bool, token: &str, endpoint: &str) -> Result<(), String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    conn.execute(
+        "INSERT INTO heartbeat_config (id, enabled, token, endpoint) VALUES (1, ?1, ?2, ?3)
+         ON CONFLICT(id) DO UPDATE SET enabled=?1, token=?2, endpoint=?3",
+        params![enabled as i64, token, endpoint],
+    )
+    .map_err(|e| format!("保存心跳配置失败: {}", e))?;
     Ok(())
 }
 
@@ -592,7 +896,8 @@ pub fn set_security_config_db(kdf_salt: &str, verifier: &str) -> Result<(), Stri
         "INSERT INTO security_config (id, kdf_salt, verifier, created_at) VALUES (1, ?1, ?2, ?3)
          ON CONFLICT(id) DO UPDATE SET kdf_salt=?1, verifier=?2",
         params![kdf_salt, verifier, now],
-    ).map_err(|e| format!("保存安全配置失败: {}", e))?;
+    )
+    .map_err(|e| format!("保存安全配置失败: {}", e))?;
     Ok(())
 }
 
@@ -612,7 +917,8 @@ pub fn set_asset_credential_db(id: i64, credential: &str) -> Result<(), String> 
     conn.execute(
         "UPDATE digital_assets SET credential_enc=?1, updated_at=?2 WHERE id=?3",
         params![stored, now, id],
-    ).map_err(|e| format!("保存凭据失败: {}", e))?;
+    )
+    .map_err(|e| format!("保存凭据失败: {}", e))?;
     Ok(())
 }
 
@@ -620,11 +926,13 @@ pub fn set_asset_credential_db(id: i64, credential: &str) -> Result<(), String> 
 pub fn get_asset_credential_db(id: i64) -> Result<String, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
-    let raw: String = conn.query_row(
-        "SELECT COALESCE(credential_enc, '') FROM digital_assets WHERE id = ?1",
-        params![id],
-        |row| row.get(0),
-    ).map_err(|e| format!("查询凭据失败: {}", e))?;
+    let raw: String = conn
+        .query_row(
+            "SELECT COALESCE(credential_enc, '') FROM digital_assets WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("查询凭据失败: {}", e))?;
     if raw.is_empty() {
         return Ok(String::new());
     }
@@ -634,7 +942,11 @@ pub fn get_asset_credential_db(id: i64) -> Result<String, String> {
 /// 修改主密码：校验旧密码后全库重加密并更新安全配置（单事务，失败自动回滚）。
 /// 返回轮换后的新恢复密钥——改密即轮换恢复码，UI 必须展示给用户抄写，
 /// 否则旧恢复码随旧封印一起失效、恢复链路断裂（历史缺陷）。
-pub fn change_master_password_db(old_password: &str, new_password: &str, confirm_password: &str) -> Result<String, String> {
+pub fn change_master_password_db(
+    old_password: &str,
+    new_password: &str,
+    confirm_password: &str,
+) -> Result<String, String> {
     if new_password.chars().count() < 8 {
         return Err("新主密码至少需要 8 个字符".to_string());
     }
@@ -663,7 +975,8 @@ pub fn change_master_password_db(old_password: &str, new_password: &str, confirm
     let recovery_code_new = {
         let guard = get_conn()?;
         let conn = guard.as_ref().unwrap();
-        conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| format!("开启事务失败: {}", e))?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("开启事务失败: {}", e))?;
 
         let txn_result = (|| -> Result<String, String> {
             let mut stmt = conn.prepare(
@@ -732,8 +1045,9 @@ pub fn change_master_password_db(old_password: &str, new_password: &str, confirm
                 ).map_err(|e| format!("重加密档案失败: {}", e))?;
             }
 
-            let (recovery_code_new, recovery_seal_new) = crate::recovery::create_recovery_seal(&key_new)
-                .map_err(|e| format!("轮换恢复密钥失败: {}", e))?;
+            let (recovery_code_new, recovery_seal_new) =
+                crate::recovery::create_recovery_seal(&key_new)
+                    .map_err(|e| format!("轮换恢复密钥失败: {}", e))?;
             conn.execute(
                 "INSERT INTO security_config (id, kdf_salt, verifier, recovery_seal, created_at) VALUES (1, ?1, ?2, ?3, ?4)
                  ON CONFLICT(id) DO UPDATE SET kdf_salt=?1, verifier=?2, recovery_seal=?3",
@@ -745,7 +1059,8 @@ pub fn change_master_password_db(old_password: &str, new_password: &str, confirm
 
         match txn_result {
             Ok(code) => {
-                conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+                conn.execute_batch("COMMIT")
+                    .map_err(|e| format!("提交事务失败: {}", e))?;
                 code
             }
             Err(e) => {
@@ -770,7 +1085,8 @@ pub fn reset_security_config_db(
     {
         let guard = get_conn()?;
         let conn = guard.as_ref().unwrap();
-        conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| format!("开启事务失败: {}", e))?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("开启事务失败: {}", e))?;
 
         let result = (|| -> Result<(), String> {
             let mut stmt = conn.prepare(
@@ -794,11 +1110,19 @@ pub fn reset_security_config_db(
 
             for (id, ai, ad, hn, hc, nt, cr) in rows {
                 let dec = |v: &String| -> Result<String, String> {
-                    if v.is_empty() { Ok(String::new()) } else { crate::vault::decrypt_field(v, master_key) }
+                    if v.is_empty() {
+                        Ok(String::new())
+                    } else {
+                        crate::vault::decrypt_field(v, master_key)
+                    }
                 };
                 let re = |v: &String| -> Result<String, String> {
                     let plain = dec(v)?;
-                    if plain.is_empty() { Ok(String::new()) } else { crate::vault::encrypt_field(&plain, new_key) }
+                    if plain.is_empty() {
+                        Ok(String::new())
+                    } else {
+                        crate::vault::encrypt_field(&plain, new_key)
+                    }
                 };
                 conn.execute(
                     "UPDATE digital_assets SET account_identifier=?1, account_description=?2, heir_name=?3, heir_contact=?4, notes=?5, credential_enc=?6 WHERE id=?7",
@@ -830,7 +1154,11 @@ pub fn reset_security_config_db(
                         new_vals.push(String::new());
                     } else {
                         let plain = crate::vault::decrypt_field(v, master_key)?;
-                        new_vals.push(if plain.is_empty() { String::new() } else { crate::vault::encrypt_field(&plain, new_key)? });
+                        new_vals.push(if plain.is_empty() {
+                            String::new()
+                        } else {
+                            crate::vault::encrypt_field(&plain, new_key)?
+                        });
                     }
                 }
                 conn.execute(
@@ -846,13 +1174,16 @@ pub fn reset_security_config_db(
             conn.execute(
                 "UPDATE security_config SET kdf_salt=?1, verifier=?2, recovery_seal=?3 WHERE id=1",
                 params![kdf_salt, verifier, recovery_seal],
-            ).map_err(|e| format!("更新安全配置失败: {}", e))?;
+            )
+            .map_err(|e| format!("更新安全配置失败: {}", e))?;
 
             Ok(())
         })();
 
         match result {
-            Ok(()) => conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?,
+            Ok(()) => conn
+                .execute_batch("COMMIT")
+                .map_err(|e| format!("提交事务失败: {}", e))?,
             Err(e) => {
                 let _ = conn.execute_batch("ROLLBACK");
                 return Err(e);
@@ -937,7 +1268,8 @@ pub fn export_backup_json_db() -> Result<String, String> {
 
     let mut check_ins: Vec<Value> = Vec::new();
     {
-        let mut stmt = conn.prepare("SELECT id, checked_at, status, note FROM check_in_log ORDER BY id")
+        let mut stmt = conn
+            .prepare("SELECT id, checked_at, status, note FROM check_in_log ORDER BY id")
             .map_err(|e| format!("查询记录失败: {}", e))?;
         let rows = stmt
             .query_map([], |row| {
@@ -973,12 +1305,16 @@ pub fn export_backup_json_db() -> Result<String, String> {
         .ok();
 
     let security: Option<Value> = conn
-        .query_row("SELECT kdf_salt, verifier FROM security_config WHERE id = 1", [], |row| {
-            Ok(json!({
-                "kdf_salt": row.get::<_, String>(0)?,
-                "verifier": row.get::<_, String>(1)?,
-            }))
-        })
+        .query_row(
+            "SELECT kdf_salt, verifier FROM security_config WHERE id = 1",
+            [],
+            |row| {
+                Ok(json!({
+                    "kdf_salt": row.get::<_, String>(0)?,
+                    "verifier": row.get::<_, String>(1)?,
+                }))
+            },
+        )
         .ok();
 
     let backup = json!({
@@ -1010,23 +1346,45 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
     }
     let tables = v.get("tables").ok_or("备份缺少数据表")?;
 
-    let sval = |val: &Value, k: &str| -> String { val.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string() };
+    let sval = |val: &Value, k: &str| -> String {
+        val.get(k)
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
     let ival = |val: &Value, k: &str| -> i64 { val.get(k).and_then(|x| x.as_i64()).unwrap_or(0) };
     let fval = |val: &Value, k: &str| -> f64 { val.get(k).and_then(|x| x.as_f64()).unwrap_or(0.0) };
-    let oval = |val: &Value, k: &str| -> Option<String> { val.get(k).and_then(|x| x.as_str()).map(|s| s.to_string()) };
+    let oval = |val: &Value, k: &str| -> Option<String> {
+        val.get(k).and_then(|x| x.as_str()).map(|s| s.to_string())
+    };
 
-    let assets = tables.get("digital_assets").and_then(|x| x.as_array()).ok_or("备份缺少资产数据")?;
-    let profiles: Vec<Value> = tables.get("user_profile").and_then(|x| x.as_array()).cloned().unwrap_or_default();
-    let check_ins: Vec<Value> = tables.get("check_in_log").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+    let assets = tables
+        .get("digital_assets")
+        .and_then(|x| x.as_array())
+        .ok_or("备份缺少资产数据")?;
+    let profiles: Vec<Value> = tables
+        .get("user_profile")
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let check_ins: Vec<Value> = tables
+        .get("check_in_log")
+        .and_then(|x| x.as_array())
+        .cloned()
+        .unwrap_or_default();
 
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
 
-    conn.execute_batch("BEGIN IMMEDIATE").map_err(|e| format!("开启事务失败: {}", e))?;
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| format!("开启事务失败: {}", e))?;
     let result = (|| -> Result<i64, String> {
-        conn.execute("DELETE FROM digital_assets", []).map_err(|e| format!("清空资产失败: {}", e))?;
-        conn.execute("DELETE FROM user_profile", []).map_err(|e| format!("清空档案失败: {}", e))?;
-        conn.execute("DELETE FROM check_in_log", []).map_err(|e| format!("清空记录失败: {}", e))?;
+        conn.execute("DELETE FROM digital_assets", [])
+            .map_err(|e| format!("清空资产失败: {}", e))?;
+        conn.execute("DELETE FROM user_profile", [])
+            .map_err(|e| format!("清空档案失败: {}", e))?;
+        conn.execute("DELETE FROM check_in_log", [])
+            .map_err(|e| format!("清空记录失败: {}", e))?;
 
         let mut count = 0i64;
         for a in assets {
@@ -1084,8 +1442,14 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
         for c in &check_ins {
             conn.execute(
                 "INSERT INTO check_in_log (id, checked_at, status, note) VALUES (?1, ?2, ?3, ?4)",
-                params![ival(c, "id"), sval(c, "checked_at"), sval(c, "status"), sval(c, "note")],
-            ).map_err(|e| format!("写入记录失败: {}", e))?;
+                params![
+                    ival(c, "id"),
+                    sval(c, "checked_at"),
+                    sval(c, "status"),
+                    sval(c, "note")
+                ],
+            )
+            .map_err(|e| format!("写入记录失败: {}", e))?;
         }
 
         if let Some(d) = tables.get("dms_config").filter(|x| x.is_object()) {
@@ -1121,7 +1485,8 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
 
     match result {
         Ok(n) => {
-            conn.execute_batch("COMMIT").map_err(|e| format!("提交事务失败: {}", e))?;
+            conn.execute_batch("COMMIT")
+                .map_err(|e| format!("提交事务失败: {}", e))?;
             crate::vault::clear_key();
             Ok(n)
         }
@@ -1225,63 +1590,79 @@ pub fn record_check_in_db() -> Result<(), String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    
+
     conn.execute(
         "INSERT INTO check_in_log (checked_at, status, note) VALUES (?1, 'ok', '用户手动检查')",
         params![now],
-    ).map_err(|e| format!("记录检查失败: {}", e))?;
-    
+    )
+    .map_err(|e| format!("记录检查失败: {}", e))?;
+
     conn.execute(
         "UPDATE dms_config SET last_check_in=?1 WHERE id=1",
         params![now],
-    ).map_err(|e| format!("更新DMS状态失败: {}", e))?;
-    
+    )
+    .map_err(|e| format!("更新DMS状态失败: {}", e))?;
+
     conn.execute(
         "UPDATE user_profile SET last_check_in=?1 WHERE id=(SELECT MAX(id) FROM user_profile)",
         params![now],
-    ).map_err(|e| format!("更新用户签到时间失败: {}", e))?;
-    
+    )
+    .map_err(|e| format!("更新用户签到时间失败: {}", e))?;
+
     Ok(())
 }
 
 pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
-    
-    let last_check_in: Option<String> = conn.query_row(
-        "SELECT last_check_in FROM dms_config WHERE id=1",
-        [],
-        |row| row.get(0),
-    ).ok();
-    
-    let interval: i64 = conn.query_row(
-        "SELECT check_in_interval_days FROM dms_config WHERE id=1",
-        [],
-        |row| row.get(0),
-    ).unwrap_or(30);
-    
-    let dms_enabled: bool = conn.query_row(
-        "SELECT enabled FROM dms_config WHERE id=1",
-        [],
-        |row| row.get::<_, i64>(0),
-    ).map(|v| v != 0).unwrap_or(false);
-    
+
+    let last_check_in: Option<String> = conn
+        .query_row(
+            "SELECT last_check_in FROM dms_config WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    let interval: i64 = conn
+        .query_row(
+            "SELECT check_in_interval_days FROM dms_config WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(30);
+
+    let dms_enabled: bool = conn
+        .query_row("SELECT enabled FROM dms_config WHERE id=1", [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .map(|v| v != 0)
+        .unwrap_or(false);
+
     let next_check_in_due = if let Some(ref last) = last_check_in {
         if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(last, "%Y-%m-%d %H:%M:%S") {
             let next = dt + chrono::Duration::days(interval);
             Some(next.format("%Y-%m-%d").to_string())
-        } else { None }
-    } else { None };
-    
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let days_until_due = if let Some(ref last) = last_check_in {
         if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(last, "%Y-%m-%d %H:%M:%S") {
             let next = dt + chrono::Duration::days(interval);
             let now = chrono::Local::now().naive_local();
             let duration = next.signed_duration_since(now);
             Some(duration.num_days())
-        } else { None }
-    } else { None };
-    
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     Ok(CheckInStatus {
         last_check_in,
         interval_days: interval,
@@ -1294,46 +1675,101 @@ pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
 pub fn set_dms_config_db(enabled: bool, interval_days: i64) -> Result<(), String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
-    
+
     conn.execute(
         "INSERT OR IGNORE INTO dms_config (id, enabled, check_in_interval_days, stage1_wait_days, stage2_wait_days, stage3_wait_days, last_check_in) VALUES (1, 0, 30, 3, 7, 14, NULL)",
         [],
     ).map_err(|e| format!("初始化DMS配置失败: {}", e))?;
-    
+
     conn.execute(
         "UPDATE dms_config SET enabled=?1, check_in_interval_days=?2 WHERE id=1",
         params![if enabled { 1 } else { 0 }, interval_days],
-    ).map_err(|e| format!("设置DMS失败: {}", e))?;
-    
+    )
+    .map_err(|e| format!("设置DMS失败: {}", e))?;
+
     Ok(())
 }
 
 pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
-    
-    let total: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets", [], |row| row.get(0))
+
+    let total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM digital_assets", [], |row| row.get(0))
         .map_err(|e| format!("统计失败: {}", e))?;
-    
-    let property_count: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets WHERE category='property'", [], |row| row.get(0)).unwrap_or(0);
-    let personality_count: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets WHERE category='personality'", [], |row| row.get(0)).unwrap_or(0);
-    let mixed_count: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets WHERE category='mixed'", [], |row| row.get(0)).unwrap_or(0);
-    let confirmed_count: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets WHERE is_confirmed=1", [], |row| row.get(0)).unwrap_or(0);
-    let total_value: f64 = conn.query_row("SELECT COALESCE(SUM(estimated_value), 0.0) FROM digital_assets", [], |row| row.get(0)).unwrap_or(0.0);
-    let disposal_planned: i64 = conn.query_row("SELECT COUNT(*) FROM digital_assets WHERE disposal_method != 'no_action'", [], |row| row.get(0)).unwrap_or(0);
-    
-    let last_check_in: Option<String> = conn.query_row("SELECT MAX(checked_at) FROM check_in_log", [], |row| row.get(0)).ok();
-    let dms_enabled: bool = conn.query_row("SELECT enabled FROM dms_config WHERE id=1", [], |row| row.get::<_, i64>(0)).map(|v| v != 0).unwrap_or(false);
-    
-    let completion = if total > 0 { (disposal_planned * 100 / total) as i64 } else { 0 };
-    
+
+    let property_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets WHERE category='property'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let personality_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets WHERE category='personality'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let mixed_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets WHERE category='mixed'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let confirmed_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets WHERE is_confirmed=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let total_value: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(estimated_value), 0.0) FROM digital_assets",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+    let disposal_planned: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets WHERE disposal_method != 'no_action'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let last_check_in: Option<String> = conn
+        .query_row("SELECT MAX(checked_at) FROM check_in_log", [], |row| {
+            row.get(0)
+        })
+        .ok();
+    let dms_enabled: bool = conn
+        .query_row("SELECT enabled FROM dms_config WHERE id=1", [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .map(|v| v != 0)
+        .unwrap_or(false);
+
+    let completion = if total > 0 {
+        disposal_planned * 100 / total
+    } else {
+        0
+    };
+
     Ok(DashboardStats {
         total_assets: total,
-        property_count, personality_count, mixed_count,
-        confirmed_count, unconfirmed_count: total - confirmed_count,
+        property_count,
+        personality_count,
+        mixed_count,
+        confirmed_count,
+        unconfirmed_count: total - confirmed_count,
         total_estimated_value: total_value,
         disposal_planned_count: disposal_planned,
-        last_check_in, dms_enabled,
+        last_check_in,
+        dms_enabled,
         completion_percentage: completion,
     })
 }
@@ -1354,24 +1790,37 @@ pub fn get_inheritance_report_db() -> Result<InheritanceReport, String> {
     let user = get_user_profile_db()?.unwrap_or(UserProfile {
         id: None,
         full_name: "未设置".to_string(),
-        phone: String::new(), email: String::new(), id_last4: String::new(),
-        emergency_contact_name: String::new(), emergency_contact_phone: String::new(), emergency_contact_relation: String::new(),
+        phone: String::new(),
+        email: String::new(),
+        id_last4: String::new(),
+        emergency_contact_name: String::new(),
+        emergency_contact_phone: String::new(),
+        emergency_contact_relation: String::new(),
         emergency_contact_email: String::new(),
-        heir_primary_name: String::new(), heir_primary_phone: String::new(), heir_primary_relation: String::new(),
+        heir_primary_name: String::new(),
+        heir_primary_phone: String::new(),
+        heir_primary_relation: String::new(),
         heir_primary_email: String::new(),
-        check_in_interval_days: 30, last_check_in: None, dms_enabled: false,
-        created_at: String::new(), updated_at: String::new(),
+        check_in_interval_days: 30,
+        last_check_in: None,
+        dms_enabled: false,
+        created_at: String::new(),
+        updated_at: String::new(),
     });
-    
+
     let assets = get_all_assets_db()?;
     let total_value: f64 = assets.iter().filter_map(|a| a.estimated_value).sum();
-    
+
     let property_count = assets.iter().filter(|a| a.category == "property").count() as i64;
-    let personality_count = assets.iter().filter(|a| a.category == "personality").count() as i64;
+    let personality_count = assets
+        .iter()
+        .filter(|a| a.category == "personality")
+        .count() as i64;
     let mixed_count = assets.iter().filter(|a| a.category == "mixed").count() as i64;
-    
+
     Ok(InheritanceReport {
-        user, assets,
+        user,
+        assets,
         total_estimated_value: total_value,
         property_assets_count: property_count,
         personality_assets_count: personality_count,
@@ -1385,11 +1834,38 @@ mod tests {
     use crate::models::AssetRequest;
     use crate::vault;
 
-    fn fresh_db_path(tag: &str) -> PathBuf {
+    /// 测试库路径。
+    ///
+    /// 注意：不要在 Drop 里删文件。数据库连接是进程级全局单例，测试并行执行时
+    /// 一个用例的清理会关掉另一个用例正在用的连接（实测表现为 "数据库未初始化"
+    /// 随机失败）。临时文件由 CI/本地定期清理，正确性优先。
+    struct TempDb {
+        path: PathBuf,
+    }
+
+    impl std::ops::Deref for TempDb {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.path
+        }
+    }
+
+    impl AsRef<std::path::Path> for TempDb {
+        fn as_ref(&self) -> &std::path::Path {
+            self.path.as_path()
+        }
+    }
+
+    fn fresh_db_path(tag: &str) -> TempDb {
         let mut p = std::env::temp_dir();
         p.push(format!("digilegacy_test_{}_{}.db", tag, std::process::id()));
-        let _ = std::fs::remove_file(&p);
-        p
+        // 每个用例开头先清掉自己上次跑的残留（-wal/-shm 也必须拼在后缀上，
+        // 不能用 with_extension，否则会把 .db 替换掉导致删不到）。
+        let base = p.to_string_lossy().to_string();
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            let _ = std::fs::remove_file(format!("{}{}", base, suffix));
+        }
+        TempDb { path: p }
     }
 
     #[test]
@@ -1415,7 +1891,11 @@ mod tests {
         let guard = get_conn().unwrap();
         let conn = guard.as_ref().unwrap();
         let raw_before: String = conn
-            .query_row("SELECT account_identifier FROM digital_assets WHERE id=?1", params![id], |r| r.get(0))
+            .query_row(
+                "SELECT account_identifier FROM digital_assets WHERE id=?1",
+                params![id],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(raw_before, "13800000000", "未启用主密码前应保持明文");
         drop(guard);
@@ -1432,7 +1912,11 @@ mod tests {
         let guard = get_conn().unwrap();
         let conn = guard.as_ref().unwrap();
         let raw_after: String = conn
-            .query_row("SELECT account_identifier FROM digital_assets WHERE id=?1", params![id], |r| r.get(0))
+            .query_row(
+                "SELECT account_identifier FROM digital_assets WHERE id=?1",
+                params![id],
+                |r| r.get(0),
+            )
             .unwrap();
         assert!(vault::is_encrypted(&raw_after), "库内应为 enc:v1: 密文");
         assert!(!raw_after.contains("13800000000"), "库内不得出现明文");
@@ -1453,11 +1937,20 @@ mod tests {
 
         set_asset_credential_db(id, "再次保存").unwrap();
         vault::clear_key();
-        assert!(get_asset_credential_db(id).is_err(), "锁定后不得返回明文凭据");
-        assert!(set_asset_credential_db(id, "锁定写入").is_err(), "锁定后不得写入新凭据");
+        assert!(
+            get_asset_credential_db(id).is_err(),
+            "锁定后不得返回明文凭据"
+        );
+        assert!(
+            set_asset_credential_db(id, "锁定写入").is_err(),
+            "锁定后不得写入新凭据"
+        );
         let list = get_all_assets_db().unwrap();
         let mine = list.iter().find(|a| a.id == Some(id)).unwrap();
-        assert!(mine.account_identifier.contains("加密数据"), "锁定后读取应为占位符");
+        assert!(
+            mine.account_identifier.contains("加密数据"),
+            "锁定后读取应为占位符"
+        );
 
         let _ = std::fs::remove_file(&path);
     }
@@ -1465,7 +1958,7 @@ mod tests {
     #[test]
     fn test_change_password_and_backup_roundtrip() {
         let _g = vault::test_lock();
-        use base64::{Engine, engine::general_purpose::STANDARD as b64};
+        use base64::{engine::general_purpose::STANDARD as b64, Engine};
         vault::clear_key();
         let path = fresh_db_path("r2");
         init_database_at(path.clone()).unwrap();
@@ -1491,7 +1984,9 @@ mod tests {
         encrypt_existing_data_db().unwrap();
         set_asset_credential_db(id, "cred-round2").unwrap();
 
-        let new_recovery_code = change_master_password_db("old-master-123", "new-master-456", "new-master-456").unwrap();
+        let new_recovery_code =
+            change_master_password_db("old-master-123", "new-master-456", "new-master-456")
+                .unwrap();
         assert!(vault::is_unlocked(), "改密后应保持解锁状态");
         assert_eq!(get_asset_credential_db(id).unwrap(), "cred-round2");
         let asset = get_asset_by_id_db(id).unwrap().unwrap();
@@ -1500,21 +1995,29 @@ mod tests {
 
         let (salt2_b64, verifier2) = get_security_config_db().unwrap().unwrap();
         // 改密后安全配置应为 v2 盐（自描述前缀 + 60 万次迭代）
-        assert!(salt2_b64.starts_with(crate::crypto::SALT_PREFIX_V2), "改密后盐应为 v2 格式");
+        assert!(
+            salt2_b64.starts_with(crate::crypto::SALT_PREFIX_V2),
+            "改密后盐应为 v2 格式"
+        );
         let (salt2_bytes, salt2_iters) = crate::crypto::resolve_salt(&salt2_b64).unwrap();
         assert_eq!(salt2_iters, crate::crypto::PBKDF2_ITERATIONS_V2);
         let key2 = crate::crypto::derive_key_bytes_v("new-master-456", &salt2_bytes, salt2_iters);
         assert!(vault::verify_key(&verifier2, &key2), "新密码应可解锁");
-        let key_old = crate::crypto::derive_key_bytes_v("old-master-123", &salt2_bytes, salt2_iters);
+        let key_old =
+            crate::crypto::derive_key_bytes_v("old-master-123", &salt2_bytes, salt2_iters);
         assert!(!vault::verify_key(&verifier2, &key_old), "旧密码不得再解锁");
 
         // 新恢复密钥必须能解封"当前数据密钥"（改密轮换恢复码不得丢弃——历史缺陷回归）
         let seal_after = get_recovery_seal_db().unwrap();
-        let unsealed = crate::recovery::unseal_with_recovery(&new_recovery_code, &seal_after).unwrap();
+        let unsealed =
+            crate::recovery::unseal_with_recovery(&new_recovery_code, &seal_after).unwrap();
         assert_eq!(*unsealed, *key2, "新恢复码必须解出改密后的数据密钥");
 
         let backup = export_backup_json_db().unwrap();
-        assert!(backup.contains("acc-round2") || backup.contains("enc:v1:"), "备份应含密文数据");
+        assert!(
+            backup.contains("acc-round2") || backup.contains("enc:v1:"),
+            "备份应含密文数据"
+        );
 
         {
             let guard = get_conn().unwrap();
@@ -1522,22 +2025,43 @@ mod tests {
             conn.execute("DELETE FROM digital_assets", []).unwrap();
             conn.execute("DELETE FROM user_profile", []).unwrap();
         }
-        assert!(get_asset_by_id_db(id).unwrap().is_none(), "清空后资产应不存在");
+        assert!(
+            get_asset_by_id_db(id).unwrap().is_none(),
+            "清空后资产应不存在"
+        );
 
         let restored = import_backup_json_db(&backup).unwrap();
         assert!(restored >= 1, "导入应恢复资产行数");
-        assert!(get_asset_credential_db(id).is_err(), "导入后应处于锁定态，需重新解锁");
+        assert!(
+            get_asset_credential_db(id).is_err(),
+            "导入后应处于锁定态，需重新解锁"
+        );
 
-        vault::set_key(crate::crypto::derive_key_bytes_v("new-master-456", &salt2_bytes, salt2_iters));
-        assert_eq!(get_asset_credential_db(id).unwrap(), "cred-round2", "重新解锁后凭据应可读");
+        vault::set_key(crate::crypto::derive_key_bytes_v(
+            "new-master-456",
+            &salt2_bytes,
+            salt2_iters,
+        ));
+        assert_eq!(
+            get_asset_credential_db(id).unwrap(),
+            "cred-round2",
+            "重新解锁后凭据应可读"
+        );
 
         vault::clear_key();
         let (_, verifier_after) = get_security_config_db().unwrap().unwrap();
         let key2b = crate::crypto::derive_key_bytes_v("new-master-456", &salt2_bytes, salt2_iters);
-        assert!(vault::verify_key(&verifier_after, &key2b), "导入后新密码仍可解锁");
+        assert!(
+            vault::verify_key(&verifier_after, &key2b),
+            "导入后新密码仍可解锁"
+        );
         vault::set_key(key2b);
         let after = get_asset_by_id_db(id).unwrap().unwrap();
-        assert_eq!(after.heir_name.as_deref(), Some("李四"), "档案字段应完整恢复");
+        assert_eq!(
+            after.heir_name.as_deref(),
+            Some("李四"),
+            "档案字段应完整恢复"
+        );
 
         let _ = std::fs::remove_file(&path);
     }
@@ -1548,7 +2072,7 @@ mod tests {
     #[test]
     fn import_backup_clears_stale_recovery_seal() {
         let _g = vault::test_lock();
-        use base64::{Engine, engine::general_purpose::STANDARD as b64};
+        use base64::{engine::general_purpose::STANDARD as b64, Engine};
         vault::clear_key();
         let path = fresh_db_path("seal");
         init_database_at(path.clone()).unwrap();
@@ -1578,7 +2102,7 @@ mod tests {
     #[test]
     fn locked_vault_blocks_plaintext_writes() {
         let _g = vault::test_lock();
-        use base64::{Engine, engine::general_purpose::STANDARD as b64};
+        use base64::{engine::general_purpose::STANDARD as b64, Engine};
         vault::clear_key();
         let path = fresh_db_path("lock");
         init_database_at(path.clone()).unwrap();
@@ -1606,7 +2130,10 @@ mod tests {
         vault::clear_key();
 
         assert!(add_asset_db(&req).is_err(), "锁定态不得静默新增敏感字段");
-        assert!(update_asset_db(id, &req).is_err(), "锁定态不得静默更新敏感字段");
+        assert!(
+            update_asset_db(id, &req).is_err(),
+            "锁定态不得静默更新敏感字段"
+        );
         assert!(
             save_user_profile_db(&UserProfile::default()).is_err(),
             "锁定态不得静默保存档案敏感字段"
@@ -1617,6 +2144,225 @@ mod tests {
         assert!(add_asset_db(&req).is_ok(), "解锁后应可正常写入");
 
         vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 政策库补丁：导入后必须覆盖同 id 内置条目、并新增未知 id。
+    #[test]
+    fn platform_patch_overrides_builtin_entries() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("patch");
+        init_database_at(path.clone()).unwrap();
+
+        let builtin = get_all_platforms_db().unwrap();
+        let target_id = builtin.iter().find(|p| p.name == "支付宝").unwrap().id;
+        let before_len = builtin.len();
+
+        let patch = serde_json::json!({
+            "app": "digilegacy",
+            "platforms": [
+                {
+                    "id": target_id,
+                    "name": "支付宝（2026 政策更新）",
+                    "category": "支付金融",
+                    "required_documents": "死亡证明、继承公证书、继承人身份证",
+                    "process_description": "更新后的办理路径",
+                    "inheritable": true
+                },
+                {
+                    "id": 9001,
+                    "name": "某新平台",
+                    "category": "社交通讯"
+                }
+            ]
+        })
+        .to_string();
+
+        let (added, updated) = import_platform_overrides_db(&patch).unwrap();
+        assert_eq!((added, updated), (1, 1), "一条新增、一条覆盖");
+
+        let after = get_all_platforms_db().unwrap();
+        assert_eq!(after.len(), before_len + 1, "补丁新增的条目应出现在列表里");
+
+        let patched = after.iter().find(|p| p.id == target_id).unwrap();
+        assert_eq!(
+            patched.name, "支付宝（2026 政策更新）",
+            "同 id 必须被补丁覆盖"
+        );
+        assert_eq!(patched.process_description, "更新后的办理路径");
+
+        let newp = after.iter().find(|p| p.id == 9001).unwrap();
+        assert_eq!(newp.name, "某新平台");
+        assert_eq!(count_platform_overrides_db().unwrap(), 2);
+
+        // 再次启动时的 sync_platforms 不得抹掉补丁
+        init_database_at(path.clone()).unwrap();
+        let after_restart = get_all_platforms_db().unwrap();
+        assert_eq!(
+            after_restart
+                .iter()
+                .find(|p| p.id == target_id)
+                .unwrap()
+                .name,
+            "支付宝（2026 政策更新）",
+            "重启后补丁仍须生效（内置同步不能覆盖用户补丁）"
+        );
+
+        let cleared = clear_platform_overrides_db().unwrap();
+        assert_eq!(cleared, 2);
+        let restored = get_all_platforms_db().unwrap();
+        assert_eq!(
+            restored.iter().find(|p| p.id == target_id).unwrap().name,
+            "支付宝"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn platform_patch_rejects_invalid_payloads() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("patchbad");
+        init_database_at(path.clone()).unwrap();
+
+        assert!(import_platform_overrides_db("{not json")
+            .unwrap_err()
+            .contains("解析失败"));
+        assert!(import_platform_overrides_db(
+            r#"{"app":"other","platforms":[{"id":1,"name":"x","category":"y"}]}"#
+        )
+        .unwrap_err()
+        .contains("不是归零政策库补丁"));
+        assert!(
+            import_platform_overrides_db(r#"{"app":"digilegacy","platforms":[]}"#)
+                .unwrap_err()
+                .contains("没有平台条目")
+        );
+        assert!(import_platform_overrides_db(
+            r#"{"app":"digilegacy","platforms":[{"id":0,"name":"x","category":"y"}]}"#
+        )
+        .unwrap_err()
+        .contains("id 必须为正数"));
+        assert!(import_platform_overrides_db(
+            r#"{"app":"digilegacy","platforms":[{"id":5,"name":"","category":"y"}]}"#
+        )
+        .unwrap_err()
+        .contains("缺少名称"));
+
+        assert_eq!(
+            count_platform_overrides_db().unwrap(),
+            0,
+            "失败的导入不得留下部分数据"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn platform_patch_export_roundtrip() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("patchrt");
+        init_database_at(path.clone()).unwrap();
+
+        let payload = r#"{"app":"digilegacy","platforms":[{"id":9100,"name":"导出测试","category":"游戏","notes":"n"}]}"#;
+        import_platform_overrides_db(payload).unwrap();
+
+        let exported = export_platform_overrides_db().unwrap();
+        let v: serde_json::Value = serde_json::from_str(&exported).unwrap();
+        assert_eq!(v["app"], "digilegacy");
+        assert_eq!(v["kind"], "platform-policy-patch");
+        assert_eq!(v["platforms"].as_array().unwrap().len(), 1);
+        assert_eq!(v["platforms"][0]["name"], "导出测试");
+
+        // 导出的文件必须能被自己再导入（格式闭环）
+        let (added, updated) = import_platform_overrides_db(&exported).unwrap();
+        assert_eq!((added, updated), (0, 1), "重复导入应视为覆盖而非新增");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 备份导出必须包含真实数据且可被自己再导入（闭环），而不是空壳 JSON。
+    #[test]
+    fn backup_export_contains_real_rows_and_reimports() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("backup");
+        init_database_at(path.clone()).unwrap();
+
+        let req = AssetRequest {
+            platform_id: 1,
+            account_identifier: "acc-backup".to_string(),
+            account_description: "desc".to_string(),
+            category: "property".to_string(),
+            estimated_value: Some(321.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: Some("继承人A".to_string()),
+            heir_contact: Some("h@example.com".to_string()),
+            notes: "backup-notes".to_string().to_string(),
+        };
+        let id = add_asset_db(&req).unwrap();
+
+        let json = export_backup_json_db().unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["app"], "digilegacy");
+        let rows = v["tables"]["digital_assets"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "备份必须包含已登记资产");
+        assert_eq!(rows[0]["account_identifier"], "acc-backup");
+        assert_eq!(rows[0]["notes"], "backup-notes");
+
+        // 清空后重新导入，数据必须回来
+        delete_asset_db(id).unwrap();
+        assert!(get_all_assets_db().unwrap().is_empty());
+
+        import_backup_json_db(&json).unwrap();
+        let restored = get_all_assets_db().unwrap();
+        assert_eq!(restored.len(), 1);
+        assert_eq!(restored[0].account_identifier, "acc-backup");
+        assert_eq!(restored[0].heir_name.as_deref(), Some("继承人A"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 继承报告必须真的由库内数据生成，而不是固定模板。
+    #[test]
+    fn inheritance_report_reflects_actual_assets() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("report");
+        init_database_at(path.clone()).unwrap();
+
+        assert_eq!(get_inheritance_report_db().unwrap().assets.len(), 0);
+
+        add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "r1".to_string(),
+            account_description: "".to_string(),
+            category: "property".to_string(),
+            estimated_value: Some(1000.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: Some("甲".to_string()),
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap();
+        add_asset_db(&AssetRequest {
+            platform_id: 2,
+            account_identifier: "r2".to_string(),
+            account_description: "".to_string(),
+            category: "personality".to_string(),
+            estimated_value: Some(500.0),
+            disposal_method: "memorialize".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap();
+
+        let report = get_inheritance_report_db().unwrap();
+        assert_eq!(report.assets.len(), 2, "报告必须包含全部资产");
+        assert_eq!(report.property_assets_count, 1);
+        assert_eq!(report.personality_assets_count, 1);
+        assert_eq!(report.total_estimated_value, 1500.0);
+        assert!(!report.generated_at.is_empty(), "报告必须有生成时间");
+
         let _ = std::fs::remove_file(&path);
     }
 }

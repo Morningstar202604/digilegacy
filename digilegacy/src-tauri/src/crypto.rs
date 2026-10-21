@@ -1,10 +1,10 @@
+//! AES-256-GCM 加密基础设施
+//!
+//! 提供两套接口：
+//! 1. 密码式 encrypt/decrypt（每次调用派生密钥，适合低频、单值场景）；
+//! 2. 密钥式 encrypt_with_key/decrypt_with_key（密钥派生一次、批量复用，
+//!    供 vault 模块做主密码字段级加密，避免逐字段 PBKDF2 开销）。
 #![allow(dead_code)]
-/// AES-256-GCM 加密基础设施
-///
-/// 提供两套接口：
-/// 1. 密码式 encrypt/decrypt（每次调用派生密钥，适合低频、单值场景）；
-/// 2. 密钥式 encrypt_with_key/decrypt_with_key（密钥派生一次、批量复用，
-///    供 vault 模块做主密码字段级加密，避免逐字段 PBKDF2 开销）。
 
 use aes_gcm::{
     aead::{Aead, KeyInit},
@@ -55,7 +55,9 @@ pub fn resolve_salt(salt_str: &str) -> Result<(Vec<u8>, u32), String> {
         let bytes = BASE64.decode(rest).map_err(|_| "盐格式无效".to_string())?;
         Ok((bytes, PBKDF2_ITERATIONS_V2))
     } else {
-        let bytes = BASE64.decode(salt_str).map_err(|_| "盐格式无效".to_string())?;
+        let bytes = BASE64
+            .decode(salt_str)
+            .map_err(|_| "盐格式无效".to_string())?;
         Ok((bytes, PBKDF2_ITERATIONS_V1))
     }
 }
@@ -79,7 +81,9 @@ pub fn encrypt_with_key(plaintext: &str, key: &[u8; 32]) -> Result<String, Strin
 
 /// 用已派生密钥解密 encrypt_with_key 的输出
 pub fn decrypt_with_key(encrypted: &str, key: &[u8; 32]) -> Result<String, String> {
-    let data = BASE64.decode(encrypted).map_err(|_| "数据格式无效".to_string())?;
+    let data = BASE64
+        .decode(encrypted)
+        .map_err(|_| "数据格式无效".to_string())?;
 
     if data.len() < 13 {
         return Err("数据长度不合法".to_string());
@@ -106,18 +110,27 @@ pub fn generate_salt() -> [u8; 16] {
 mod tests {
     use super::*;
 
+    /// 迭代次数是密钥强度本身：必须用字面量钉死，
+    /// 如果断言写成 `== PBKDF2_ITERATIONS_V2` 就是同义反复——
+    /// 把常量从 600_000 改成 1_000，测试依然全绿（变异实测确认过）。
     #[test]
     fn test_salt_prefix_selects_iterations() {
+        assert_eq!(PBKDF2_ITERATIONS_V1, 100_000, "v1 兼容路径迭代数不得下调");
+        assert_eq!(
+            PBKDF2_ITERATIONS_V2, 600_000,
+            "v2 迭代数必须保持 60 万（OWASP 2023 建议量级）"
+        );
+
         // v1 裸盐与 v2 前缀盐分别解析出不同迭代数
         let raw = [1u8; 16];
         let (bytes1, iters1) = resolve_salt(&BASE64.encode(raw)).unwrap();
-        assert_eq!(iters1, PBKDF2_ITERATIONS_V1);
+        assert_eq!(iters1, 100_000);
         assert_eq!(bytes1, raw.to_vec());
 
         let salt_v2 = generate_salt_v2();
         assert!(salt_v2.starts_with(SALT_PREFIX_V2));
         let (bytes2, iters2) = resolve_salt(&salt_v2).unwrap();
-        assert_eq!(iters2, PBKDF2_ITERATIONS_V2);
+        assert_eq!(iters2, 600_000);
         assert_eq!(bytes2.len(), 16);
     }
 

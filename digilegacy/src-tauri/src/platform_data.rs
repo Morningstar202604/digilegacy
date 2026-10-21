@@ -1,8 +1,8 @@
 //! 中国数字遗产平台完整数据库
-//! 
+//!
 //! 内置 150+ 主流平台的继承政策、所需材料、办理流程、变现路径、法律文书模板等完整信息。
 //! 为前端资产发现引擎、继承人向导、继承执行工具包提供数据支撑。
-//! 
+//!
 //! 辅助查询函数（get_platform_by_id / get_platforms_by_category / get_difficulty_stats）
 //! 预留给前端独立查询使用，MVP batch 路径暂不调用。
 
@@ -29,14 +29,15 @@ pub struct PlatformEntry {
     pub notes: String,
     pub data_source: String, // 数据来源：权威出处 / 官网链接 / 判例编号
     // 新增字段：用于继承执行工具包
-    pub inheritance_form_url: String,      // 平台官方继承申请表下载链接
-    pub monetization_path: String,         // 变现/过户路径卡（JSON 字符串）
-    pub legal_template_ids: String,        // 关联的法律文书模板 ID 列表（逗号分隔）
-    pub risk_warnings: String,             // 风险提示
-    pub tags: String,                      // 标签：如 "高价值" "需公证" "简易程序" "死亡循环风险"
+    pub inheritance_form_url: String, // 平台官方继承申请表下载链接
+    pub monetization_path: String,    // 变现/过户路径卡（JSON 字符串）
+    pub legal_template_ids: String,   // 关联的法律文书模板 ID 列表（逗号分隔）
+    pub risk_warnings: String,        // 风险提示
+    pub tags: String,                 // 标签：如 "高价值" "需公证" "简易程序" "死亡循环风险"
 }
 
 impl PlatformEntry {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: i64,
         name: &str,
@@ -78,6 +79,7 @@ impl PlatformEntry {
     }
 
     /// 创建带有数据来源的平台条目
+    #[allow(clippy::too_many_arguments)]
     pub fn with_source(
         id: i64,
         name: &str,
@@ -149,7 +151,7 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "联系京东金融客服95118",
             "中等", "https://www.jdpay.com", "30-60天",
             ""),
-        
+
         // ========== 社交通讯类 ==========
         PlatformEntry::with_source(10, "微信", "WeChat", "社交通讯", "即时通讯", true, true, false,
             "不可继承（仅可导出聊天记录）",
@@ -971,7 +973,10 @@ pub fn get_platform_by_id(id: i64) -> Option<PlatformEntry> {
 
 /// 按类别获取平台
 pub fn get_platforms_by_category(category: &str) -> Vec<PlatformEntry> {
-    get_all_platforms().into_iter().filter(|p| p.category == category).collect()
+    get_all_platforms()
+        .into_iter()
+        .filter(|p| p.category == category)
+        .collect()
 }
 
 /// 获取继承难度分布
@@ -989,9 +994,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn platform_database_has_56_entries() {
+    fn platform_database_has_at_least_140_entries() {
         let platforms = get_all_platforms();
-        assert!(platforms.len() >= 140, "平台数据库应包含至少 140 个平台，实际 {}", platforms.len());
+        assert!(
+            platforms.len() >= 140,
+            "平台数据库应包含至少 140 个平台，实际 {}",
+            platforms.len()
+        );
     }
 
     #[test]
@@ -1016,13 +1025,30 @@ mod tests {
     #[test]
     fn categories_are_within_known_set() {
         let known = [
-            "支付金融", "社交通讯", "游戏", "电商", "内容创作", "知识付费",
-            "金融证券", "出行住宿", "工具订阅", "音视频", "生活服务", "学习与考试",
-            "存储云服务", "政务服务", "生活工具", "汽车服务",
+            "支付金融",
+            "社交通讯",
+            "游戏",
+            "电商",
+            "内容创作",
+            "知识付费",
+            "金融证券",
+            "出行住宿",
+            "工具订阅",
+            "音视频",
+            "生活服务",
+            "学习与考试",
+            "存储云服务",
+            "政务服务",
+            "生活工具",
+            "汽车服务",
         ];
         let platforms = get_all_platforms();
         for p in &platforms {
-            assert!(known.contains(&p.category.as_str()), "未知类别: {}", p.category);
+            assert!(
+                known.contains(&p.category.as_str()),
+                "未知类别: {}",
+                p.category
+            );
         }
     }
 

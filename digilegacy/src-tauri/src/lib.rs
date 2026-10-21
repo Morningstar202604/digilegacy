@@ -1,12 +1,12 @@
-mod models;
-mod db;
-mod crypto;
-mod recovery;
-mod heartbeat;
-mod vault;
-mod platform_data;
 mod commands;
+mod crypto;
+mod db;
+mod heartbeat;
+mod models;
 mod notify;
+mod platform_data;
+mod recovery;
+mod vault;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -36,35 +36,38 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .tooltip("归零 · 数字遗产管理系统")
-        .on_menu_event(|app, event| {
-            match event.id().as_ref() {
-                "show" => {
-                    if let Some(win) = app.get_webview_window("main") {
-                        let _ = win.show();
-                        let _ = win.unminimize();
-                        let _ = win.set_focus();
-                    }
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.show();
+                    let _ = win.unminimize();
+                    let _ = win.set_focus();
                 }
-                "checkin" => {
-                    let _ = db::record_check_in_db();
-                    if let Some(win) = app.get_webview_window("main") {
-                        let _ = win.emit("dms-checked-in", ());
-                    }
-                }
-                "lock" => {
-                    crate::vault::clear_key();
-                    if let Some(win) = app.get_webview_window("main") {
-                        let _ = win.emit("app-locked", ());
-                    }
-                }
-                "quit" => {
-                    app.exit(0);
-                }
-                _ => {}
             }
+            "checkin" => {
+                let _ = db::record_check_in_db();
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.emit("dms-checked-in", ());
+                }
+            }
+            "lock" => {
+                crate::vault::clear_key();
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.emit("app-locked", ());
+                }
+            }
+            "quit" => {
+                app.exit(0);
+            }
+            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, button_state: tauri::tray::MouseButtonState::Up, .. } = event {
+            if let TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
                 if let Some(win) = tray.app_handle().get_webview_window("main") {
                     let _ = win.show();
                     let _ = win.unminimize();
@@ -99,6 +102,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_all_platforms,
             commands::get_all_platforms_extended,
+            commands::import_platform_patch,
+            commands::export_platform_patch,
+            commands::platform_patch_status,
+            commands::clear_platform_patch,
             commands::add_asset,
             commands::update_asset,
             commands::delete_asset,
@@ -129,6 +136,8 @@ pub fn run() {
             commands::complete_recovery,
             commands::get_recovery_seal_exists,
             commands::get_heartbeat_status,
+            commands::get_heartbeat_config,
+            commands::set_heartbeat_config,
             commands::send_heartbeat_now,
             commands::set_autostart,
             commands::hide_main_window,

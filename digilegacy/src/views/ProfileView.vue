@@ -167,12 +167,28 @@
         <p class="form-hint">浏览器预览模式不支持心跳，请在桌面版中使用。</p>
       </template>
       <template v-else>
-        <p style="font-size: 12px; color: var(--gray-600); margin-top: 8px;">
-          通过环境变量配置（DMS_HEARTBEAT_ENABLED=1、DMS_HEARTBEAT_TOKEN=你的令牌、可选 DMS_HEARTBEAT_ENDPOINT）。
-        </p>
+        <div style="margin-top: 12px; display: grid; gap: 10px; max-width: 520px;">
+          <label class="flex items-center gap-8" style="cursor: pointer;">
+            <input type="checkbox" v-model="heartbeatEnabled" style="width: 18px; height: 18px;" />
+            <span style="font-weight: 500; font-size: 14px;">启用零内容心跳</span>
+          </label>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="hb-endpoint">服务器地址</label>
+            <input class="form-input" id="hb-endpoint" v-model="heartbeatEndpoint" placeholder="https://你的心跳服务器" />
+            <p class="form-hint">本项目不运营公共心跳服务器，请自建（仓库内 server/heartbeat-server.mjs，单文件、无外部依赖）。</p>
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="hb-token">心跳令牌</label>
+            <input class="form-input" id="hb-token" type="password" v-model="heartbeatToken" :placeholder="heartbeatHasToken ? '已保存（留空则保持不变）' : '与服务端预注册的令牌'" />
+          </div>
+          <div>
+            <button class="btn btn-primary btn-sm" :disabled="heartbeatBusy" @click="saveHeartbeatConfig">{{ heartbeatBusy ? '保存中...' : '保存心跳设置' }}</button>
+          </div>
+        </div>
+        <p v-if="heartbeatMsg" style="font-size: 12px; color: var(--gray-600); margin-top: 8px;" aria-live="polite">{{ heartbeatMsg }}</p>
         <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
           <button class="btn btn-secondary btn-sm" @click="sendHeartbeat">发送一次测试心跳</button>
-          <span v-if="heartbeatMsg" style="font-size: 12px; color: var(--gray-600);" aria-live="polite">{{ heartbeatMsg }}</span>
+          <span v-if="heartbeatTestMsg" style="font-size: 12px; color: var(--gray-600);" aria-live="polite">{{ heartbeatTestMsg }}</span>
         </div>
         <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--gray-200, #e8e4de);">
           <label class="flex items-center gap-8" style="cursor: pointer;">
@@ -181,6 +197,23 @@
           </label>
           <p class="form-hint">关闭窗口时应用会驻留系统托盘继续工作；从托盘菜单可"显示/我还安好/锁定/退出"。</p>
         </div>
+      </template>
+    </div>
+
+    <div class="card mt-24">
+      <div class="card-title mb-16">📚 政策库更新（离线补丁）</div>
+      <p style="font-size: 13px; color: var(--gray-600);">内置平台政策随版本发布；如果你的平台政策有变动，可导入一份 JSON 补丁覆盖对应条目（同 id 覆盖、新 id 新增）。补丁保存在本地库，重启后仍生效。</p>
+      <template v-if="!isTauri">
+        <p class="form-hint">浏览器预览模式不支持导入补丁，请在桌面版中使用。</p>
+      </template>
+      <template v-else>
+        <p class="form-hint" style="margin-top: 8px;">当前已应用 <strong>{{ patchCount }}</strong> 条本地补丁。</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
+          <button class="btn btn-secondary btn-sm" @click="importPatch">导入补丁文件</button>
+          <button class="btn btn-secondary btn-sm" @click="exportPatch">{{ patchCount > 0 ? '导出当前补丁' : '导出空补丁模板' }}</button>
+          <button class="btn btn-secondary btn-sm" :disabled="patchCount === 0" @click="clearPatch">清除全部补丁</button>
+        </div>
+        <p v-if="patchMsg" style="font-size: 12px; color: var(--gray-600); margin-top: 8px;" aria-live="polite">{{ patchMsg }}</p>
       </template>
     </div>
 
@@ -198,11 +231,13 @@ import { ref, onMounted } from 'vue';
 
 import { useDashboardStore } from '../stores/dashboard';
 import { useSecurityStore } from '../stores/security';
+import { usePlatformsStore } from '../stores/platforms';
 import { invoke, isTauriEnv } from '../api/invoke';
 import type { ApiResponse, UserProfile } from '../types';
 
 const dashboard = useDashboardStore();
 const security = useSecurityStore();
+const platforms = usePlatformsStore();
 
 const masterPassword = ref('');
 const masterPassword2 = ref('');
@@ -221,6 +256,14 @@ const backupOk = ref(false);
 const isTauri = isTauriEnv();
 const recoveryExists = ref<boolean | null>(null);
 const heartbeatMsg = ref('');
+const heartbeatTestMsg = ref('');
+const heartbeatEnabled = ref(false);
+const heartbeatEndpoint = ref('');
+const heartbeatToken = ref('');
+const heartbeatHasToken = ref(false);
+const heartbeatBusy = ref(false);
+const patchCount = ref(0);
+const patchMsg = ref('');
 const autostartEnabled = ref(false);
 
 const recoveryCode = ref('');
@@ -233,19 +276,53 @@ function copyRecoveryCode() {
   );
 }
 
-async function sendHeartbeat() {
-  heartbeatMsg.value = '发送中…';
+async function loadHeartbeatConfig() {
   try {
-    const res = await invoke<ApiResponse<{ last_result: string }>>('send_heartbeat_now');
+    const res = await invoke<ApiResponse<{ enabled: boolean; has_token: boolean; endpoint: string }>>('get_heartbeat_config');
     if (res.success && res.data) {
-      heartbeatMsg.value = res.data.last_result === 'ok'
-        ? '心跳发送成功（服务器已记录）'
-        : '发送失败：服务器未连通（本地功能不受影响）。请确认已配置 DMS_HEARTBEAT_* 环境变量且服务器可达';
-    } else {
-      heartbeatMsg.value = res.message;
+      heartbeatEnabled.value = res.data.enabled;
+      heartbeatHasToken.value = res.data.has_token;
+      heartbeatEndpoint.value = res.data.endpoint;
+    }
+  } catch {
+    // 读取失败时保持默认空态，用户保存时会重新写入
+  }
+}
+
+async function saveHeartbeatConfig() {
+  heartbeatBusy.value = true;
+  heartbeatMsg.value = '';
+  try {
+    const res = await invoke<ApiResponse<null>>('set_heartbeat_config', {
+      enabled: heartbeatEnabled.value,
+      token: heartbeatToken.value,
+      endpoint: heartbeatEndpoint.value,
+    });
+    heartbeatMsg.value = res.message;
+    if (res.success) {
+      heartbeatToken.value = '';
+      await loadHeartbeatConfig();
     }
   } catch (e) {
     heartbeatMsg.value = String(e);
+  } finally {
+    heartbeatBusy.value = false;
+  }
+}
+
+async function sendHeartbeat() {
+  heartbeatTestMsg.value = '发送中…';
+  try {
+    const res = await invoke<ApiResponse<{ last_result: string }>>('send_heartbeat_now');
+    if (res.success && res.data) {
+      heartbeatTestMsg.value = res.data.last_result === 'ok'
+        ? '心跳发送成功（服务器已记录）'
+        : '未发送：请先在上方填写服务器地址与令牌并启用';
+    } else {
+      heartbeatTestMsg.value = res.message;
+    }
+  } catch (e) {
+    heartbeatTestMsg.value = String(e);
   }
 }
 
@@ -339,6 +416,59 @@ async function importBackup() {
   }
 }
 
+async function importPatch() {
+  patchMsg.value = '';
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const { readTextFile } = await import('@tauri-apps/plugin-fs');
+    const selected = await open({ multiple: false, filters: [{ name: '政策库补丁', extensions: ['json'] }] });
+    if (!selected || typeof selected !== 'string') return;
+    const content = await readTextFile(selected);
+    const res = await invoke<ApiResponse<string>>('import_platform_patch', { content });
+    patchMsg.value = res.success ? `${res.message}：${res.data}` : res.message;
+    if (res.success) {
+      await loadPatchStatus();
+      await platforms.loadPlatforms();
+    }
+  } catch (e) {
+    patchMsg.value = '导入失败：' + String(e);
+  }
+}
+
+async function exportPatch() {
+  patchMsg.value = '';
+  try {
+    // 后端直接写进应用数据目录（与备份导出同路径策略），无需前端写文件权限
+    const res = await invoke<ApiResponse<string>>('export_platform_patch');
+    patchMsg.value = res.success ? `${res.message}：${res.data}` : res.message;
+  } catch (e) {
+    patchMsg.value = '导出失败：' + String(e);
+  }
+}
+
+async function clearPatch() {
+  if (!confirm('清除全部本地政策补丁并恢复内置政策库？')) return;
+  try {
+    const res = await invoke<ApiResponse<number>>('clear_platform_patch');
+    patchMsg.value = res.success ? `已清除 ${res.data} 条补丁` : res.message;
+    if (res.success) {
+      await loadPatchStatus();
+      await platforms.loadPlatforms();
+    }
+  } catch (e) {
+    patchMsg.value = '清除失败：' + String(e);
+  }
+}
+
+async function loadPatchStatus() {
+  try {
+    const res = await invoke<ApiResponse<number>>('platform_patch_status');
+    if (res.success) patchCount.value = Number(res.data ?? 0);
+  } catch {
+    patchCount.value = 0;
+  }
+}
+
 async function enableEncryption() {
   securityMessage.value = '';
   if (masterPassword.value.length < 8) {
@@ -390,6 +520,8 @@ onMounted(async () => {
     } catch {
       recoveryExists.value = null;
     }
+    await loadHeartbeatConfig();
+    await loadPatchStatus();
     try {
       const { isEnabled } = await import('@tauri-apps/plugin-autostart');
       autostartEnabled.value = await isEnabled();

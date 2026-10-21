@@ -220,14 +220,26 @@ pub struct ApiResponse<T> {
 
 impl<T> ApiResponse<T> {
     pub fn ok(data: T) -> Self {
-        Self { success: true, message: "操作成功".into(), data: Some(data) }
+        Self {
+            success: true,
+            message: "操作成功".into(),
+            data: Some(data),
+        }
     }
 
     pub fn ok_with_msg(data: T, msg: &str) -> Self {
-        Self { success: true, message: msg.into(), data: Some(data) }
+        Self {
+            success: true,
+            message: msg.into(),
+            data: Some(data),
+        }
     }
 
     pub fn fail(msg: &str) -> Self {
-        Self { success: false, message: msg.into(), data: None }
+        Self {
+            success: false,
+            message: msg.into(),
+            data: None,
+        }
     }
 }
