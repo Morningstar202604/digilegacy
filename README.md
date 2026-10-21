@@ -191,7 +191,13 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 | Production build | `npm run build` | passing |
 | Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
 
-> `.github/workflows/ci.yml` runs these on every push to `main` and on every pull request: the frontend type check, unit tests and production build, plus the full Rust test suite on Linux. The heartbeat server syntax check and the manual type check above are not part of CI.
+> `.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in three jobs:
+>
+> 1. **前端** — `npm ci` → `vue-tsc --noEmit` → `npm run test:coverage`（含覆盖率门禁）→ `npm run build`
+> 2. **Rust** — `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test --locked`
+> 3. **心跳服务器** — `node --check` + 真实启动后验证 `/heartbeat` 收令牌、非法请求返回 400、`/check` 可查询
+>
+> 本地等价校验用 `bash scripts/verify.sh`（会显式记录每个命令的退出码，避免 `cmd | tail` 吞掉失败）。
 
 ### Test coverage — what the numbers actually cover
 
@@ -288,6 +294,6 @@ MIT — see [LICENSE](LICENSE).
 - **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
 - **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（绝不进入导出物）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 56 项通过（另有 1 项 ignored）、前端 `npm test` 110 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
+- **测试**：`cargo test` 59 项通过（另有 1 项 ignored）、前端 `npm test` 110 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
 
 *数字有数，归处有路。*

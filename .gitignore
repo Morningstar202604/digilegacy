@@ -58,3 +58,6 @@ digilegacy-hardening-report.html
 # ---- 心跳服务器运行时状态（含 token 与时间戳，不得入库） ----
 digilegacy/server/state.json
 digilegacy/server/registrations.json
+
+# ---- 本地临时产物 ----
+out/

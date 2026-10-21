@@ -23,7 +23,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # 依赖链要求 ^22.22.2 || ^24.15.0 || >=26；22 线在 Actions 上会解析到最新 22.x，
+          # 本地实测 24.14.0 反而不满足，故固定 22 线（LTS + 满足 engines）。
+          node-version: '22.22.2'
           cache: npm
           cache-dependency-path: digilegacy/package-lock.json
 
@@ -83,7 +85,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.22.2'
 
       - name: 语法检查
         run: node --check heartbeat-server.mjs
