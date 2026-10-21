@@ -134,6 +134,21 @@ describe('AssetsView 渲染', () => {
     expect(w.text()).toContain('已存凭据');
   });
 
+  it('「全部」必须与顶部计数一致（含未确认资产）', async () => {
+    // 变异守卫：把 filter==='all' 改成只返回 is_confirmed 资产时，
+    // 顶部显示「共 2 项」但列表只有 1 行，自相矛盾。
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [
+      makeAsset({ id: 1, is_confirmed: true, platform_name: '支付宝' }),
+      makeAsset({ id: 2, is_confirmed: false, platform_name: '微信' }),
+    ] as never;
+    await w.vm.$nextTick();
+
+    expect(w.text()).toContain('共 2 项');
+    expect(w.findAll('.asset-row')).toHaveLength(2);
+  });
+
   it('无估值显示占位符而不是 ¥0', async () => {
     const w = await mountView();
     const store = useAssetsStore();

@@ -209,6 +209,18 @@ describe('App 锁定遮罩', () => {
     expect(w.find('input[aria-label="恢复密钥"]').exists()).toBe(true);
   });
 
+  it('侧栏只有当前路由的导航项带 active', async () => {
+    // 变异守卫：active 恒为 true 时此前 115 个测试全绿，
+    // 用户将看到所有菜单项同时高亮。
+    const w = await mountApp();
+    const items = w.findAll('.nav-item');
+    expect(items.length).toBeGreaterThan(1);
+
+    const activeItems = items.filter(i => i.classes().includes('active'));
+    expect(activeItems).toHaveLength(1);
+    expect(activeItems[0].attributes('href')).toBe('/dashboard');
+  });
+
   it('侧栏在未启用加密时提示去设置主密码', async () => {
     const w = await mountApp();
     const s = useSecurityStore();

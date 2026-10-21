@@ -693,4 +693,50 @@ mod tests {
         assert!(result.is_err(), "无 STARTTLS 能力时必须拒绝投递");
         let _ = handle.join();
     }
+
+    /// 去重逻辑：同 stage + 同收件人只投递一次。
+    ///
+    /// 这条没有测试时，把 `stage` 改成 `stage + 1` 全部 65 个测试仍绿——
+    /// 真实后果：去重永远查下一级记录，同一 stage 每 30 分钟重复投递，
+    /// 收件人被反复轰炸。
+    #[test]
+    fn already_notified_dedups_same_stage_and_recipient() {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("digilegacy_outbox_{}.jsonl", std::process::id()));
+        let _ = fs::remove_file(&path);
+
+        let entry = DmsNotification {
+            stage: 2,
+            recipient: "heir@example.com".to_string(),
+            subject: "s".to_string(),
+            body: "b".to_string(),
+            sent_at: "2026-01-01 00:00:00".to_string(),
+            channel: "local_outbox".to_string(),
+        };
+        append_outbox(&path, &entry).unwrap();
+
+        assert!(
+            already_notified(&path, 2, "heir@example.com"),
+            "同 stage 同收件人必须判为已通知"
+        );
+        assert!(
+            !already_notified(&path, 1, "heir@example.com"),
+            "不同 stage 不得误判"
+        );
+        assert!(
+            !already_notified(&path, 3, "heir@example.com"),
+            "更高 stage 不得误判"
+        );
+        assert!(
+            !already_notified(&path, 2, "other@example.com"),
+            "不同收件人不得误判"
+        );
+
+        // 不存在的文件：视为未通知，允许首次投递
+        let missing = dir.join("digilegacy_outbox_missing.jsonl");
+        let _ = fs::remove_file(&missing);
+        assert!(!already_notified(&missing, 2, "heir@example.com"));
+
+        let _ = fs::remove_file(&path);
+    }
 }
