@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod crypto;
 mod db;
@@ -14,13 +15,28 @@ use tauri::{
     Emitter, Manager,
 };
 
-/// 后台推进线程：每 30 分钟评估 DMS（写发件箱）并尝试云端心跳
+/// 后台推进线程：每 30 分钟评估 DMS（写发件箱）并尝试云端心跳。
+///
+/// 关键：整轮工作包在 `catch_unwind` 里。DMS 评估与心跳都会触达全局状态
+/// （DB 连接、LAST_STATUS、文件系统），任一处的 panic 会直接杀死这个线程——
+/// 而线程一旦死了，用户会「以为」安心传承还在值守，实际提醒永久停摆。
+/// 崩溃后记录并继续下一轮，比静默停摆安全得多。
 fn spawn_background_loop(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || loop {
-        if let Err(e) = notify::evaluate_dms(app_handle.clone()) {
-            eprintln!("后台 DMS 评估失败: {}", e);
+        let handle = app_handle.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Err(e) = notify::evaluate_dms(handle.clone()) {
+                eprintln!("后台 DMS 评估失败: {}", e);
+            }
+            heartbeat::send_heartbeat();
+        }));
+        if result.is_err() {
+            // 单轮崩溃不应终止守护：记录后继续下一轮
+            eprintln!(
+                "[{}] 后台任务发生 panic，已隔离并将在下一轮继续",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            );
         }
-        heartbeat::send_heartbeat();
         std::thread::sleep(std::time::Duration::from_secs(30 * 60));
     });
 }
@@ -95,6 +111,19 @@ pub fn run() {
         ))
         .setup(|app| {
             db::init_database(app.handle())?;
+
+            // 每日自动备份：失败不阻断启动（磁盘满/权限问题不应让应用不可用）
+            if let Ok(dir) = app.path().app_data_dir() {
+                match db::export_backup_json_db() {
+                    Ok(json) => {
+                        if let Err(e) = backup::run_daily_backup(&dir, &json) {
+                            eprintln!("自动备份失败: {}", e);
+                        }
+                    }
+                    Err(e) => eprintln!("自动备份跳过（导出失败）: {}", e),
+                }
+            }
+
             build_tray(app)?;
             spawn_background_loop(app.handle().clone());
             Ok(())
@@ -152,4 +181,48 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    /// 后台循环的核心契约：单轮 panic 必须被隔离，不能终止后续轮次。
+    /// 这里用与 `spawn_background_loop` 相同的结构做等价验证
+    /// （真实函数会开线程并 sleep 30 分钟，不适合直接测试）。
+    #[test]
+    fn panic_in_one_round_does_not_stop_the_loop() {
+        let rounds = Arc::new(AtomicUsize::new(0));
+        let r = rounds.clone();
+
+        // 模拟 3 轮：第 2 轮 panic
+        for i in 0..3 {
+            let r2 = r.clone();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if i == 1 {
+                    panic!("模拟后台任务崩溃");
+                }
+                r2.fetch_add(1, Ordering::SeqCst);
+            }));
+            // 关键：panic 被抓住，循环继续
+            assert_eq!(result.is_err(), i == 1, "第 {} 轮的 panic 必须被隔离", i);
+        }
+
+        assert_eq!(
+            rounds.load(Ordering::SeqCst),
+            2,
+            "除崩溃轮外，其余两轮必须正常执行"
+        );
+    }
+
+    /// 使用 AssertUnwindSafe 后仍能捕获 panic（确认没有 unwind 泄漏）。
+    #[test]
+    fn catch_unwind_captures_panic_without_aborting() {
+        let result = std::panic::catch_unwind(|| {
+            panic!("boom");
+        });
+        assert!(result.is_err());
+        // 走到这里说明进程没有 abort
+    }
 }

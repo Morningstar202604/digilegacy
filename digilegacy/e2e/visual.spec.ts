@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 // 视觉验收：截图 Toast、确认框、新品牌图标在真实渲染下的样子。
 test.use({ viewport: { width: 1200, height: 800 } });

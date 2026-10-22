@@ -67,3 +67,7 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# ---- E2E 覆盖率 ----
+coverage-e2e/
+digilegacy/e2e/.coverage/

@@ -41,6 +41,10 @@ jobs:
       - name: 生产构建
         run: npm run build
 
+      - name: 依赖漏洞扫描（npm）
+        # 默认镜像的 audit 端点常不可用，显式指向官方 registry
+        run: npm audit --audit-level=high --registry=https://registry.npmjs.org
+
   e2e:
     name: E2E · Playwright（7 个视图交互链路）
     runs-on: ubuntu-24.04
@@ -66,6 +70,23 @@ jobs:
 
       - name: 运行 E2E
         run: npx playwright test
+
+      - name: E2E 覆盖率（不阻断，仅报告）
+        # 与单元覆盖率是两套口径：前者证明「用户点到的路径都跑过」，
+        # 后者证明「分支组合被覆盖」。这里只产出报告，不设阈值。
+        run: |
+          rm -rf e2e/.coverage
+          E2E_COVERAGE=1 npx playwright test
+          node e2e/collect-coverage.mjs
+        continue-on-error: true
+
+      - name: 上传 E2E 覆盖率
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-coverage
+          path: digilegacy/coverage-e2e/
+          retention-days: 7
 
       - name: 上传失败痕迹
         if: failure()
@@ -107,6 +128,13 @@ jobs:
 
       - name: 测试
         run: cargo test --locked
+
+      - name: 依赖漏洞扫描（RustSec）
+        # 只对「漏洞」判定失败；unmaintained/unsound 属信息级警告，
+        # 由 Tauri 上游依赖链决定，不应阻断本项目构建。
+        run: |
+          cargo install cargo-audit --locked --quiet || true
+          cargo audit --deny vulnerabilities
 
   heartbeat-server:
     name: 心跳服务器 · 语法与行为

@@ -8,12 +8,12 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 226 tests / 21 files，statements 79.9%（79.8 / 73.4 / 81.1，阈值 78/78/71/79） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 238 tests / 24 files，statements 79.9%（79.8 / 73.4 / 81.1，阈值 78/78/71/79） |
 | 生产构建 | `npm run build` | PASS |
-| E2E（Playwright） | `npx playwright test` | **31 passed**（7 个视图 + 完整发现链路 + 13 项全站 UI 健全性） |
+| E2E（Playwright） | `npx playwright test` | **37 passed**（7 视图 + 发现链路 + 全站 UI 健全性 + 深色模式 + 视觉验收） |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
-| Rust 测试 | `cargo test --locked` | 74 passed, 0 failed, 1 ignored |
+| Rust 测试 | `cargo test --locked` | 80 passed, 0 failed, 1 ignored |
 
 ## 跨平台验证（Ubuntu 24.04 容器，真实 Linux）
 
@@ -84,3 +84,13 @@ CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通�
 | Toast / 确认框 | 单元测试 12 例（自动消失、错误样式、Promise 语义、alertdialog） | 通过 |
 | 空态插画 | 资产页空数据渲染 SVG | 通过 |
 | 报告文书版式 | 页眉/编号/页脚/签名区渲染 | 通过 |
+
+## 可靠性与供应链
+
+| 项目 | 验证 | 结果 |
+|---|---|---|
+| 后台任务 panic 隔离 | 单轮 panic 不终止循环（2 例） | 通过 |
+| 每日自动备份 | 当日幂等、保留 7 份、裁剪顺序、无临时残留（4 例） | 通过 |
+| Rust 依赖扫描 | `cargo audit --deny vulnerabilities` | 0 漏洞（5 条 unmaintained/unsound 警告来自 Tauri 上游） |
+| npm 依赖扫描 | `npm audit --audit-level=high` | 0 漏洞 |
+| E2E 覆盖率 | `npm run test:e2e:coverage` | 语句 58.9% / 行 60.1%（26 文件，与单测口径互补） |

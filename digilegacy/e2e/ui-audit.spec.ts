@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
 // 逐页遍历所有可点击元素，检查：点击后有无报错、有无反馈、按钮是否卡死。

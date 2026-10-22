@@ -12,7 +12,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // 采集覆盖率时每页都跑插桩代码，并发过高会让 Chromium 进程 OOM
+  // （表现为 worker exited unexpectedly / code=3221226505）。
+  workers: process.env.CI || process.env.E2E_COVERAGE === '1' ? 1 : undefined,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   timeout: 30_000,
   expect: { timeout: 8_000 },
@@ -27,6 +29,9 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
+
+  // E2E 覆盖率：设 E2E_COVERAGE=1 时启用（vite 侧同步插桩）
+  globalTeardown: process.env.E2E_COVERAGE === '1' ? './e2e/coverage-teardown.mjs' : undefined,
 
   webServer: {
     command: 'npm run dev',

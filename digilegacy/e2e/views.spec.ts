@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
 // 覆盖剩余 6 个此前 0% 的视图：Dashboard / DMS / Report / HeirGuide / LegalTemplates / AssetDetail。

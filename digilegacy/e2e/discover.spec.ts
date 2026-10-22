@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
 // 资产发现是产品的核心链路：自检 → 选类别 → 勾平台 → 填详情 → 保存 → 进资产列表。
