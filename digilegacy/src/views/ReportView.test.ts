@@ -20,9 +20,16 @@ const mockedInvoke = invoke as unknown as Mock;
 
 /** ZIP 路径包含动态 import + JSZip 压缩 + btoa，jsdom 下需要真实事件循环。 */
 async function settle(w: { vm: { $nextTick: () => Promise<unknown> } }) {
-  for (let i = 0; i < 4; i++) { await flushPromises(); await w.vm.$nextTick(); }
-  await new Promise(r => setTimeout(r, 400));
-  for (let i = 0; i < 4; i++) { await flushPromises(); await w.vm.$nextTick(); }
+  // ZIP 路径：动态 import jszip → 压缩 → btoa，在低配/高负载机器上可能超过 400ms。
+  // 改为「轮询直到 export_zip_to_file 被调用或超时」，避免固定 sleep 导致的偶发失败。
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    await flushPromises();
+    await w.vm.$nextTick();
+    if ((invoke as unknown as Mock).mock.calls.some(c => c[0] === 'export_zip_to_file')) return;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  // 超时也退出，让断言给出真实失败原因
 }
 
 function reportData() {

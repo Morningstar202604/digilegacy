@@ -74,3 +74,13 @@ CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通�
   核实：run `39558924027`（sha `3fc3b68`）**completed / success**，三个 job 全绿。
   后续提交的构建结果需在 Actions 页面确认：
   https://github.com/badhope/digilegacy/actions
+
+## 视觉与品牌验证
+
+| 项目 | 验证方式 | 结果 |
+|---|---|---|
+| 深色模式 | Playwright 设 `data-theme=dark` 后截图检查标题/背景/卡片层次 | 通过（3 页截图） |
+| 主题切换 | 点按钮后断言 `data-theme` 由 light 变 dark | 通过 |
+| Toast / 确认框 | 单元测试 12 例（自动消失、错误样式、Promise 语义、alertdialog） | 通过 |
+| 空态插画 | 资产页空数据渲染 SVG | 通过 |
+| 报告文书版式 | 页眉/编号/页脚/签名区渲染 | 通过 |

@@ -54,6 +54,9 @@
       <header class="main-header">
         <div class="header-title">{{ currentPageTitle }}</div>
         <div class="header-actions">
+          <button class="btn btn-sm btn-secondary" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme">
+            <span aria-hidden="true">{{ themeIcon }}</span>
+          </button>
           <button class="btn btn-sm btn-secondary" data-tour="help" @click="showHelp = true"><span aria-hidden="true">❓</span> 帮助</button>
           <button class="btn btn-sm btn-secondary" v-if="security.hasMasterPassword && security.unlocked" @click="handleLock"><span aria-hidden="true">🔒</span> 锁定</button>
           <button class="btn btn-sm" data-tour="checkin" :class="checkBtnClass" @click="handleCheckIn">
@@ -125,6 +128,7 @@ import { useDashboardStore } from './stores/dashboard';
 import { useSecurityStore } from './stores/security';
 import { useAssetsStore } from './stores/assets';
 import { startLocalReminderLoop } from './api/reminders';
+import { initTheme, toggleTheme, useTheme } from './composables/theme';
 import OnboardingTour from './components/OnboardingTour.vue';
 import HelpDrawer from './components/HelpDrawer.vue';
 import FeedbackLayer from './components/FeedbackLayer.vue';
@@ -147,6 +151,9 @@ const unlockPassword = ref('');
 const unlockError = ref('');
 const showTour = ref(false);
 const showHelp = ref(false);
+const { resolved: themeResolved } = useTheme();
+const themeIcon = computed(() => (themeResolved.value === 'dark' ? '☀️' : '🌙'));
+const themeLabel = computed(() => (themeResolved.value === 'dark' ? '切换到浅色模式' : '切换到深色模式'));
 const lockCardRef = ref<HTMLElement | null>(null);
 let stopReminders: (() => void) | null = null;
 
@@ -382,6 +389,8 @@ const checkBtnClass = computed(() => {
 async function handleCheckIn() {
   await dashboard.checkIn();
 }
+
+initTheme();
 
 onMounted(() => {
   security.refresh();

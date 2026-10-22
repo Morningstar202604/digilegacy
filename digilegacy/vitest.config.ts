@@ -15,6 +15,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.ts'],
+    // 每个测试文件都会新建一次 jsdom（~1.5s/实例）。并发过高在内存受限的机器上
+    // 会让 worker 进程 OOM 崩溃（表现为 "Worker forks emitted error"），
+    // 限制并发换取稳定性；CI runner 内存更小，同样受益。
+    maxWorkers: 2,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],

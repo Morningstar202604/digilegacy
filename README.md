@@ -63,6 +63,7 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 | 7 | **Legal template library** | Six categories of legal document templates (will clause, inheritance declaration, authorization, affidavit, application, agreement) |
 | 8 | **Encrypted vault & recovery key** | Field-level AES-256-GCM encryption, master password lock with idle auto-lock, one-time recovery key, encrypted backup export/import |
 | 9 | **Onboarding & help centre** | First-run guided tour; built-in help explaining the encryption model and the **real** capability boundaries of reminders |
+| 9b | **Light / dark theme** | Follow-system by default with a one-click toggle; every surface uses design tokens so both themes stay consistent. Honours `prefers-reduced-motion` and ships print styles |
 | 10 | **Credential vault** | Optional encrypted storage of account credentials. Excluded from the **report and toolkit** exports; the **encrypted backup** carries the ciphertext so credentials survive a device migration (they stay unreadable without your master password) |
 
 ## Screenshots

@@ -108,7 +108,7 @@
 
     <!-- 空状态 -->
     <div class="card text-center" v-else style="padding: 48px;">
-      <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+      <EmptyState kind="search" :size="160" />
       <h3 style="font-size: 18px; margin-bottom: 8px;">尚未发现任何数字资产</h3>
       <p class="text-muted mb-24" style="font-size: 14px;">开始扫描你可能拥有的数字资产，建立你的数字遗产清单</p>
       <router-link to="/discover" class="btn btn-primary btn-lg">立即开始资产发现</router-link>
@@ -122,6 +122,7 @@ import { computed, onMounted } from 'vue';
 import { useDashboardStore } from '../stores/dashboard';
 import { useAssetsStore } from '../stores/assets';
 import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
+import EmptyState from '../components/EmptyState.vue';
 
 const dashboard = useDashboardStore();
 const assetsStore = useAssetsStore();

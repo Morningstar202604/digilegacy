@@ -6,9 +6,25 @@
     </p>
 
     <div v-if="report" class="report-page">
+      <!-- 文档页眉：品牌标识 + 文档类型，模拟正式文书的抬头 -->
+      <div class="doc-header">
+        <div class="doc-brand">
+          <svg width="22" height="22" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <rect width="40" height="40" rx="9" fill="#b4594a"/>
+            <circle cx="20" cy="20" r="11.6" stroke="#fff" stroke-width="2.1" opacity="0.95"/>
+            <circle cx="20" cy="20" r="7.2" stroke="#fff" stroke-width="1.2" opacity="0.6"/>
+            <circle cx="20" cy="20" r="2.9" fill="#fff"/>
+          </svg>
+          <span>归零 DigiLegacy</span>
+        </div>
+        <div class="doc-no">文档编号 · {{ report.generated_at.replace(/[-: ]/g, '') }}</div>
+      </div>
+
       <div class="report-title">数 字 遗 产 继 承 方 案</div>
-      <div style="text-align: center; color: var(--gray-600); font-size: 13px; margin-bottom: 32px;">
-        生成时间：{{ report.generated_at }} | 仅供内部参考
+      <div class="doc-meta">
+        <span>生成时间：{{ report.generated_at }}</span>
+        <span class="doc-meta-sep">·</span>
+        <span>仅供内部参考</span>
       </div>
 
       <div class="report-section">
@@ -82,6 +98,12 @@
           <div style="text-align: center;"><div style="width: 200px; border-bottom: 1px solid var(--gray-400); margin-bottom: 8px;">&nbsp;</div><span style="font-size: 13px; color: var(--gray-500);">日期</span></div>
         </div>
       </div>
+
+      <!-- 文档页脚：与页眉呼应，标注来源与保密属性 -->
+      <div class="doc-footer">
+        <span>本文件由归零 DigiLegacy 生成 · 数据全部存储于持有人本机</span>
+        <span>第 1 页 / 共 1 页</span>
+      </div>
     </div>
 
     <div v-if="exportPath" class="card mt-24 tag-success" style="background: var(--success-light); border-color: var(--success);">
@@ -148,21 +170,27 @@ async function exportReport() {
   if (!report.value) return;
   const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
   const fullHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>数字继承报告</title><style>
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:0 auto;padding:40px;color:#232019}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:0 auto;padding:44px 48px;color:#232019;background:#fff}
 h1,h2,h3{margin:0}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{border-bottom:1px solid #e8e2d8;padding:10px 12px;text-align:left;vertical-align:middle;word-break:break-word}
 th{background:#f6f3ee;color:#6b6157;font-weight:600;font-size:13px;border-bottom:2px solid #e4ddd3}
-tr:hover td{background:#f6f3ee}
 .text-muted{color:#6b6157}.text-center{text-align:center}
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}
 .stats-grid .text-center{padding:12px;border:1px solid #e4ddd3;border-radius:8px}
 .mt-16{margin-top:16px}
-.report-page{background:#fff;max-width:800px;margin:0 auto;padding:40px;border:1px solid #e8e2d8;border-radius:8px}
-.report-title{text-align:center;font-size:24px;font-weight:700;margin-bottom:28px;letter-spacing:4px}
-.report-section{margin-bottom:26px}
-.report-section-title{font-size:16px;font-weight:600;padding-bottom:8px;border-bottom:2px solid #e4ddd3;margin-bottom:12px}
-@media print{body{padding:0}.report-page{border:none}}
+.report-page{max-width:800px;margin:0 auto}
+.doc-header{display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid #e4ddd3;margin-bottom:40px}
+.doc-brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#6b6157;letter-spacing:.5px}
+.doc-no{text-align:right;font-size:11px;color:#a49a8d;letter-spacing:.5px}
+.report-title{text-align:center;font-size:25px;font-weight:700;margin-bottom:12px;letter-spacing:6px}
+.doc-meta{text-align:center;color:#8a8073;font-size:12px;margin-bottom:40px}
+.doc-meta-sep{margin:0 8px;color:#cfc6ba}
+.report-section{margin-bottom:28px}
+.report-section-title{font-size:15px;font-weight:600;padding-bottom:9px;border-bottom:2px solid #e4ddd3;margin-bottom:14px;letter-spacing:.5px}
+.doc-footer{display:flex;justify-content:space-between;margin-top:44px;padding-top:14px;border-top:1px solid #e4ddd3;font-size:11px;color:#a49a8d}
+@page{margin:18mm 16mm}
+@media print{body{padding:0}.report-page{max-width:none}.report-section{break-inside:avoid}}
 </style></head><body>${htmlContent}</body></html>`;
   exportError.value = '';
   exportPath.value = '';
@@ -264,7 +292,96 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.report-page { max-width: 800px; margin: 0 auto; }
+/* 报告页：屏幕预览用「文档纸面」观感，打印时去装饰。
+   这些类此前完全没有样式（scoped 段只有 4 行），导致页眉/标题挤在一起。 */
+.report-page {
+  max-width: 800px;
+  margin: 0 auto;
+  background: var(--surface);
+  padding: 44px 48px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+}
+
+.doc-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--gray-200);
+  margin-bottom: 40px;
+}
+.doc-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-600);
+  letter-spacing: 0.5px;
+}
+.doc-no {
+  text-align: right;
+  font-size: 11px;
+  color: var(--gray-400);
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-title {
+  text-align: center;
+  font-size: 25px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  letter-spacing: 6px;
+  color: var(--gray-900);
+}
+
+.doc-meta {
+  text-align: center;
+  color: var(--gray-500);
+  font-size: 12px;
+  margin-bottom: 40px;
+  letter-spacing: 0.3px;
+}
+.doc-meta-sep { margin: 0 8px; color: var(--gray-300); }
+
+.report-section { margin-bottom: 28px; }
+.report-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  padding-bottom: 9px;
+  border-bottom: 2px solid var(--gray-200);
+  margin-bottom: 14px;
+  color: var(--gray-900);
+  letter-spacing: 0.5px;
+}
+
+.doc-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 44px;
+  padding-top: 14px;
+  border-top: 1px solid var(--gray-200);
+  font-size: 11px;
+  color: var(--gray-400);
+  letter-spacing: 0.3px;
+}
+
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 16px 0; }
 .stats-grid .text-center { padding: 12px; border: 1px solid var(--gray-200); border-radius: 8px; }
+
+/* 打印：去卡片装饰，留装订边 */
+@media print {
+  .report-page {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    max-width: none;
+    background: #fff;
+  }
+  .report-section { break-inside: avoid; }
+}
 </style>

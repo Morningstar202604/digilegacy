@@ -81,6 +81,13 @@ export function settleConfirm(ok: boolean) {
   r?.(ok);
 }
 
+/** 仅供测试：清空全部 toast 与确认框状态。 */
+export function __resetFeedbackForTests() {
+  toasts.splice(0, toasts.length);
+  confirmState.open = false;
+  confirmState.resolve = null;
+}
+
 export function useFeedback() {
   return {
     toasts: readonly(toasts),

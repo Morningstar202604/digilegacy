@@ -29,7 +29,10 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 if [ "$MODE" != "--rust-only" ]; then
   echo "################ 前端 ################"
-  run "依赖安装（ci 一致性）" bash -c "cd '$WEB' && npm ci --silent"
+  # 用 npm install 而非 npm ci：后者会先删光 node_modules，
+  # 在 Windows 上若仍有进程占用文件会中途失败并留下残缺目录（曾多次踩坑）。
+  # CI 里仍用 npm ci（干净环境），本地校验用 install 更稳。
+  run "依赖就绪" bash -c "cd '$WEB' && npm install --silent --no-audit --no-fund"
   run "类型检查" bash -c "cd '$WEB' && npx vue-tsc --noEmit"
   run "单元测试 + 覆盖率门禁" bash -c "cd '$WEB' && npm run test:coverage"
   run "生产构建" bash -c "cd '$WEB' && npm run build"

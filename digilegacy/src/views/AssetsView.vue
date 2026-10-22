@@ -50,8 +50,8 @@
     </div>
 
     <div class="card text-center" v-else-if="assets.assets.length === 0" style="padding: 48px;">
-      <div style="font-size: 48px; margin-bottom: 16px;">💎</div>
-      <h3 style="font-size: 18px; margin-bottom: 8px;">还没有登记任何数字资产</h3>
+      <EmptyState kind="assets" :size="160" />
+      <h3 style="font-size: 18px; margin: 16px 0 8px;">还没有登记任何数字资产</h3>
       <p class="text-muted mb-24" style="font-size: 14px;">前往"资产发现"模块，开始建立你的数字遗产清单</p>
       <router-link to="/discover" class="btn btn-primary btn-lg">开始资产发现</router-link>
     </div>
@@ -62,6 +62,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useAssetsStore } from '../stores/assets';
 import { formatMoney, categoryLabel, disposalLabel, platformIcon } from '../utils/format';
+import EmptyState from '../components/EmptyState.vue';
 
 const assets = useAssetsStore();
 const filter = ref<string>('all');
