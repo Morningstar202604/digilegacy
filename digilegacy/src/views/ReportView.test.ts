@@ -12,6 +12,9 @@ vi.mock('../api/invoke', () => ({
 
 import ReportView from './ReportView.vue';
 import { invoke } from '../api/invoke';
+import { silenceExpectedErrors } from '../test-utils/silence';
+
+silenceExpectedErrors();
 
 const mockedInvoke = invoke as unknown as Mock;
 

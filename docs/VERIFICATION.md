@@ -8,9 +8,9 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 122 tests / 12 files，statements ~36.6%（33.5 / 28.5 / 38.2，阈值 34/31/26/35） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 149 tests / 15 files，statements 51.9%（51.6 / 43.6 / 53.8，阈值 50/49/41/51） |
 | 生产构建 | `npm run build` | PASS |
-| E2E（Playwright） | `npx playwright test` | **18 passed**（7 个视图 + 完整发现链路） |
+| E2E（Playwright） | `npx playwright test` | **31 passed**（7 个视图 + 完整发现链路 + 13 项全站 UI 健全性） |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
 | Rust 测试 | `cargo test --locked` | 74 passed, 0 failed, 1 ignored |
