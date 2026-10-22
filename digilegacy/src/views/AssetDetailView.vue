@@ -34,7 +34,7 @@
         <template v-else>
           <p class="text-muted" style="font-size: 13px; margin-top: 8px;">
             尚未启用加密。请先在
-            <router-link to="/profile" style="color: var(--primary);">我的档案 · 安全与加密</router-link>
+            <router-link to="/profile" style="color: var(--primary); text-decoration: underline; text-underline-offset: 2px; font-weight: 600;">我的档案 · 安全与加密</router-link>
             设置主密码，之后即可加密保存账号与密码。
           </p>
         </template>
@@ -80,6 +80,7 @@ import { useAssetsStore } from '../stores/assets';
 import { usePlatformsStore } from '../stores/platforms';
 import { useSecurityStore } from '../stores/security';
 import { platformIcon } from '../utils/format';
+import { toast, confirmDialog } from '../composables/feedback';
 import type { ApiResponse, DigitalAsset } from '../types';
 
 const route = useRoute();
@@ -158,7 +159,14 @@ async function copyCredential() {
 }
 
 async function clearCredential() {
-  if (!asset.value?.id || !confirm('确定清除该资产的已保存凭据吗？')) return;
+  if (!asset.value?.id) return;
+  const ok = await confirmDialog({
+    title: '清除已保存的凭据？',
+    message: '该资产的账号凭据将被永久删除，无法恢复。',
+    confirmText: '清除凭据',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     const res = await invoke<ApiResponse<null>>('set_asset_credential', { id: asset.value.id, credential: '' });
     credentialStatus.value = res.message;
@@ -199,10 +207,16 @@ async function handleSave() {
 }
 
 async function handleDelete() {
-  if (asset.value?.id && confirm('确定要删除此资产吗？')) {
-    await assetsStore.deleteAsset(asset.value.id);
-    router.back();
-  }
+  if (!asset.value?.id) return;
+  const ok = await confirmDialog({
+    title: '删除此资产？',
+    message: '该资产的登记信息与已保存凭据都会被删除，无法恢复。',
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!ok) return;
+  await assetsStore.deleteAsset(asset.value.id);
+  router.back();
 }
 
 onMounted(async () => {

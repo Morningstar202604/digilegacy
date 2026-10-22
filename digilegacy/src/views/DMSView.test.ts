@@ -17,6 +17,7 @@ vi.mock('../api/reminders', () => ({
 }));
 
 import DMSView from './DMSView.vue';
+import { useFeedback } from '../composables/feedback';
 import { invoke } from '../api/invoke';
 import { sendTestNotification } from '../api/reminders';
 import { useDashboardStore } from '../stores/dashboard';
@@ -156,7 +157,8 @@ describe('设置保存', () => {
     await flushPromises();
 
     expect(mockedInvoke).toHaveBeenCalledWith('set_dead_mans_switch', expect.objectContaining({ intervalDays: 30 }));
-    expect(vi.mocked(alert)).toHaveBeenCalledWith('设置已保存');
+    const { toasts } = useFeedback();
+    expect(toasts.some(t => t.message === '设置已保存'), '保存成功必须有 toast 提示').toBe(true);
   });
 
   it('保存失败时必须提示错误（不得静默）', async () => {
@@ -167,8 +169,11 @@ describe('设置保存', () => {
     await saveBtn!.trigger('click');
     await flushPromises();
 
-    const calls = vi.mocked(alert).mock.calls.map(c => String(c[0]));
-    expect(calls.some(t => t.includes('设置保存失败')), `alert 应含失败提示，实际: ${JSON.stringify(calls)}`).toBe(true);
+    const { toasts } = useFeedback();
+    expect(
+      toasts.some(t => t.message.includes('设置保存失败')),
+      `应出现失败 toast，实际: ${JSON.stringify(toasts.map(t => t.message))}`
+    ).toBe(true);
   });
 });
 

@@ -12,6 +12,7 @@ vi.mock('../api/invoke', () => ({
 }));
 
 import AssetDetailView from './AssetDetailView.vue';
+import { settleConfirm } from '../composables/feedback';
 import { invoke } from '../api/invoke';
 import { useAssetsStore } from '../stores/assets';
 import { usePlatformsStore } from '../stores/platforms';
@@ -233,18 +234,18 @@ describe('凭据复制', () => {
 
 describe('凭据清除', () => {
   it('用户取消时不调用后端', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
-    // 清除按钮只在 has_credential=true 时渲染
     const w = await mountDetail({ a: asset({ has_credential: true }) });
     const btn = w.findAll('button').find(b => b.text().trim() === '清除');
     expect(btn, '有凭据时必须显示清除按钮').toBeTruthy();
     await btn!.trigger('click');
     await flushPromises();
+    // 自定义确认框：取消
+    settleConfirm(false);
+    await flushPromises();
     expect(mockedInvoke).not.toHaveBeenCalledWith('set_asset_credential', expect.anything());
   });
 
   it('确认后调用后端清除', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const w = await mountDetail({
       a: asset({ has_credential: true }),
       invokeOverrides: { set_asset_credential: { success: true, message: '凭据已清除', data: null } },
@@ -252,6 +253,8 @@ describe('凭据清除', () => {
     const btn = w.findAll('button').find(b => b.text().trim() === '清除');
     expect(btn).toBeTruthy();
     await btn!.trigger('click');
+    await flushPromises();
+    settleConfirm(true);
     await flushPromises();
     expect(mockedInvoke).toHaveBeenCalledWith('set_asset_credential', expect.objectContaining({ credential: '' }));
   });
@@ -324,20 +327,22 @@ describe('保存资产', () => {
 
 describe('删除资产', () => {
   it('取消确认时不调用 deleteAsset', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => false));
     const w = await mountDetail();
     const btn = w.findAll('button').find(b => b.text() === '删除此资产');
     expect(btn, '删除按钮必须存在').toBeTruthy();
     await btn!.trigger('click');
     await flushPromises();
+    settleConfirm(false);
+    await flushPromises();
     expect(mockedInvoke.mock.calls.some(c => c[0] === 'delete_asset')).toBe(false);
   });
 
   it('确认后调用 deleteAsset', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true));
     const w = await mountDetail();
     const btn = w.findAll('button').find(b => b.text() === '删除此资产')!;
     await btn.trigger('click');
+    await flushPromises();
+    settleConfirm(true);
     await flushPromises();
     expect(mockedInvoke.mock.calls.some(c => c[0] === 'delete_asset')).toBe(true);
   });

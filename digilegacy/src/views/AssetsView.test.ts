@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 
@@ -67,8 +67,19 @@ beforeEach(() => {
 describe('AssetsView 渲染', () => {
   it('空态：显示引导卡片而不是空白页', async () => {
     const w = await mountView();
+    await flushPromises();
     expect(w.text()).toContain('还没有登记任何数字资产');
     expect(w.text()).toContain('共 0 项');
+  });
+
+  it('加载中显示骨架屏而不是空态（避免闪烁）', async () => {
+    const store = useAssetsStore();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    // 手动把 loading 置 true，验证骨架屏渲染
+    store.loading = true;
+    const w = await mountView();
+    expect(w.find('[aria-busy="true"]').exists()).toBe(true);
   });
 
   it('有数据时渲染资产行、平台名与格式化金额', async () => {

@@ -94,6 +94,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useDashboardStore } from '../stores/dashboard';
 import { sendTestNotification } from '../api/reminders';
+import { toast } from '../composables/feedback';
 
 const dashboard = useDashboardStore();
 const checking = ref(false);
@@ -163,9 +164,9 @@ async function handleCheckIn() {
 async function saveSettings() {
   try {
     await dashboard.configureDms(settings.value.enabled, settings.value.interval);
-    alert('设置已保存');
+    toast('设置已保存');
   } catch (e) {
-    alert('设置保存失败：' + String(e));
+    toast('设置保存失败：' + String(e), 'error');
   }
 }
 

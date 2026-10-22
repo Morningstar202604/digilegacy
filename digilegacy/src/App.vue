@@ -4,13 +4,15 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
+          <!-- 品牌标：双环 + 圆心，与 app icon / favicon 保持同一套几何 -->
           <svg class="logo-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#digilegacy-logo)"/>
-            <circle cx="20" cy="20" r="9.5" stroke="#fff" stroke-width="2.2" opacity="0.95"/>
-            <circle cx="20" cy="20" r="3.2" fill="#fff"/>
+            <rect x="1" y="1" width="38" height="38" rx="9" fill="url(#digilegacy-logo)"/>
+            <circle cx="20" cy="20" r="11.6" stroke="#fff" stroke-width="2.1" opacity="0.95"/>
+            <circle cx="20" cy="20" r="7.2" stroke="#fff" stroke-width="1.2" opacity="0.6"/>
+            <circle cx="20" cy="20" r="2.9" fill="#fff"/>
             <defs>
-              <linearGradient id="digilegacy-logo" x1="1" y1="1" x2="39" y2="39" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#c56a58"/>
+              <linearGradient id="digilegacy-logo" x1="20" y1="1" x2="20" y2="39" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#c46a5c"/>
                 <stop offset="1" stop-color="#9a473b"/>
               </linearGradient>
             </defs>
@@ -108,6 +110,9 @@
     <!-- 新手引导与帮助中心 -->
     <OnboardingTour v-if="showTour" @close="showTour = false" />
     <HelpDrawer v-if="showHelp" @close="showHelp = false" @replay-tour="startTour" />
+
+    <!-- 全局反馈层：Toast + 确认框（替代原生 alert/confirm） -->
+    <FeedbackLayer />
   </div>
 </template>
 
@@ -122,6 +127,7 @@ import { useAssetsStore } from './stores/assets';
 import { startLocalReminderLoop } from './api/reminders';
 import OnboardingTour from './components/OnboardingTour.vue';
 import HelpDrawer from './components/HelpDrawer.vue';
+import FeedbackLayer from './components/FeedbackLayer.vue';
 import type { ApiResponse, SecurityStatus } from './types';
 
 interface NavRoute {

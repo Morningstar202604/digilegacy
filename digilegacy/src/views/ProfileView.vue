@@ -232,6 +232,7 @@ import { ref, onMounted } from 'vue';
 import { useDashboardStore } from '../stores/dashboard';
 import { useSecurityStore } from '../stores/security';
 import { usePlatformsStore } from '../stores/platforms';
+import { toast, confirmDialog } from '../composables/feedback';
 import { invoke, isTauriEnv } from '../api/invoke';
 import type { ApiResponse, UserProfile } from '../types';
 
@@ -271,8 +272,8 @@ const recoveryAck = ref(false);
 
 function copyRecoveryCode() {
   navigator.clipboard.writeText(recoveryCode.value).then(
-    () => { alert('已复制到剪贴板，请粘贴到安全位置保存'); },
-    () => { alert('复制失败，请手动抄写'); },
+    () => { toast('已复制到剪贴板，请粘贴到安全位置保存'); },
+    () => { toast('复制失败，请手动抄写', 'error'); },
   );
 }
 
@@ -331,11 +332,11 @@ async function toggleAutostart() {
     const res = await invoke<ApiResponse<null>>('set_autostart', { enabled: autostartEnabled.value });
     if (!res.success) {
       autostartEnabled.value = !autostartEnabled.value;
-      alert(res.message);
+      toast(res.message, 'error');
     }
   } catch (e) {
     autostartEnabled.value = !autostartEnabled.value;
-    alert(String(e));
+    toast(String(e), 'error');
   }
 }
 
@@ -395,9 +396,13 @@ async function importBackup() {
     backupMessage.value = 'Web 预览模式不支持导入备份，请在桌面版中使用';
     return;
   }
-  if (!confirm('导入备份将覆盖当前全部资产、档案与安全配置，且不可撤销。确定继续吗？')) {
-    return;
-  }
+  const ok = await confirmDialog({
+    title: '导入备份并覆盖当前数据？',
+    message: '当前全部资产、档案与安全配置将被备份文件替换，且不可撤销。',
+    confirmText: '覆盖导入',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
@@ -447,7 +452,13 @@ async function exportPatch() {
 }
 
 async function clearPatch() {
-  if (!confirm('清除全部本地政策补丁并恢复内置政策库？')) return;
+  const ok = await confirmDialog({
+    title: '清除全部政策补丁？',
+    message: '将删除所有本地导入的政策补丁，恢复为内置平台库。',
+    confirmText: '清除',
+    danger: true,
+  });
+  if (!ok) return;
   try {
     const res = await invoke<ApiResponse<number>>('clear_platform_patch');
     patchMsg.value = res.success ? `已清除 ${res.data} 条补丁` : res.message;
@@ -535,10 +546,10 @@ async function saveProfile() {
   try {
     await dashboard.saveUser(profile.value);
     await dashboard.configureDms(profile.value.dms_enabled, profile.value.check_in_interval_days);
-    alert('档案保存成功！');
+    toast('档案保存成功');
   } catch (e) {
     // 保存失败必须给用户明确反馈，不得静默
-    alert('档案保存失败：' + String(e));
+    toast('档案保存失败：' + String(e), 'error');
   }
 }
 </script>

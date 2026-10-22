@@ -11,6 +11,7 @@ vi.mock('../api/invoke', () => ({
 }));
 
 import ProfileView from './ProfileView.vue';
+import { useFeedback } from '../composables/feedback';
 import { invoke } from '../api/invoke';
 import { useSecurityStore } from '../stores/security';
 import { silenceExpectedErrors } from '../test-utils/silence';
@@ -211,9 +212,11 @@ describe('档案保存（saveProfile）', () => {
     await btn.trigger('click');
     await flushPromises();
 
-    const alerts = (globalThis.alert as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    const texts = alerts.map(c => String(c[0]));
-    expect(texts.some(t => t.includes('保存失败')), `alert 应含失败提示，实际: ${JSON.stringify(texts)}`).toBe(true);
+    const { toasts } = useFeedback();
+    expect(
+      toasts.some(t => t.message.includes('保存失败')),
+      `应出现失败 toast，实际: ${JSON.stringify(toasts.map(t => t.message))}`
+    ).toBe(true);
   });
 });
 
