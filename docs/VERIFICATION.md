@@ -94,3 +94,19 @@ CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通�
 | Rust 依赖扫描 | `cargo audit --deny vulnerabilities` | 0 漏洞（5 条 unmaintained/unsound 警告来自 Tauri 上游） |
 | npm 依赖扫描 | `npm audit --audit-level=high` | 0 漏洞 |
 | E2E 覆盖率 | `npm run test:e2e:coverage` | 语句 58.9% / 行 60.1%（26 文件，与单测口径互补） |
+
+## 发布构建验证（Windows）
+
+此前从未验证过安装包能否产出。实测发现并修复了一个发布阻塞缺陷：
+WiX 默认 codepage 1252 无法编码中文产品名「归零」，MSI 打包直接失败
+（代码全绿但用户装不上）。
+
+修复：`tauri.conf.json` 指定 `bundle.windows.wix.language = ["zh-CN"]`
++ `nsis.languages = ["SimpChinese"]`。
+
+| 产物 | 大小 | 校验 |
+|---|---|---|
+| `归零_0.1.0_x64_zh-CN.msi` | 4.79 MB | ProductName=归零, ProductVersion=0.1.0, ProductLanguage=2052 |
+| `归零_0.1.0_x64-setup.exe` (NSIS) | 3.34 MB | 生成成功 |
+
+CI 新增 `release-build` job（windows-latest）断言两个产物都存在并上传 artifact。

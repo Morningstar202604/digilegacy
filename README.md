@@ -109,9 +109,14 @@ Digital legacy data is the most private data a person owns — it contains both 
 
 ## Get started
 
-### Use the app (Windows 10/11, ~3 MB)
+### Use the app (Windows 10/11)
 
-Download the installer or the portable executable from [Releases](https://github.com/badhope/digilegacy/releases). No account, no sign-up, no network connection required.
+Download the installer from [Releases](https://github.com/badhope/digilegacy/releases). No account, no sign-up, no network connection required.
+
+| Package | Size (v0.1.0, x64) | Notes |
+|---|---|---|
+| `归零_0.1.0_x64-setup.exe` (NSIS) | **3.34 MB** | Recommended; per-user install, no admin required |
+| `归零_0.1.0_x64_zh-CN.msi` (WiX) | **4.79 MB** | For managed deployment / group policy |
 
 ```
 Installer  : DigiLegacy_*_x64-setup.exe
