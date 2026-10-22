@@ -182,6 +182,20 @@ tr:hover td{background:#f6f3ee}
 
 async function exportZip() {
   if (!report.value) return;
+  exportError.value = '';
+  exportPath.value = '';
+  try {
+    await buildAndSaveZip();
+  } catch (e) {
+    // JSZip 生成、btoa 或 IPC 任一步失败都必须可见——
+    // 旧实现只把 IPC 那一段包了 try，前面的失败会变成未处理拒绝，UI 毫无反应。
+    console.error('导出工具包失败:', e);
+    exportError.value = '导出工具包失败：' + String(e);
+  }
+}
+
+async function buildAndSaveZip() {
+  if (!report.value) return;
   // @ts-ignore - jszip 需要 new 实例
   const j = new (await import('jszip').then(m => m.default || m));
   // @ts-ignore - 避免类型推断问题
@@ -233,18 +247,11 @@ async function exportZip() {
       .join('')
   );
   // 通过 Tauri 命令保存文件
-  exportError.value = '';
-  exportPath.value = '';
-  try {
-    const res = await invoke<ApiResponse<string>>('export_zip_to_file', { content: base64 });
-    if (res.success && res.data) {
-      exportPath.value = res.data;
-    } else {
-      exportError.value = res.message || '导出工具包失败';
-    }
-  } catch (e) {
-    console.error('导出工具包失败:', e);
-    exportError.value = '导出工具包失败：' + String(e);
+  const res = await invoke<ApiResponse<string>>('export_zip_to_file', { content: base64 });
+  if (res.success && res.data) {
+    exportPath.value = res.data;
+  } else {
+    exportError.value = res.message || '导出工具包失败';
   }
 }
 

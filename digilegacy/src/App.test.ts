@@ -327,3 +327,57 @@ describe('恢复密钥流程', () => {
     expect(w.text()).toContain('NEW1-NEW2-NEW3-NEW4-NEW5-NEW6');
   });
 });
+
+describe('闲置自动锁定', () => {
+  it('超过 10 分钟无操作后自动锁定', async () => {
+    vi.useFakeTimers();
+    try {
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'security_status') {
+          return { success: true, message: '', data: { has_master_password: true, unlocked: true } };
+        }
+        return { success: true, message: '', data: [] };
+      });
+      const w = await mountApp();
+      const s = useSecurityStore();
+      s.hasMasterPassword = true;
+      s.unlocked = true;
+      await w.vm.$nextTick();
+
+      // 定时器每 30 秒检查一次；推进 11 分钟确保越过 10 分钟阈值
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+      await w.vm.$nextTick();
+
+      expect(s.unlocked, '超过闲置阈值必须自动锁定').toBe(false);
+      expect(w.find('.lock-overlay').exists()).toBe(true);
+      w.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('未设主密码时闲置不会锁定（明文模式无需解锁）', async () => {
+    vi.useFakeTimers();
+    try {
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'security_status') {
+          return { success: true, message: '', data: { has_master_password: false, unlocked: true } };
+        }
+        return { success: true, message: '', data: [] };
+      });
+      const w = await mountApp();
+      const s = useSecurityStore();
+      s.hasMasterPassword = false;
+      await w.vm.$nextTick();
+
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+      await w.vm.$nextTick();
+
+      expect(s.unlocked).toBe(true);
+      expect(w.find('.lock-overlay').exists()).toBe(false);
+      w.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

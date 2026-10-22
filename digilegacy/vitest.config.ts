@@ -36,11 +36,11 @@ export default defineConfig({
       ],
       // 阈值按「真实产品口径」设定，并预留逐步提升空间。
       thresholds: {
-        // 补完组件层后的实测：76.58 / 77.37 / 69.56 / 77.48
-        statements: 75,
-        branches: 76,
-        functions: 68,
-        lines: 76,
+        // 补完 App / ReportView / AssetDetail 后的实测：79.94 / 79.75 / 73.41 / 81.11
+        statements: 78,
+        branches: 78,
+        functions: 71,
+        lines: 79,
       },
     },
   },

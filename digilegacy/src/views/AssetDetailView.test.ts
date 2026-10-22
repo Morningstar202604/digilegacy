@@ -289,3 +289,56 @@ describe('外部链接', () => {
     expect(w.text()).toContain('暂无该平台官方链接');
   });
 });
+
+describe('保存资产', () => {
+  it('点击保存调用 updateAsset 并返回上一页', async () => {
+    const w = await mountDetail();
+    const saveBtn = w.findAll('button').find(b => b.text() === '保存修改');
+    expect(saveBtn, '保存按钮必须存在').toBeTruthy();
+
+    await saveBtn!.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'update_asset')).toBe(true);
+  });
+
+  it('保存失败时不跳转（异常向上冒泡，由调用方处理）', async () => {
+    const w = await mountDetail({
+      invokeOverrides: { update_asset: { success: false, message: '锁定状态', data: null } },
+    });
+    const saveBtn = w.findAll('button').find(b => b.text() === '保存修改')!;
+
+    // 组件内的 async 处理器会抛出未捕获拒绝；用 Vue 的错误钩子接住，
+    // 否则会污染整个测试进程（曾导致 1 个 unhandled error）。
+    const errors: unknown[] = [];
+    const app = w.vm.$;
+    app.appContext.config.errorHandler = (e: unknown) => errors.push(e);
+
+    await saveBtn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'update_asset')).toBe(true);
+    expect(errors.length, '失败必须有异常传出，不能静默吞掉').toBeGreaterThan(0);
+  });
+});
+
+describe('删除资产', () => {
+  it('取消确认时不调用 deleteAsset', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    const w = await mountDetail();
+    const btn = w.findAll('button').find(b => b.text() === '删除此资产');
+    expect(btn, '删除按钮必须存在').toBeTruthy();
+    await btn!.trigger('click');
+    await flushPromises();
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'delete_asset')).toBe(false);
+  });
+
+  it('确认后调用 deleteAsset', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    const w = await mountDetail();
+    const btn = w.findAll('button').find(b => b.text() === '删除此资产')!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'delete_asset')).toBe(true);
+  });
+});
