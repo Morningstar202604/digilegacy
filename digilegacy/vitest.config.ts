@@ -36,11 +36,11 @@ export default defineConfig({
       ],
       // 阈值按「真实产品口径」设定，并预留逐步提升空间。
       thresholds: {
-        // 补完 DiscoverView / AssetDetailView 后的实测：52.07 / 51.90 / 43.89 / 53.98
-        statements: 50,
-        branches: 49,
-        functions: 41,
-        lines: 51,
+        // 补完 7 个视图后的实测：69.88 / 72.34 / 63.76 / 70.75
+        statements: 68,
+        branches: 70,
+        functions: 61,
+        lines: 68,
       },
     },
   },

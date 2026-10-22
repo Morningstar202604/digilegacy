@@ -292,7 +292,12 @@ const templates: LegalTemplate[] = [
 
 const filteredTemplates = computed(() => {
   if (typeFilter.value === 'all') return templates;
-  return templates.filter(t => t.type === typeFilter.value);
+  // typeFilter 存的是 templateTypes 的 value（英文 key，如 'will'），
+  // 而模板的 type 字段是中文标签（如 '遗嘱'）。此处必须先映射成标签再比较，
+  // 否则任何分类筛选都会返回空列表（历史缺陷）。
+  const label = templateTypes.find(t => t.value === typeFilter.value)?.label;
+  if (!label) return templates;
+  return templates.filter(t => t.type === label);
 });
 
 const previewTemplate = ref<LegalTemplate | null>(null);
