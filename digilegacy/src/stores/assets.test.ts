@@ -119,3 +119,68 @@ describe('assets store 失败分支', () => {
     await expect(s.deleteAsset(1)).rejects.toThrow('删除失败');
   });
 });
+
+describe('assets store 详情与更新', () => {
+  it('loadAssetById 成功时写入 currentAsset', async () => {
+    const s = useAssetsStore();
+    mockedInvoke.mockResolvedValueOnce({ success: true, message: '', data: asset({ id: 7, platform_name: '微信' }) });
+
+    const result = await s.loadAssetById(7);
+
+    expect(result?.id).toBe(7);
+    expect(s.currentAsset?.platform_name).toBe('微信');
+  });
+
+  it('loadAssetById 返回 null 时置空而不是保留旧值', async () => {
+    const s = useAssetsStore();
+    await s.loadAssetById(1); // 先设一个
+    mockedInvoke.mockReset();
+    mockedInvoke.mockResolvedValueOnce({ success: true, message: '', data: null });
+
+    const result = await s.loadAssetById(999);
+
+    expect(result).toBeNull();
+    expect(s.currentAsset).toBeNull();
+  });
+
+  it('loadAssetById 失败时保留旧值', async () => {
+    const s = useAssetsStore();
+    mockedInvoke.mockResolvedValueOnce({ success: true, message: '', data: asset({ id: 3 }) });
+    await s.loadAssetById(3);
+
+    mockedInvoke.mockReset();
+    mockedInvoke.mockRejectedValueOnce(new Error('IPC 断开'));
+    const result = await s.loadAssetById(3);
+
+    expect(result?.id).toBe(3);
+  });
+
+  it('updateAsset 成功后重新加载列表', async () => {
+    const s = useAssetsStore();
+    mockedInvoke
+      .mockResolvedValueOnce({ success: true, message: '', data: null })
+      .mockResolvedValueOnce({ success: true, message: '', data: [asset({ id: 1 })] });
+
+    await s.updateAsset(1, {
+      platform_id: 1, account_identifier: 'x', account_description: '',
+      category: 'property', estimated_value: 1, disposal_method: 'inherit',
+      heir_name: undefined, heir_contact: undefined, notes: '',
+    });
+
+    expect(mockedInvoke.mock.calls.map(c => c[0])).toEqual(['update_asset', 'get_all_assets']);
+    expect(s.assets).toHaveLength(1);
+  });
+
+  it('updateAsset 失败时抛错且不刷新', async () => {
+    const s = useAssetsStore();
+    mockedInvoke.mockResolvedValueOnce({ success: false, message: '锁定状态', data: null });
+
+    await expect(s.updateAsset(1, {
+      platform_id: 1, account_identifier: 'x', account_description: '',
+      category: 'property', estimated_value: 1, disposal_method: 'inherit',
+      heir_name: undefined, heir_contact: undefined, notes: '',
+    })).rejects.toThrow('锁定状态');
+
+    expect(mockedInvoke.mock.calls.map(c => c[0])).toEqual(['update_asset']);
+  });
+});

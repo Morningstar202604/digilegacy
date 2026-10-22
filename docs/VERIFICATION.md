@@ -8,7 +8,7 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 188 tests / 19 files，statements 69.9%（72.3 / 63.8 / 70.8，阈值 68/70/61/68） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 216 tests / 21 files，statements 76.6%（77.4 / 69.6 / 77.5，阈值 75/76/68/76） |
 | 生产构建 | `npm run build` | PASS |
 | E2E（Playwright） | `npx playwright test` | **31 passed**（7 个视图 + 完整发现链路 + 13 项全站 UI 健全性） |
 | 格式 | `cargo fmt --check` | PASS |
