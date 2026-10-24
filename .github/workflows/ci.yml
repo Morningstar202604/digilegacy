@@ -14,6 +14,9 @@ concurrency:
 jobs:
   frontend:
     name: 前端 · typecheck / test+coverage / build
+    # 镜像仓库（x33834 / Morningstar202604 / Gitee / GitCode）保留同一份工作流，
+    # 但只在 canonical 仓库执行，避免镜像账号消耗 Actions 额度。
+    if: github.repository == 'badhope/digilegacy'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -63,6 +66,7 @@ jobs:
 
   e2e:
     name: E2E · Playwright（7 个视图交互链路）
+    if: github.repository == 'badhope/digilegacy'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -114,6 +118,7 @@ jobs:
 
   rust:
     name: Rust · fmt / clippy / test
+    if: github.repository == 'badhope/digilegacy'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -156,6 +161,7 @@ jobs:
 
   heartbeat-server:
     name: 心跳服务器 · 语法与行为
+    if: github.repository == 'badhope/digilegacy'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -178,6 +184,7 @@ jobs:
   # 一直没被发现——代码全绿但用户根本装不上。
   release-build:
     name: 发布构建 · Windows 安装包
+    if: github.repository == 'badhope/digilegacy'
     runs-on: windows-latest
     defaults:
       run:

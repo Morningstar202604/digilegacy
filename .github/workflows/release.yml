@@ -22,6 +22,7 @@ concurrency:
 jobs:
   build-and-release:
     name: 构建并发布 Windows 安装包
+    if: github.repository == 'badhope/digilegacy'
     runs-on: windows-latest
     defaults:
       run:
@@ -91,6 +92,7 @@ jobs:
   verify-release:
     name: 校验 Release 产物
     needs: build-and-release
+    if: github.repository == 'badhope/digilegacy'
     runs-on: ubuntu-24.04
     steps:
       - name: 下载并校验 SHA-256
