@@ -33,7 +33,8 @@ Nothing yet.
 
 ### Changed
 
-- README and `docs/VERIFICATION.md` re-derived from real runs: 86 Rust tests, 257 frontend unit tests, 37 E2E, coverage 79.1/78.4/72.6/80.5.
+- README and `docs/VERIFICATION.md` re-derived from real runs: 86 Rust tests, 265 frontend unit tests, 37 E2E, coverage 79.4/79.0/73.2/80.8.
+- `src/router.ts` and `src/api/invoke.ts` — previously 0% / partially covered despite being the single entry points for navigation and IPC — now have dedicated unit tests (`router.test.ts`, extended `invoke.test.ts`), covering the 404 fallback, per-route `document.title`, scroll restoration, mock routing, and the "no backend" error path.
 
 ## [0.1.0] - 2026-10-22
 

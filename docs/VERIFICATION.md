@@ -6,9 +6,9 @@
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|
-| 依赖一致性 | `npm ci` | PASS |
+| 依赖就绪 | `npm install`（本地；CI 用 `npm ci`） | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 257 tests / 25 files，statements 79.11%（branches 78.44 / functions 72.64 / lines 80.45，阈值 78/78/71/79） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 265 tests / 26 files，statements 79.41%（branches 79.00 / functions 73.17 / lines 80.78，阈值 78/78/71/79） |
 | 生产构建 | `npm run build` | PASS |
 | E2E（Playwright） | `npx playwright test` | **37 passed**（7 视图 + 发现链路 + 全站 UI 健全性 + 深色模式 + 视觉验收） |
 | 格式 | `cargo fmt --check` | PASS |
@@ -114,7 +114,7 @@ WiX 默认 codepage 1252 无法编码中文产品名「归零」，MSI 打包直
 
 CI 新增 `release-build` job（windows-latest）断言两个产物都存在并上传 artifact。
 
-## 2026-10-23 审计修复验证（本轮）
+## 2026-10-23 审计修复验证（历史轮 · 数字为当时状态）
 
 本轮审计修复的每一项都带真实命令与结果。凡是未重跑的历史结论，均标注为「历史」。
 
@@ -183,8 +183,8 @@ CI 新增 `release-build` job（windows-latest）断言两个产物都存在并�
 | 命令 | 结果 |
 |---|---|
 | `npx vue-tsc --noEmit` | exit 0 |
-| `npm test` | 25 files / **257 passed**，stderr 无未预期错误 |
-| `npm run test:coverage` | 79.11 / 78.44 / 72.64 / 80.45（阈值 78/78/71/79） |
+| `npm test` | 26 files / **265 passed**，stderr 无未预期错误 |
+| `npm run test:coverage` | 79.41 / 79.00 / 73.17 / 80.78（阈值 78/78/71/79） |
 | `npm run build` | PASS；**产物中已无 mock 分块**（`dist/assets` 不含 `mock-*.js`） |
 | `npm run build:demo` | PASS；`docs/demo/` 0.91 MB，hash 路由，浏览器实测无控制台错误 |
 | `npx playwright test` | **37 passed** |
@@ -195,5 +195,25 @@ CI 新增 `release-build` job（windows-latest）断言两个产物都存在并�
 ### 明确未验证
 
 - macOS / Linux 安装包构建：仅 Windows 目标在 CI 中产出。
-- CI 上本轮改动的运行结果：需推送后由 Actions 确认。
 - 演示视频为 32 秒 1200×800 mp4，未做多语言字幕。
+
+CI 已确认：run `40072253561`（sha `9a55a80`）5 个 job 全绿；Release run `40075221850` 的
+build 与 verify 两个 job 全绿，Release `v0.2.0` 的 MSI/NSIS 已独立复核 SHA-256 一致。
+
+### 收尾轮补充（路由与 IPC 入口的回归网）
+
+`src/router.ts` 与 `src/api/invoke.ts` 是导航与 IPC 的唯一入口，此前 router 为 0% 覆盖。
+本轮补 `src/router.test.ts`（5 例：404 兜底、深层未知路径、`document.title` 同步、
+根路径重定向、scrollBehavior 恢复）与 `invoke.test.ts` 扩展（+3 例：纯前端生产构建报错、
+`IS_WEB_PREVIEW` 在 dev/Tauri 两种环境下的取值）。
+
+| 命令 | 结果 |
+|---|---|
+| `npx vitest run src/router.test.ts` | 5 passed |
+| `npx vitest run src/api/invoke.test.ts` | 8 passed，invoke.ts 覆盖率 100% |
+| `npm test` | 26 files / **265 passed** |
+| `npm run test:coverage` | 79.41 / 79.00 / 73.17 / 80.78（阈值 78/78/71/79） |
+| `node scripts/demo-media.mjs`（SKIP_VIDEO=1） | 10 张截图重出，标题断言全部匹配 |
+
+`scripts/demo-media.mjs` 的 `title` 字段此前未被断言（只检查标题非空），现在会在标题与
+路由预期不符时直接失败，避免交付错图。

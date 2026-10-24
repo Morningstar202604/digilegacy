@@ -77,4 +77,31 @@ describe('invoke 路由', () => {
     expect(mockInvoke).toHaveBeenCalledWith('get_all_assets', undefined);
     expect(tauriInvoke).not.toHaveBeenCalled();
   });
+
+  it('纯前端生产构建（非 Tauri、非 dev、非 demo）：明确报错而不是静默返回 undefined', async () => {
+    // 这条分支只有「把 dist 直接丢给浏览器、又没有演示开关」时才会命中。
+    // 静默失败会让用户以为数据为空；必须给出可操作的提示。
+    vi.stubEnv('DEV', false);
+    try {
+      const { invoke } = await loadModule();
+      await expect(invoke('get_all_assets')).rejects.toThrow(/未连接本地后端/);
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(tauriInvoke).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('IS_WEB_PREVIEW', () => {
+  it('dev 环境且非 Tauri 时为 true', async () => {
+    const { IS_WEB_PREVIEW } = await loadModule();
+    expect(IS_WEB_PREVIEW).toBe(true);
+  });
+
+  it('Tauri 环境永远为 false（桌面版不得加载演示后端）', async () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    const { IS_WEB_PREVIEW } = await loadModule();
+    expect(IS_WEB_PREVIEW).toBe(false);
+  });
 });

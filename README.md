@@ -214,12 +214,12 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 | Check | Command | Status |
 |---|---|---|
 | Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **86 passing, 1 ignored** |
-| Frontend unit tests | `npm test` (in `digilegacy/`) | **257 passing** |
+| Frontend unit tests | `npm test` (in `digilegacy/`) | **265 passing** |
 | Frontend E2E | `npm run test:e2e` (in `digilegacy/`) | **37 passing** |
 | Heartbeat server behaviour | `node server/heartbeat-server.test.mjs` | **9 assertions passing** |
 | Frontend type check | `npx vue-tsc --noEmit` | passing |
 | Production build | `npm run build` | passing |
-| Coverage (statements/branches/functions/lines) | `npm run test:coverage` | **79.1 / 78.5 / 72.6 / 80.5** (gates 78/78/71/79) |
+| Coverage (statements/branches/functions/lines) | `npm run test:coverage` | **79.4 / 79.0 / 73.2 / 80.8** (gates 78/78/71/79) |
 
 > `.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in five jobs:
 >
@@ -234,7 +234,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 ### Test coverage — what the numbers actually cover
 
-Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 78 / branches 78 / functions 71 / lines 79), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured unit coverage is 79.4% statements (78.8% branches, 73.6% functions, 80.6% lines). A separate Playwright E2E suite covers the view layer end-to-end (see below):
+Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 78 / branches 78 / functions 71 / lines 79), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured unit coverage is 79.4% statements (79.0% branches, 73.2% functions, 80.8% lines). A separate Playwright E2E suite covers the view layer end-to-end (see below):
 
 - **`src/api/mock.ts` is development-preview code only.** It is not in the production bundle (`npm run build` does not include it — verified by grepping `dist/`). Its 14 tests exercise the browser demo backend, not the shipped app. They are still useful as a regression net for the preview, but they must not be counted as product coverage.
 - **The view layer** now has two layers of protection:
@@ -338,6 +338,6 @@ MIT — see [LICENSE](LICENSE).
 - **六大模块**：资产发现（152 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
 - **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（报告与工具包导出不含凭据；加密备份含密文以支持换机迁移）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 86 项通过（另有 1 项 ignored）、前端 `npm test` 257 项通过、Playwright E2E 37 项通过、心跳服务器 9 项断言；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
+- **测试**：`cargo test` 86 项通过（另有 1 项 ignored）、前端 `npm test` 265 项通过、Playwright E2E 37 项通过、心跳服务器 9 项断言；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
 
 *数字有数，归处有路。*

@@ -23,7 +23,7 @@ const BASE = process.env.DEMO_BASE || 'http://localhost:1420';
 const PAGES = [
   { file: '01-dashboard', path: '/dashboard', title: '仪表板' },
   { file: '02-discover', path: '/discover', title: '资产发现' },
-  { file: '03-assets', path: '/assets', title: '我的数字资产' },
+  { file: '03-assets', path: '/assets', title: '我的资产' },
   { file: '04-asset-detail', path: '/assets/1', title: '资产详情' },
   { file: '05-profile', path: '/profile', title: '我的档案' },
   { file: '06-dms', path: '/dms', title: '安心传承' },
@@ -72,8 +72,12 @@ async function captureScreenshots(browser) {
   for (const item of PAGES) {
     await page.goto(`${BASE}${item.path}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(700);
-    const heading = await page.locator('.header-title').textContent().catch(() => '');
-    if (!heading?.trim()) throw new Error(`${item.file}: 页面标题为空，未渲染完成`);
+    const heading = (await page.locator('.header-title').textContent().catch(() => '')) ?? '';
+    if (!heading.trim()) throw new Error(`${item.file}: 页面标题为空，未渲染完成`);
+    // 标题不一致通常意味着路由没生效或截到了 404/上一页，直接失败比交付错图好
+    if (!heading.includes(item.title)) {
+      throw new Error(`${item.file}: 期望标题含「${item.title}」，实际「${heading.trim()}」`);
+    }
     await page.screenshot({ path: path.join(SHOTS, `${item.file}.png`) });
     console.log(`captured ${item.file}.png  ← ${item.path} 「${heading.trim()}」`);
   }
