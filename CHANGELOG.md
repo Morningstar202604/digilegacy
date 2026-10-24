@@ -37,6 +37,7 @@ Nothing yet.
 
 ### Changed
 
+- **README rewritten as a showcase, not a manual.** Both `README.md` and `README.zh-CN.md` now open with the real dashboard screenshot, a one-line pitch, the live-demo/download links, a four-stat band (152 platforms · 42 commands · AES-256-GCM · 0 servers), an eight-shot guided tour, a capability grid, a verification table and a tech stack. Module layering and the encryption data flow stay in `docs/ARCHITECTURE.md`, verification evidence in `docs/VERIFICATION.md`, and the long-form comparison, security notes and FAQ live on the website (EN + 中文) instead of bloating the front page.
 - README and `docs/VERIFICATION.md` re-derived from real runs: 86 Rust tests, 265 frontend unit tests, 37 E2E, coverage 79.4/79.0/73.2/80.8.
 - `src/router.ts` and `src/api/invoke.ts` — previously 0% / partially covered despite being the single entry points for navigation and IPC — now have dedicated unit tests (`router.test.ts`, extended `invoke.test.ts`), covering the 404 fallback, per-route `document.title`, scroll restoration, mock routing, and the "no backend" error path.
 
