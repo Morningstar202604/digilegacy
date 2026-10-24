@@ -77,7 +77,7 @@ E2E does not feed the v8 coverage numbers. The two are complementary: unit cover
 
 ## Known limits
 
-- The UI is Simplified Chinese only. Strings are inline in components; there is no i18n layer yet.
+- The desktop UI is Simplified Chinese only. Strings are inline in components; there is no i18n layer yet. The website (`docs/index.html` + `docs/zh/index.html`), `README.md` / `README.zh-CN.md` and the demo banner are bilingual, but that is content parity, not runtime internationalisation.
 - Migrations are still additive `ALTER TABLE` checks; `PRAGMA user_version` now records the baseline (`SCHEMA_VERSION = 2`), so the first destructive migration should branch on it rather than on column presence.
 - `db.rs` is the largest module (~3k lines). Platform queries, asset CRUD, profile, security, backup, and DMS all live there. Splitting it by domain is the highest-value refactor left, but it is not urgent while the test suite covers the seams.
 - The public demo is a static build of the real UI over the mock backend. It is a showcase, not a security boundary: its data lives unencrypted in `localStorage` and the banner in the UI says so.

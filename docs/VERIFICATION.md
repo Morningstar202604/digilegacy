@@ -217,3 +217,20 @@ build 与 verify 两个 job 全绿，Release `v0.2.0` 的 MSI/NSIS 已独立复�
 
 `scripts/demo-media.mjs` 的 `title` 字段此前未被断言（只检查标题非空），现在会在标题与
 路由预期不符时直接失败，避免交付错图。
+
+### 双语官网与截图交付（2026-10-24 追加）
+
+| 检查项 | 命令 / 方法 | 结果 |
+|---|---|---|
+| 内部链接完整性 | 解析 `docs/index.html` 与 `docs/zh/index.html` 的全部 href/src/poster，逐个 stat | 两页各 62 条，缺失 0 |
+| HTML 结构 | 自写 HTMLParser 栈式校验 | 两页均无未闭合/错配标签 |
+| 语言切换 | Playwright 点击 `.lang a`，双向验证 | `zh/#screenshots → en/#screenshots`、`en/#security → zh/#security` |
+| 首屏截图 | `img.naturalWidth` 断言 | 2400（真实加载，非占位） |
+| 截图区 | 逐段滚动触发 lazy load 后统计 | 10/10 加载成功 |
+| 演示视频 | `video.readyState` + 元数据 | 32.28s / 1200×800，可播放 |
+| 双语内容纯度 | 去标签后统计可见文本 | 英文页残留中文仅品牌名与「中文官网」入口；中文页仅代码块含英文 |
+| README 锚点 | 标题 slug 与 `](#…)` 比对 | 两个 README 各 0 失效 |
+| 线上部署 | `curl -o /dev/null -w %{http_code}` | `/`、`/zh/`、`/demo/` 均 200；三套镜像的 `/zh/` 均 200 |
+| CI | GitHub Actions run | `2cf8aa4` 5 job 全绿 |
+
+新增文件：`docs/site.css`（两站共用）、`docs/zh/index.html`（完整中文站）、`README.zh-CN.md`。

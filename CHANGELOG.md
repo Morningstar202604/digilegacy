@@ -18,7 +18,11 @@ Nothing yet.
 - **Command-layer input validation**: 8 KB text caps, finite/non-negative value bounds, positive platform id, 1–365 day DMS interval, 500-char profile fields.
 - **Heartbeat server hardening**: `/check` requires `Authorization: Bearer $HEARTBEAT_ADMIN_TOKEN` (503 when unset — fail closed), unregistered tokens are rejected with 403, alert state persists across restarts and resets on the next heartbeat, `/health` probe, 413 on oversized bodies, atomic state writes. Covered by `server/heartbeat-server.test.mjs`.
 - **404 route** with a recovery path instead of a blank page; `document.title` now tracks the active route.
-- **Demo media pipeline** (`scripts/demo-media.mjs`): screenshots for nine screens plus dark mode, and a 32-second walkthrough video.
+- **Bilingual website.** `docs/zh/index.html` is a full Chinese counterpart of the English site (problem, 8 features, 10 screenshots, security, comparison, getting started, roadmap, FAQ, footer), sharing `docs/site.css`. The language switch sits in the nav as an `EN | 中文` pill, stays visible when the section links collapse on narrow screens, marks the current language with `aria-current`, and preserves the section anchor when switching. Bidirectional `hreflang`, per-page `canonical`/`og:locale`, and `zh/` entries in the sitemap.
+- **App screenshot above the fold.** The hero now shows the real 2400×1600 dashboard capture; the gallery grew from 7 to 10 images (adding asset detail, profile and dark mode) and every shot links to the full-size PNG.
+- **`README.zh-CN.md`** — the Chinese documentation is now a standalone file instead of a section at the bottom of an English README. Both READMEs cross-link at the top and their tables of contents were re-checked (0 broken anchors).
+- **Bilingual demo banner** in the static demo build, so the "do not enter real credentials" warning is readable to English visitors too.
+- **Demo media pipeline** (`scripts/demo-media.mjs`): ten screenshots (nine screens + dark mode) and a 32-second walkthrough video. Each capture asserts the page header matches the expected title, so a wrong-route screenshot fails the run instead of shipping.
 
 ### Fixed
 
