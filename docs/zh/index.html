@@ -208,7 +208,7 @@
     <h2>截图 — 看看程序长什么样</h2>
     <p class="sub">原生桌面应用，安装约 3.5 MB，窗口 1200×800。界面为简体中文（主要目标语言）；英文界面在路线图上。点击任意截图可看原图。</p>
     <figure style="margin-bottom:26px">
-      <video controls preload="metadata" poster="../screenshots/01-dashboard.png" style="width:100%;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(34,51,59,.10)">
+      <video class="walkthrough" controls preload="metadata" poster="../screenshots/01-dashboard.png">
         <source src="../media/demo-walkthrough.mp4" type="video/mp4">
         你的浏览器不支持视频标签——<a href="../media/demo-walkthrough.mp4">下载这段 32 秒演示</a>。
       </video>
@@ -441,5 +441,14 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
   </div>
 </footer>
 
+
+<script>
+// 语言切换保留当前章节锚点：从中文站「截图」切到英文站仍停在截图区
+document.querySelectorAll('.lang a').forEach(function (a) {
+  a.addEventListener('click', function () {
+    if (location.hash) a.href = a.getAttribute('href').split('#')[0] + location.hash;
+  });
+});
+</script>
 </body>
 </html>

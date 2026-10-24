@@ -101,3 +101,6 @@ footer h4{color:#fff;font-size:14px;margin:0 0 10px;letter-spacing:.4px}
 footer ul{list-style:none;margin:0;padding:0}
 footer li{margin-bottom:6px}
 .mirror{display:flex;gap:14px;flex-wrap:wrap}
+
+/* walkthrough video: 3:2 is the app window ratio, and capping the width keeps the gallery visible */
+.walkthrough{display:block;width:100%;max-width:880px;margin:0 auto;aspect-ratio:3/2;background:#0d1418;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(34,51,59,.10)}
