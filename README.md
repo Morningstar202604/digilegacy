@@ -121,12 +121,11 @@ Download the installer from [Releases](https://github.com/badhope/digilegacy/rel
 
 | Package | Size (v0.2.0, x64) | Notes |
 |---|---|---|
-| `归零_0.2.0_x64-setup.exe` (NSIS) | ~3.4 MB | Recommended; per-user install, no admin required |
-| `归零_0.2.0_x64_zh-CN.msi` (WiX) | ~4.8 MB | For managed deployment / group policy |
+| `DigiLegacy_0.2.0_x64-setup.exe` (NSIS) | ~3.7 MB | Recommended; per-user install, no admin required |
+| `DigiLegacy_0.2.0_x64_zh-CN.msi` (WiX) | ~5.2 MB | For managed deployment / group policy |
 
 ```
-Installer  : DigiLegacy_*_x64-setup.exe
-Portable   : digilegacy.exe
+Installer  : DigiLegacy_*_x64-setup.exe (ASCII file name; the window title still reads 归零 DigiLegacy)
 Database   : %APPDATA%\com.digilegacy.app\digilegacy.db
 ```
 

@@ -80,7 +80,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          draft: true
+          # 直接发布而不是草稿：草稿对 verify-release 不可见（gh release download
+          # 默认只在已发布版本里找），会造成「构建成功、校验必失败」的假红。
+          draft: false
           generate_release_notes: true
           files: |
             digilegacy/src-tauri/target/release/bundle/msi/*.msi
@@ -101,11 +103,22 @@ jobs:
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
+          # Release 刚创建时资产可能还在上传；最多重试 6 次（约 1 分钟）
+          for i in $(seq 1 6); do
+            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then break; fi
+            echo "等待 Release 可见（第 $i 次）…"
+            sleep 10
+          done
           gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
             --jq '.assets[] | "\(.name)\t\(.size)"' | tee /tmp/assets.tsv
           grep -q '\.msi' /tmp/assets.tsv
           grep -q 'setup\.exe' /tmp/assets.tsv
           grep -q 'digest-sha256' /tmp/assets.tsv
+          # 文件名不得以 _ 开头：说明 productName 含非 ASCII 字符时打包器把前缀吞了。
+          if grep -qE '^_' /tmp/assets.tsv; then
+            echo "::error::安装包文件名以 _ 开头，检查 tauri.conf.json 的 productName"
+            exit 1
+          fi
           mkdir -p /tmp/rel && cd /tmp/rel
           gh release download "$TAG" --repo "${{ github.repository }}"
           sha256sum -c digest-sha256.txt

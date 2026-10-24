@@ -1,5 +1,5 @@
 {
-  "productName": "归零",
+  "productName": "DigiLegacy",
   "version": "0.2.0",
   "identifier": "com.digilegacy.app",
   "build": {
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "归零 - 数字遗产管理系统",
+        "title": "归零 DigiLegacy - 数字遗产管理系统",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
