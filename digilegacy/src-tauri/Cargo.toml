@@ -1,9 +1,12 @@
 [package]
 name = "digilegacy"
-version = "0.1.0"
+version = "0.2.0"
 description = "归零 - 数字遗产管理系统"
 authors = ["DigiLegacy Team"]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/badhope/digilegacy"
+readme = "../../README.md"
 
 [lib]
 name = "digilegacy_lib"

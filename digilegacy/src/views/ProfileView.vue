@@ -62,23 +62,13 @@
 
       <div class="card">
         <div class="card-title mb-16">⏰ Dead Man's Switch</div>
-        <div class="form-group">
-          <label class="form-label" for="pf-dms-interval">检查间隔</label>
-          <select class="form-select" id="pf-dms-interval" v-model.number="profile.check_in_interval_days">
-            <option :value="7">每周</option>
-            <option :value="14">每两周</option>
-            <option :value="30">每月</option>
-            <option :value="60">每两月</option>
-            <option :value="90">每季度</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="flex items-center gap-8" style="cursor: pointer;">
-            <input type="checkbox" v-model="profile.dms_enabled" style="width: 18px; height: 18px;" />
-            <span style="font-weight: 500;">启用 Dead Man's Switch</span>
-          </label>
-          <p class="form-hint">开启后将在每次到达检查周期时提醒你确认安全</p>
-        </div>
+        <p style="font-size: 13px; color: var(--gray-600);">
+          检查间隔与开关只在「安心传承」页维护，避免两处设置互相覆盖。
+        </p>
+        <p class="form-hint" style="margin-top: 8px;">
+          当前：{{ dmsSummary }}
+        </p>
+        <router-link to="/dms" class="btn btn-secondary btn-sm mt-16">前往「安心传承」设置 →</router-link>
       </div>
     </div>
 
@@ -227,11 +217,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
 import { useDashboardStore } from '../stores/dashboard';
 import { useSecurityStore } from '../stores/security';
 import { usePlatformsStore } from '../stores/platforms';
+import { useAssetsStore } from '../stores/assets';
 import { toast, confirmDialog } from '../composables/feedback';
 import { invoke, isTauriEnv } from '../api/invoke';
 import type { ApiResponse, UserProfile } from '../types';
@@ -239,6 +230,7 @@ import type { ApiResponse, UserProfile } from '../types';
 const dashboard = useDashboardStore();
 const security = useSecurityStore();
 const platforms = usePlatformsStore();
+const assets = useAssetsStore();
 
 const masterPassword = ref('');
 const masterPassword2 = ref('');
@@ -413,7 +405,14 @@ async function importBackup() {
     backupOk.value = res.success;
     backupMessage.value = res.success ? `${res.message}：${res.data}` : res.message;
     if (res.success) {
-      await security.refresh();
+      // 备份已覆盖数据库：必须让所有数据视图重新拉取，
+      // 否则用户看到的是导入前的旧列表，会误判「恢复失败」并反复导入。
+      await Promise.all([
+        security.refresh(),
+        dashboard.refreshAll(),
+        assets.loadAssets(),
+        platforms.loadPlatforms(true),
+      ]);
     }
   } catch (e) {
     backupOk.value = false;
@@ -519,10 +518,23 @@ const profile = ref<UserProfile>({
   created_at: '', updated_at: '',
 });
 
+/** DMS 配置的唯一事实源是 dms_config（安心传承页维护），档案页只读展示。 */
+const dmsSummary = computed(() => {
+  const st = dashboard.checkInStatus;
+  if (!st) return '读取中…';
+  if (!st.dms_enabled) return '未启用';
+  return `已启用 · 每 ${st.interval_days} 天确认一次`;
+});
+
 onMounted(async () => {
-  await dashboard.loadUser();
+  await Promise.all([dashboard.loadUser(), dashboard.loadCheckInStatus()]);
   if (dashboard.user) {
     profile.value = { ...profile.value, ...dashboard.user };
+    // 档案表里的 DMS 副本可能是旧值；显示与保存都跟随 dms_config
+    if (dashboard.checkInStatus) {
+      profile.value.dms_enabled = dashboard.checkInStatus.dms_enabled;
+      profile.value.check_in_interval_days = dashboard.checkInStatus.interval_days;
+    }
   }
   if (isTauri) {
     try {
@@ -545,7 +557,8 @@ onMounted(async () => {
 async function saveProfile() {
   try {
     await dashboard.saveUser(profile.value);
-    await dashboard.configureDms(profile.value.dms_enabled, profile.value.check_in_interval_days);
+    // 不再把档案页里的旧 DMS 值回写 dms_config：那会让用户在「安心传承」
+    // 设好的 90 天周期，被一次无关的「保存档案」静默改回 30 天。
     toast('档案保存成功');
   } catch (e) {
     // 保存失败必须给用户明确反馈，不得静默

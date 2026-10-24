@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
 .tour-card {
   position: fixed;
   width: 340px;
-  background: var(--gray-0, #fffdfa);
+  background: var(--surface);
   border-radius: 14px;
   padding: 18px 20px 14px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);

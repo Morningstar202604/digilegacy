@@ -14,6 +14,11 @@ static DB_PATH: Lazy<Mutex<Option<PathBuf>>> = Lazy::new(|| Mutex::new(None));
 /// 全局共享数据库连接（启用 WAL + busy_timeout，避免并发锁死）
 static CONN: Lazy<Mutex<Option<Connection>>> = Lazy::new(|| Mutex::new(None));
 
+/// 当前 schema 版本，写入 `PRAGMA user_version`。
+/// 没有版本号时，未来任何一次加列/改表都无法判断「该不该迁移」，
+/// 只能靠 PRAGMA table_info 逐列猜；版本号是后续升级的安全阀。
+const SCHEMA_VERSION: i64 = 2;
+
 /// 初始化数据库
 pub fn init_database(app_handle: &AppHandle) -> Result<(), String> {
     let app_dir = app_handle
@@ -44,6 +49,8 @@ pub(crate) fn init_database_at(db_path: PathBuf) -> Result<(), String> {
 
     create_tables(&conn).map_err(|e| format!("创建表失败: {}", e))?;
     migrate_schema(&conn).map_err(|e| format!("数据库迁移失败: {}", e))?;
+    conn.pragma_update(None, "user_version", SCHEMA_VERSION)
+        .map_err(|e| format!("写入 schema 版本失败: {}", e))?;
     sync_platforms(&conn)?;
 
     conn.execute(
@@ -721,6 +728,76 @@ pub fn get_assets_by_category_db(category: &str) -> Result<Vec<DigitalAsset>, St
 
 // ========== 用户档案 ==========
 
+/// 档案中需要加密的字段，顺序即 SELECT / UPDATE 的参数顺序。
+/// 「启用加密」「改密」「恢复重设」三条重加密路径共用同一份列清单：
+/// 历史缺陷是 `encrypt_existing_data_db` 自持一份少了一列的副本，导致索引越界 panic。
+const PROFILE_SENSITIVE_COLUMNS: [&str; 12] = [
+    "full_name",
+    "phone",
+    "email",
+    "id_last4",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+    "emergency_contact_relation",
+    "emergency_contact_email",
+    "heir_primary_name",
+    "heir_primary_phone",
+    "heir_primary_relation",
+    "heir_primary_email",
+];
+
+/// 读取最新一条档案的 (id, 敏感字段原文)。无档案返回 None。
+fn select_profile_sensitive(conn: &Connection) -> Result<Option<(i64, Vec<String>)>, String> {
+    let sql = format!(
+        "SELECT id, {} FROM user_profile ORDER BY id DESC LIMIT 1",
+        PROFILE_SENSITIVE_COLUMNS.join(", ")
+    );
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|e| format!("查询档案失败: {}", e))?;
+    let row = stmt
+        .query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let mut vals = Vec::with_capacity(PROFILE_SENSITIVE_COLUMNS.len());
+            for i in 1..=PROFILE_SENSITIVE_COLUMNS.len() {
+                vals.push(row.get::<_, Option<String>>(i)?.unwrap_or_default());
+            }
+            Ok((id, vals))
+        })
+        .map_err(|e| format!("读取档案失败: {}", e))?
+        .next()
+        .transpose()
+        .map_err(|e| format!("收集档案失败: {}", e))?;
+    Ok(row)
+}
+
+/// 按下标顺序写回档案敏感字段，参数个数由列清单决定，不会与 UPDATE 占位符错位。
+fn update_profile_sensitive(conn: &Connection, id: i64, vals: &[String]) -> Result<(), String> {
+    if vals.len() != PROFILE_SENSITIVE_COLUMNS.len() {
+        return Err(format!(
+            "档案字段数量不一致：期望 {}，实际 {}",
+            PROFILE_SENSITIVE_COLUMNS.len(),
+            vals.len()
+        ));
+    }
+    let sql = format!(
+        "UPDATE user_profile SET {} WHERE id=?{}",
+        PROFILE_SENSITIVE_COLUMNS
+            .iter()
+            .enumerate()
+            .map(|(i, col)| format!("{}=?{}", col, i + 1))
+            .collect::<Vec<_>>()
+            .join(", "),
+        PROFILE_SENSITIVE_COLUMNS.len() + 1
+    );
+    let mut params_vec: Vec<&dyn rusqlite::ToSql> =
+        vals.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
+    params_vec.push(&id);
+    conn.execute(&sql, params_vec.as_slice())
+        .map_err(|e| format!("写入档案失败: {}", e))?;
+    Ok(())
+}
+
 pub fn get_user_profile_db() -> Result<Option<UserProfile>, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
@@ -1013,36 +1090,13 @@ pub fn change_master_password_db(
                 ).map_err(|e| format!("重加密资产失败: {}", e))?;
             }
 
-            let mut stmt2 = conn.prepare(
-                "SELECT id, full_name, phone, email, id_last4, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, emergency_contact_email, heir_primary_name, heir_primary_phone, heir_primary_relation, heir_primary_email FROM user_profile ORDER BY id DESC LIMIT 1",
-            ).map_err(|e| format!("查询档案失败: {}", e))?;
-            let profile_row: Option<(i64, Vec<String>)> = stmt2
-                .query_map([], |row| {
-                    let id: i64 = row.get(0)?;
-                    let mut vals = Vec::with_capacity(10);
-                    for i in 1..13 {
-                        vals.push(row.get::<_, Option<String>>(i)?.unwrap_or_default());
-                    }
-                    Ok((id, vals))
-                })
-                .map_err(|e| format!("读取档案失败: {}", e))?
-                .next()
-                .transpose()
-                .map_err(|e| format!("收集档案失败: {}", e))?;
-
-            if let Some((pid, vals)) = profile_row {
-                let mut new_vals = Vec::with_capacity(12);
+            if let Some((pid, vals)) = select_profile_sensitive(conn)? {
+                let mut new_vals = Vec::with_capacity(vals.len());
                 for v in &vals {
                     new_vals.push(crate::vault::rekey_value(v, &key_old, &key_new)?);
                 }
-                conn.execute(
-                    "UPDATE user_profile SET full_name=?1, phone=?2, email=?3, id_last4=?4, emergency_contact_name=?5, emergency_contact_phone=?6, emergency_contact_relation=?7, emergency_contact_email=?8, heir_primary_name=?9, heir_primary_phone=?10, heir_primary_relation=?11, heir_primary_email=?12 WHERE id=?13",
-                    params![
-                        new_vals[0], new_vals[1], new_vals[2], new_vals[3],
-                        new_vals[4], new_vals[5], new_vals[6], new_vals[7],
-                        new_vals[8], new_vals[9], new_vals[10], new_vals[11], pid,
-                    ],
-                ).map_err(|e| format!("重加密档案失败: {}", e))?;
+                update_profile_sensitive(conn, pid, &new_vals)
+                    .map_err(|e| format!("重加密档案失败: {}", e))?;
             }
 
             let (recovery_code_new, recovery_seal_new) =
@@ -1130,45 +1184,15 @@ pub fn reset_security_config_db(
                 ).map_err(|e| format!("重加密资产失败: {}", e))?;
             }
 
-            let mut stmt2 = conn.prepare(
-                "SELECT id, full_name, phone, email, id_last4, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, emergency_contact_email, heir_primary_name, heir_primary_phone, heir_primary_relation, heir_primary_email FROM user_profile ORDER BY id DESC LIMIT 1",
-            ).map_err(|e| format!("查询档案失败: {}", e))?;
-            let profile_row: Option<(i64, Vec<String>)> = stmt2
-                .query_map([], |row| {
-                    let id: i64 = row.get(0)?;
-                    let mut vals = Vec::with_capacity(10);
-                    for i in 1..13 {
-                        vals.push(row.get::<_, Option<String>>(i)?.unwrap_or_default());
-                    }
-                    Ok((id, vals))
-                })
-                .map_err(|e| format!("读取档案失败: {}", e))?
-                .next()
-                .transpose()
-                .map_err(|e| format!("收集档案失败: {}", e))?;
-
-            if let Some((pid, vals)) = profile_row {
-                let mut new_vals = Vec::with_capacity(12);
+            if let Some((pid, vals)) = select_profile_sensitive(conn)? {
+                let mut new_vals = Vec::with_capacity(vals.len());
                 for v in &vals {
-                    if v.is_empty() {
-                        new_vals.push(String::new());
-                    } else {
-                        let plain = crate::vault::decrypt_field(v, master_key)?;
-                        new_vals.push(if plain.is_empty() {
-                            String::new()
-                        } else {
-                            crate::vault::encrypt_field(&plain, new_key)?
-                        });
-                    }
+                    // 历史明文（如从旧版/未加密实例导入的备份）直接以新密钥加密，
+                    // 不能按密文解密——否则整条恢复链路会因一条明文记录而失败。
+                    new_vals.push(crate::vault::rekey_value(v, master_key, new_key)?);
                 }
-                conn.execute(
-                    "UPDATE user_profile SET full_name=?1, phone=?2, email=?3, id_last4=?4, emergency_contact_name=?5, emergency_contact_phone=?6, emergency_contact_relation=?7, emergency_contact_email=?8, heir_primary_name=?9, heir_primary_phone=?10, heir_primary_relation=?11, heir_primary_email=?12 WHERE id=?13",
-                    params![
-                        new_vals[0], new_vals[1], new_vals[2], new_vals[3],
-                        new_vals[4], new_vals[5], new_vals[6], new_vals[7],
-                        new_vals[8], new_vals[9], new_vals[10], new_vals[11], pid,
-                    ],
-                ).map_err(|e| format!("重加密档案失败: {}", e))?;
+                update_profile_sensitive(conn, pid, &new_vals)
+                    .map_err(|e| format!("重加密档案失败: {}", e))?;
             }
 
             conn.execute(
@@ -1317,9 +1341,56 @@ pub fn export_backup_json_db() -> Result<String, String> {
         )
         .ok();
 
+    // 心跳配置与政策补丁也必须进备份：
+    // 旧版只备份 5 张表，换机恢复后用户会发现「心跳令牌没了、自己导入的政策补丁也没了」，
+    // 而这两项都是用户手工配置、无法从内置库重建的数据。
+    let heartbeat: Option<Value> = conn
+        .query_row(
+            "SELECT enabled, COALESCE(token,''), COALESCE(endpoint,'') FROM heartbeat_config WHERE id=1",
+            [],
+            |row| {
+                Ok(json!({
+                    "enabled": row.get::<_, i64>(0)?,
+                    "token": row.get::<_, String>(1)?,
+                    "endpoint": row.get::<_, String>(2)?,
+                }))
+            },
+        )
+        .ok();
+
+    let mut platform_overrides: Vec<Value> = Vec::new();
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes FROM platform_overrides ORDER BY id")
+            .map_err(|e| format!("查询政策补丁失败: {}", e))?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "name": row.get::<_, String>(1)?,
+                    "name_en": row.get::<_, String>(2)?,
+                    "category": row.get::<_, String>(3)?,
+                    "subtype": row.get::<_, String>(4)?,
+                    "has_property": row.get::<_, i64>(5)? != 0,
+                    "has_personality": row.get::<_, i64>(6)? != 0,
+                    "inheritable": row.get::<_, i64>(7)? != 0,
+                    "required_documents": row.get::<_, String>(8)?,
+                    "process_description": row.get::<_, String>(9)?,
+                    "estimated_difficulty": row.get::<_, String>(10)?,
+                    "official_policy_url": row.get::<_, String>(11)?,
+                    "estimated_time_days": row.get::<_, String>(12)?,
+                    "notes": row.get::<_, String>(13)?,
+                }))
+            })
+            .map_err(|e| format!("读取政策补丁失败: {}", e))?;
+        for r in rows {
+            platform_overrides.push(r.map_err(|e| format!("政策补丁解析失败: {}", e))?);
+        }
+    }
+
     let backup = json!({
         "app": "digilegacy",
-        "version": 1,
+        "version": 2,
         "created_at": Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         "tables": {
             "digital_assets": assets,
@@ -1327,6 +1398,8 @@ pub fn export_backup_json_db() -> Result<String, String> {
             "check_in_log": check_ins,
             "dms_config": dms,
             "security_config": security,
+            "heartbeat_config": heartbeat,
+            "platform_overrides": platform_overrides,
         }
     });
 
@@ -1341,7 +1414,10 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
     if v.get("app").and_then(|x| x.as_str()) != Some("digilegacy") {
         return Err("不是有效的归零备份文件".to_string());
     }
-    if v.get("version").and_then(|x| x.as_i64()).unwrap_or(0) != 1 {
+    // v1 备份仍然可导入（向后兼容）：新表缺失时保持本地现状，
+    // 旧备份里没有的 heartbeat/platform_overrides 按「未提供」处理。
+    let version = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
+    if version != 1 && version != 2 {
         return Err("备份版本不受支持".to_string());
     }
     let tables = v.get("tables").ok_or("备份缺少数据表")?;
@@ -1480,6 +1556,45 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
             ).map_err(|e| format!("写入安全配置失败: {}", e))?;
         }
 
+        // v2：心跳配置与政策补丁。旧备份没有这两块 → 保持本地现状，
+        // 不主动清空（清空会让「导入旧备份」顺手删掉用户的令牌与补丁）。
+        if let Some(hb) = tables.get("heartbeat_config").filter(|x| x.is_object()) {
+            conn.execute(
+                "INSERT INTO heartbeat_config (id, enabled, token, endpoint) VALUES (1, ?1, ?2, ?3)
+                 ON CONFLICT(id) DO UPDATE SET enabled=?1, token=?2, endpoint=?3",
+                params![ival(hb, "enabled"), sval(hb, "token"), sval(hb, "endpoint")],
+            )
+            .map_err(|e| format!("写入心跳配置失败: {}", e))?;
+        }
+
+        if let Some(overrides) = tables.get("platform_overrides").and_then(|x| x.as_array()) {
+            conn.execute("DELETE FROM platform_overrides", [])
+                .map_err(|e| format!("清空政策补丁失败: {}", e))?;
+            for o in overrides {
+                conn.execute(
+                    "INSERT INTO platform_overrides (id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes, updated_at)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+                    params![
+                        ival(o, "id"),
+                        sval(o, "name"),
+                        sval(o, "name_en"),
+                        sval(o, "category"),
+                        sval(o, "subtype"),
+                        ival(o, "has_property"),
+                        ival(o, "has_personality"),
+                        ival(o, "inheritable"),
+                        sval(o, "required_documents"),
+                        sval(o, "process_description"),
+                        sval(o, "estimated_difficulty"),
+                        sval(o, "official_policy_url"),
+                        sval(o, "estimated_time_days"),
+                        sval(o, "notes"),
+                        Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    ],
+                ).map_err(|e| format!("写入政策补丁失败: {}", e))?;
+            }
+        }
+
         Ok(count)
     })();
 
@@ -1541,25 +1656,8 @@ pub fn encrypt_existing_data_db() -> Result<i64, String> {
         }
     }
 
-    let mut stmt2 = conn.prepare(
-        "SELECT id, full_name, phone, email, id_last4, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, heir_primary_name, heir_primary_phone, heir_primary_relation FROM user_profile ORDER BY id DESC LIMIT 1",
-    ).map_err(|e| format!("查询档案失败: {}", e))?;
-    let profile_row: Option<(i64, Vec<String>)> = stmt2
-        .query_map([], |row| {
-            let id: i64 = row.get(0)?;
-            let mut vals = Vec::with_capacity(10);
-            for i in 1..11 {
-                vals.push(row.get::<_, Option<String>>(i)?.unwrap_or_default());
-            }
-            Ok((id, vals))
-        })
-        .map_err(|e| format!("读取档案失败: {}", e))?
-        .next()
-        .transpose()
-        .map_err(|e| format!("收集档案失败: {}", e))?;
-
-    if let Some((pid, vals)) = profile_row {
-        let mut new_vals = Vec::with_capacity(10);
+    if let Some((pid, vals)) = select_profile_sensitive(conn)? {
+        let mut new_vals = Vec::with_capacity(vals.len());
         let mut dirty = false;
         for v in &vals {
             let nv = crate::vault::encrypt_if_needed(v)?;
@@ -1569,14 +1667,8 @@ pub fn encrypt_existing_data_db() -> Result<i64, String> {
             new_vals.push(nv);
         }
         if dirty {
-            conn.execute(
-                        "UPDATE user_profile SET full_name=?1, phone=?2, email=?3, id_last4=?4, emergency_contact_name=?5, emergency_contact_phone=?6, emergency_contact_relation=?7, emergency_contact_email=?8, heir_primary_name=?9, heir_primary_phone=?10, heir_primary_relation=?11, heir_primary_email=?12 WHERE id=?13",
-                        params![
-                            new_vals[0], new_vals[1], new_vals[2], new_vals[3],
-                            new_vals[4], new_vals[5], new_vals[6], new_vals[7],
-                            new_vals[8], new_vals[9], new_vals[10], new_vals[11], pid,
-                        ],
-            ).map_err(|e| format!("加密存量档案失败: {}", e))?;
+            update_profile_sensitive(conn, pid, &new_vals)
+                .map_err(|e| format!("加密存量档案失败: {}", e))?;
             changed += 1;
         }
     }
@@ -1955,6 +2047,87 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    /// 启用加密时若已有档案，`encrypt_existing_data_db` 必须完整加密全部 12 个档案字段。
+    ///
+    /// 历史缺陷：该函数的档案查询只 SELECT 了 11 个字段（漏 heir_primary_email），
+    /// 取值循环又写成 1..11（10 个），随后 UPDATE 却按下标取到 new_vals[11] —
+    /// 直接越界 panic。「先填档案、再设置主密码」是正常用户路径，会当场崩溃。
+    #[test]
+    fn encrypt_existing_data_covers_all_profile_fields() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("profile-encrypt");
+        init_database_at(path.clone()).unwrap();
+
+        save_user_profile_db(&UserProfile {
+            full_name: "张三".to_string(),
+            phone: "13800000000".to_string(),
+            email: "zhangsan@example.com".to_string(),
+            id_last4: "1234".to_string(),
+            emergency_contact_name: "李四".to_string(),
+            emergency_contact_phone: "13900000000".to_string(),
+            emergency_contact_relation: "配偶".to_string(),
+            emergency_contact_email: "lisi@example.com".to_string(),
+            heir_primary_name: "王五".to_string(),
+            heir_primary_phone: "13700000000".to_string(),
+            heir_primary_relation: "子女".to_string(),
+            heir_primary_email: "wangwu@example.com".to_string(),
+            check_in_interval_days: 30,
+            ..Default::default()
+        })
+        .unwrap();
+
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("master-pw-123", &salt);
+        let verifier = vault::make_verifier(&key).unwrap();
+        set_security_config_db("dGVzdC1zYWx0", &verifier).unwrap();
+        vault::set_key(key);
+
+        let changed = encrypt_existing_data_db().expect("档案加密不得 panic 或报错");
+        assert_eq!(changed, 1, "一份档案应计为一次改动");
+
+        let raw_rows: Vec<String> = {
+            let guard = get_conn().unwrap();
+            let conn = guard.as_ref().unwrap();
+            let mut stmt = conn
+                .prepare("SELECT full_name, phone, email, id_last4, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, emergency_contact_email, heir_primary_name, heir_primary_phone, heir_primary_relation, heir_primary_email FROM user_profile")
+                .unwrap();
+            let rows = stmt
+                .query_map([], |r| {
+                    Ok((0..12)
+                        .map(|i| {
+                            r.get::<_, Option<String>>(i)
+                                .ok()
+                                .flatten()
+                                .unwrap_or_default()
+                        })
+                        .collect::<Vec<String>>())
+                })
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            rows.into_iter().next().unwrap()
+        };
+        for (idx, raw) in raw_rows.iter().enumerate() {
+            assert!(
+                vault::is_encrypted(raw),
+                "第 {} 个档案字段应已加密，实际: {}",
+                idx,
+                raw
+            );
+        }
+
+        let profile = get_user_profile_db().unwrap().unwrap();
+        assert_eq!(profile.full_name, "张三");
+        assert_eq!(profile.email, "zhangsan@example.com");
+        assert_eq!(profile.emergency_contact_email, "lisi@example.com");
+        assert_eq!(profile.heir_primary_email, "wangwu@example.com");
+        assert_eq!(profile.heir_primary_relation, "子女");
+
+        vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[test]
     fn test_change_password_and_backup_roundtrip() {
         let _g = vault::test_lock();
@@ -2318,6 +2491,117 @@ mod tests {
         assert_eq!(restored.len(), 1);
         assert_eq!(restored[0].account_identifier, "acc-backup");
         assert_eq!(restored[0].heir_name.as_deref(), Some("继承人A"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 备份必须覆盖用户手工配置的两张表：心跳令牌与政策补丁。
+    ///
+    /// 历史缺陷：v1 备份只导出 5 张表，换机恢复后心跳令牌与导入的政策补丁全部丢失，
+    /// 而这两项无法从内置库重建。同时导入时不得因为「旧备份没有这些字段」而清空本地数据。
+    #[test]
+    fn backup_v2_covers_heartbeat_and_platform_overrides() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("backupv2");
+        init_database_at(path.clone()).unwrap();
+
+        set_heartbeat_config_db(true, "hb-token-123", "https://hb.example.org").unwrap();
+        import_platform_overrides_db(
+            r#"{"app":"digilegacy","platforms":[{"id":9101,"name":"备份补丁平台","category":"游戏"}]}"#,
+        )
+        .unwrap();
+
+        let json = export_backup_json_db().unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["version"], 2, "新增表后必须升版本号");
+        assert_eq!(
+            v["tables"]["heartbeat_config"]["token"], "hb-token-123",
+            "心跳令牌必须进备份"
+        );
+        assert_eq!(
+            v["tables"]["platform_overrides"].as_array().unwrap().len(),
+            1,
+            "政策补丁必须进备份"
+        );
+
+        // 清空后导入，两项都要回来
+        set_heartbeat_config_db(false, "", "").unwrap();
+        clear_platform_overrides_db().unwrap();
+        import_backup_json_db(&json).unwrap();
+
+        let (enabled, token, endpoint) = get_heartbeat_config_db().unwrap();
+        assert!(enabled);
+        assert_eq!(token, "hb-token-123");
+        assert_eq!(endpoint, "https://hb.example.org");
+        assert_eq!(count_platform_overrides_db().unwrap(), 1);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 旧版 v1 备份仍可导入，且不会清空本地 v2 才有的配置。
+    #[test]
+    fn legacy_v1_backup_imports_without_wiping_v2_config() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("backupv1");
+        init_database_at(path.clone()).unwrap();
+
+        set_heartbeat_config_db(true, "keep-me", "https://hb.example.org").unwrap();
+        import_platform_overrides_db(
+            r#"{"app":"digilegacy","platforms":[{"id":9102,"name":"保留补丁","category":"游戏"}]}"#,
+        )
+        .unwrap();
+
+        let v1 = serde_json::json!({
+            "app": "digilegacy",
+            "version": 1,
+            "tables": {
+                "digital_assets": [],
+                "user_profile": [],
+                "check_in_log": [],
+                "dms_config": null,
+                "security_config": null
+            }
+        })
+        .to_string();
+        import_backup_json_db(&v1).unwrap();
+
+        let (enabled, token, _) = get_heartbeat_config_db().unwrap();
+        assert!(enabled, "导入 v1 备份不得关闭心跳");
+        assert_eq!(token, "keep-me");
+        assert_eq!(
+            count_platform_overrides_db().unwrap(),
+            1,
+            "不得清空政策补丁"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// schema 版本号必须写入，且新库与再次打开都应保持同一版本。
+    #[test]
+    fn schema_version_is_recorded() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("schemaver");
+        init_database_at(path.clone()).unwrap();
+
+        let guard = get_conn().unwrap();
+        let v: i64 = guard
+            .as_ref()
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+        drop(guard);
+
+        // 同一路径再次初始化（模拟重启）不应回退版本
+        init_database_at(path.clone()).unwrap();
+        let guard = get_conn().unwrap();
+        let v2: i64 = guard
+            .as_ref()
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v2, SCHEMA_VERSION);
 
         let _ = std::fs::remove_file(&path);
     }

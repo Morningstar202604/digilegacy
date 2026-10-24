@@ -27,12 +27,16 @@
       <div class="card">
         <div class="card-title mb-16">⚙️ 检查设置</div>
         <div class="form-group">
+          <label class="flex items-center gap-8" style="cursor: pointer;">
+            <input type="checkbox" id="dms-enabled" v-model="settings.enabled" style="width: 18px; height: 18px;" />
+            <span style="font-weight: 500; font-size: 14px;">启用定期安全确认</span>
+          </label>
+          <p class="form-hint">关闭后不再推进三级通知链，已保存的资产与报告不受影响。</p>
+        </div>
+        <div class="form-group">
           <label class="form-label" for="dms-interval">检查间隔</label>
-          <select class="form-select" id="dms-interval" v-model.number="settings.interval">
-            <option :value="7">每周确认一次</option>
-            <option :value="14">每两周确认一次</option>
-            <option :value="30">每月确认一次</option>
-            <option :value="90">每季度确认一次</option>
+          <select class="form-select" id="dms-interval" v-model.number="settings.interval" :disabled="!settings.enabled">
+            <option v-for="opt in INTERVAL_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </div>
         <button class="btn btn-primary btn-sm mt-16" @click="saveSettings">保存设置</button>
@@ -95,10 +99,11 @@ import { ref, computed, onMounted } from 'vue';
 import { useDashboardStore } from '../stores/dashboard';
 import { sendTestNotification } from '../api/reminders';
 import { toast } from '../composables/feedback';
+import { INTERVAL_OPTIONS } from '../constants/dms';
 
 const dashboard = useDashboardStore();
 const checking = ref(false);
-const settings = ref({ interval: 30, enabled: true });
+const settings = ref({ interval: 30, enabled: false });
 const testingNotify = ref(false);
 const testResult = ref<'' | 'ok' | 'fail'>('');
 
@@ -142,7 +147,7 @@ const statusSubtitle = computed(() => {
   }
   return {
     overdue: '请立即确认你的安全状态',
-    disabled: '前往「我的档案」页面开启此功能',
+    disabled: '前往「安心传承」下方开启此功能，或在上方保存设置时勾选启用',
   }[dmsState.value] || '';
 });
 const statusColor = computed(() => ({

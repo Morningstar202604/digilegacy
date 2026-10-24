@@ -5,13 +5,13 @@
       如果你的亲人不幸离世，这个向导将帮助你按其意愿有序继承数字遗产。
     </p>
 
-    <!-- 使用前提 -->
-    <div class="card mb-32" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-color: #f59e0b;">
+    <!-- 使用前提：用 token 而非硬编码浅黄，深色主题下仍保证正文可读 -->
+    <div class="card mb-32 heir-prereq">
       <div class="flex items-center gap-12">
         <span style="font-size: 36px;" aria-hidden="true">⚠️</span>
         <div>
           <strong style="font-size: 16px;">重要前提</strong>
-          <p style="font-size: 13px; margin-top: 4px; color: var(--gray-700);">
+          <p style="font-size: 13px; margin-top: 4px; color: var(--gray-800);">
             使用本功能前，请确认你已持有逝者的：① 死亡证明 ② 继承权公证书（或法院判决书） ③ 你的身份证
           </p>
         </div>
@@ -23,19 +23,19 @@
       <div class="card-title mb-16">📝 继承流程总览</div>
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
-          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">1</span>
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--solid-primary); color: var(--on-solid); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">1</span>
           <span>确认继承权（持有死亡证明+公证书/判决书）</span>
         </div>
         <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
-          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">2</span>
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--solid-primary); color: var(--on-solid); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">2</span>
           <span>查看逝者留下的数字遗产清单与处置方案</span>
         </div>
         <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
-          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">3</span>
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--solid-primary); color: var(--on-solid); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">3</span>
           <span>按平台逐一办理继承手续</span>
         </div>
         <div class="flex items-center gap-12" style="padding: 10px 16px; background: var(--gray-50); border-radius: 8px;">
-          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">4</span>
+          <span style="width: 28px; height: 28px; border-radius: 50%; background: var(--solid-primary); color: var(--on-solid); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">4</span>
           <span>完成账号过户/余额提取/数据导出</span>
         </div>
       </div>
@@ -151,9 +151,9 @@
             </div>
 
             <!-- 风险提示 -->
-            <div v-if="platform.risk_warnings" class="mb-12 p-12" style="background: #fef3c7; border-radius: 8px; border-left: 3px solid #f59e0b;">
-              <strong style="font-size: 13px; color: #b45309;">⚠️ 风险提示：</strong>
-              <p class="text-muted" style="font-size: 13px; margin-top: 4px; color: #b45309;">{{ platform.risk_warnings }}</p>
+            <div v-if="platform.risk_warnings" class="mb-12 p-12 heir-risk">
+              <strong style="font-size: 13px;">⚠️ 风险提示：</strong>
+              <p style="font-size: 13px; margin-top: 4px;">{{ platform.risk_warnings }}</p>
             </div>
 
             <!-- 关联法律模板 -->
@@ -336,8 +336,22 @@ onMounted(async () => {
 }
 .tab-btn:hover { background: var(--gray-200); }
 .tab-btn.active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
+  background: var(--solid-primary);
+  color: var(--on-solid);
+  border-color: var(--solid-primary);
+}
+
+/* 重要前提：浅色/深色都保持"琥珀提示"语义，但底色与文字都用 token */
+.heir-prereq {
+  background: var(--warning-light);
+  border-color: var(--warning);
+}
+.heir-prereq strong { color: var(--warning-strong); }
+
+.heir-risk {
+  background: var(--warning-light);
+  border-radius: 8px;
+  border-left: 3px solid var(--warning);
+  color: var(--warning-strong);
 }
 </style>

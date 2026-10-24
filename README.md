@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/cargo%20test-80%20passed-brightgreen.svg)](#development--verification)
+[![Tests](https://img.shields.io/badge/cargo%20test-86%20passed-brightgreen.svg)](#development--verification)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](#development)
 [![No servers](https://img.shields.io/badge/servers-none-4a7c8c.svg)](#privacy-model)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-4a7c8c.svg)](#privacy-model)
 
-**Website: [badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)** · [中文说明见下方](#中文说明) · [Screenshots](https://badhope.github.io/digilegacy/#screenshots)
+**Website: [badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)** · **[Live demo](https://badhope.github.io/digilegacy/demo/)** · [中文说明见下方](#中文说明) · [Screenshots](https://badhope.github.io/digilegacy/#screenshots)
 
 > **Plan your digital legacy. Leave your family a toolkit, not a puzzle.**
 
@@ -54,7 +54,7 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 
 | # | Module | What it does |
 |---|---|---|
-| 1 | **Digital asset discovery** | Built-in policy database of **150+ platforms across 16 categories**, plus a guided self-check questionnaire that surfaces accounts you have already forgotten; already-registered entries are de-duplicated automatically |
+| 1 | **Digital asset discovery** | Built-in policy database of **152 platforms across 16 categories**, plus a guided self-check questionnaire that surfaces accounts you have already forgotten; already-registered entries are de-duplicated automatically |
 | 2 | **Classification & registration** | Every asset is classified as *property*, *personality* or *mixed*. Platform passwords are never stored — the app records *where* an account exists, not *how to break into it* |
 | 3 | **Disposal planning** | Per asset: inherit by a named person · liquidate and distribute · memorialize · authorize viewing · delete permanently · donate · take no action |
 | 4 | **Inheritance report & toolkit** | One-click HTML report plus a ZIP toolkit (report, asset list, summary, instructions). Open formats — readable without this application |
@@ -65,19 +65,25 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 | 9 | **Onboarding & help centre** | First-run guided tour; built-in help explaining the encryption model and the **real** capability boundaries of reminders |
 | 9b | **Light / dark theme** | Follow-system by default with a one-click toggle; every surface uses design tokens so both themes stay consistent. Honours `prefers-reduced-motion` and ships print styles |
 | 10 | **Credential vault** | Optional encrypted storage of account credentials. Excluded from the **report and toolkit** exports; the **encrypted backup** carries the ciphertext so credentials survive a device migration (they stay unreadable without your master password) |
+| 11 | **Search, sort & composition chart** | Full-text search across platform, account and notes; sort by recency / value / platform / disposal state; ECharts donut showing the property / personality / mixed split |
+| 12 | **Interactive web demo** | A static build of the same UI running on mock data, deployed with the website — click through every screen without installing anything |
 
 ## Screenshots
 
 | | |
 |---|---|
 | ![Dashboard](docs/screenshots/01-dashboard.png) | ![Asset discovery](docs/screenshots/02-discover.png) |
-| *Dashboard — overview & planning progress* | *Guided discovery questionnaire* |
-| ![Assets](docs/screenshots/03-assets.png) | ![Profile](docs/screenshots/04-profile.png) |
-| *Registered assets with disposal status* | *Profile, encryption & backup* |
-| ![Dead man's switch](docs/screenshots/05-dms.png) | ![Inheritance report](docs/screenshots/06-report.png) |
-| *Dead man's switch & local reminders* | *Generated inheritance report* |
-| ![Heir guidance](docs/screenshots/07-heir-guide.png) | ![Legal templates](docs/screenshots/08-legal.png) |
-| *Heir guidance wizard* | *Legal template library* |
+| *Dashboard — stats, planning progress and asset composition* | *Guided discovery questionnaire* |
+| ![Assets](docs/screenshots/03-assets.png) | ![Asset detail](docs/screenshots/04-asset-detail.png) |
+| *Registered assets with search, sort and disposal status* | *Asset detail with encrypted credential vault* |
+| ![Profile](docs/screenshots/05-profile.png) | ![Dead man's switch](docs/screenshots/06-dms.png) |
+| *Profile, encryption and backup* | *Dead man's switch & local reminders* |
+| ![Inheritance report](docs/screenshots/07-report.png) | ![Heir guidance](docs/screenshots/08-heir-guide.png) |
+| *Generated inheritance report* | *Heir guidance wizard* |
+| ![Legal templates](docs/screenshots/09-legal.png) | ![Dark mode](docs/screenshots/10-dashboard-dark.png) |
+| *Legal template library* | *Dark theme (token-driven, WCAG AA contrast)* |
+
+**Demo video:** [`docs/media/demo-walkthrough.mp4`](docs/media/demo-walkthrough.mp4) — a 32-second click-through of the full flow (discovery → registration → disposal → check-in → report → heir guide).
 
 > The interface is currently in Simplified Chinese (the primary target locale); an English UI is on the roadmap. All screens are also viewable on the [website](https://badhope.github.io/digilegacy/#screenshots).
 
@@ -113,10 +119,10 @@ Digital legacy data is the most private data a person owns — it contains both 
 
 Download the installer from [Releases](https://github.com/badhope/digilegacy/releases). No account, no sign-up, no network connection required.
 
-| Package | Size (v0.1.0, x64) | Notes |
+| Package | Size (v0.2.0, x64) | Notes |
 |---|---|---|
-| `归零_0.1.0_x64-setup.exe` (NSIS) | **3.34 MB** | Recommended; per-user install, no admin required |
-| `归零_0.1.0_x64_zh-CN.msi` (WiX) | **4.79 MB** | For managed deployment / group policy |
+| `归零_0.2.0_x64-setup.exe` (NSIS) | ~3.4 MB | Recommended; per-user install, no admin required |
+| `归零_0.2.0_x64_zh-CN.msi` (WiX) | ~4.8 MB | For managed deployment / group policy |
 
 ```
 Installer  : DigiLegacy_*_x64-setup.exe
@@ -137,7 +143,8 @@ npm run tauri:dev        # desktop development mode
 npm run tauri:build      # produce installers
 
 npm run dev              # frontend only — browser preview at http://localhost:1420
-node capture.mjs         # regenerate docs/screenshots (needs `npm run dev` running)
+npm run build:demo       # static demo build (mock backend, hash routing)
+node scripts/demo-media.mjs   # regenerate docs/screenshots + demo video (needs `npm run dev` running)
 cd src-tauri && cargo test
 ```
 
@@ -145,18 +152,32 @@ cd src-tauri && cargo test
 
 ```bash
 cd digilegacy/server
-node heartbeat-server.mjs            # default port 8080
+# 1. register the token your client will send
+cat > registrations.json <<'JSON'
+{ "replace-with-a-long-random-token": { "grace_days": 21, "notify_webhook": "https://your-gateway.example/hook" } }
+JSON
+# 2. start with an admin token (required for /check)
+HEARTBEAT_ADMIN_TOKEN="$(openssl rand -hex 24)" node heartbeat-server.mjs
 ```
 
 Point the client at it in **Profile → cloud heartbeat** (endpoint + token, stored in the local database). Environment variables `DMS_HEARTBEAT_ENABLED` / `DMS_HEARTBEAT_TOKEN` / `DMS_HEARTBEAT_ENDPOINT` are still honoured as a fallback for headless deployments, but the in-app form takes precedence.
 
 The reference server does three things: record the last heartbeat time per token, emit an alert payload when a token goes silent (default 21 days), and hand that payload to your scheduled job for delivery. **It never receives or stores user content.**
 
+Hardening worth knowing before exposing it: `/check` requires `Authorization: Bearer $HEARTBEAT_ADMIN_TOKEN` and returns 503 when that variable is unset (fail closed rather than leaking every token); unregistered tokens are rejected with 403 unless you set `HEARTBEAT_ALLOW_ANY=1` for local experiments; bodies are capped at 4 KB; alert state is persisted and resets on the next heartbeat, so a restart neither repeats alerts nor suppresses the next silence. `node heartbeat-server.test.mjs` covers all of it.
+
+```bash
+# poll from cron / systemd timer
+curl -sf -H "Authorization: Bearer $HEARTBEAT_ADMIN_TOKEN" http://127.0.0.1:8080/check
+```
+
 ## Architecture
+
+A deeper module-by-module breakdown, layering rules, and the encryption data flow are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ```
 Vue 3 + TypeScript + Pinia + Vue Router        frontend
-        │  Tauri invoke (42 commands)
+        │  Tauri invoke (42 registered commands)
 Tauri 2 (Rust)                                 desktop shell
         │
 rusqlite (SQLite, bundled)                     local storage
@@ -175,16 +196,17 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 │   │   └── assets/main.css                # design tokens
 │   ├── src-tauri/                         # Rust backend
 │   │   ├── src/
-│   │   │   ├── platform_data.rs           # 150+ platform policy database
+│   │   │   ├── platform_data.rs           # 152-platform policy database
 │   │   │   ├── db.rs                      # schema, queries, migrations
-│   │   │   ├── commands.rs                # 42 registered Tauri commands
+│   │   │   ├── commands.rs                # 41 commands + notify::evaluate_dms
 │   │   │   ├── vault.rs                   # master password & field encryption
 │   │   │   ├── recovery.rs                # one-time recovery key
 │   │   │   ├── heartbeat.rs               # zero-content cloud heartbeat
 │   │   │   ├── crypto.rs                  # AES-256-GCM primitives
 │   │   │   └── notify.rs                  # dead man's switch chain
 │   │   └── capabilities/                  # permission allowlist
-│   └── server/heartbeat-server.mjs        # reference heartbeat server
+│   ├── server/heartbeat-server.mjs        # reference heartbeat server (+ .test.mjs)
+│   └── scripts/demo-media.mjs             # screenshot & walkthrough-video generator
 └── LICENSE
 ```
 
@@ -192,28 +214,32 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 
 | Check | Command | Status |
 |---|---|---|
-| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **80 passing, 1 ignored** |
-| Frontend unit tests | `npm test` (in `digilegacy/`) | **238 passing** |
+| Rust unit + integration tests | `cargo test` (in `src-tauri/`) | **86 passing, 1 ignored** |
+| Frontend unit tests | `npm test` (in `digilegacy/`) | **257 passing** |
 | Frontend E2E | `npm run test:e2e` (in `digilegacy/`) | **37 passing** |
+| Heartbeat server behaviour | `node server/heartbeat-server.test.mjs` | **9 assertions passing** |
 | Frontend type check | `npx vue-tsc --noEmit` | passing |
 | Production build | `npm run build` | passing |
-| Heartbeat server syntax | `node --check heartbeat-server.mjs` | passing |
+| Coverage (statements/branches/functions/lines) | `npm run test:coverage` | **79.1 / 78.5 / 72.6 / 80.5** (gates 78/78/71/79) |
 
-> `.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in three jobs:
+> `.github/workflows/ci.yml` runs on every push to `main` and on every pull request, in five jobs:
 >
-> 1. **前端** — `npm ci` → `vue-tsc --noEmit` → `npm run test:coverage`（含覆盖率门禁）→ `npm run build`
-> 2. **Rust** — `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test --locked`
-> 3. **心跳服务器** — `node --check` + 真实启动后验证 `/heartbeat` 收令牌、非法请求返回 400、`/check` 可查询
+> 1. **前端** — `npm ci` → `vue-tsc --noEmit` → `npm run test:coverage`（含覆盖率门禁）→ `npm run build` → `npm audit`
+> 2. **E2E** — `npm ci` → Playwright Chromium → `npx playwright test` → E2E 覆盖率报告（不阻断）
+> 3. **Rust** — `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test --locked` → `cargo audit`
+> 4. **心跳服务器** — `node --check` + `heartbeat-server.test.mjs`（9 项断言：鉴权、未注册令牌、413、健康探针）
+> 5. **发布构建**（windows-latest）— `npm run tauri:build`，断言 MSI 与 NSIS 产物都存在并上传
 >
 > 本地等价校验用 `bash scripts/verify.sh`（会显式记录每个命令的退出码，避免 `cmd | tail` 吞掉失败）。
+> 发布由 `.github/workflows/release.yml` 负责：推送 `v*` 标签时先校验三处版本号一致，再构建安装包并生成 SHA-256 校验和。
 
 ### Test coverage — what the numbers actually cover
 
-Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 78 / branches 78 / functions 71 / lines 79), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured unit coverage is 79.9% statements (79.8% branches, 73.4% functions, 81.1% lines). A separate Playwright E2E suite covers the view layer end-to-end (see below):
+Frontend coverage is tracked with thresholds in `vitest.config.ts` (statements 78 / branches 78 / functions 71 / lines 79), measured over the **whole** `src/**` tree (`coverage.include`) so that untested views count as 0% instead of vanishing from the report. Current measured unit coverage is 79.4% statements (78.8% branches, 73.6% functions, 80.6% lines). A separate Playwright E2E suite covers the view layer end-to-end (see below):
 
 - **`src/api/mock.ts` is development-preview code only.** It is not in the production bundle (`npm run build` does not include it — verified by grepping `dist/`). Its 14 tests exercise the browser demo backend, not the shipped app. They are still useful as a regression net for the preview, but they must not be counted as product coverage.
 - **The view layer** now has two layers of protection:
-  - *Unit/render tests* for `App.vue`, `AssetsView`, `ProfileView`, `ReportView`, `DiscoverView`, `AssetDetailView` and `CollapseGroup`. All seven views are now covered: `DMSView` 97%, `DiscoverView` 86%, `AssetsView` 83%, `AssetDetailView` 71%, `ReportView` 59%, `ProfileView` 58%, plus `DashboardView` / `HeirGuideView` / `LegalTemplates` for their filter, grouping and preview logic.
+  - *Unit/render tests* for `App.vue`, `AssetsView`, `ProfileView`, `ReportView`, `DiscoverView`, `AssetDetailView` and `CollapseGroup`. All seven views are now covered: `DMSView` 97%, `ReportView` 88%, `DiscoverView` 86%, `AssetsView` 84%, `AssetDetailView` 76%, `ProfileView` 57%, plus `DashboardView` / `HeirGuideView` / `LegalTemplates` for their filter, grouping and preview logic.
   - *Playwright E2E* for the seven views that unit tests cannot reach: `DiscoverView`, `DMSView`, `DashboardView`, `ReportView`, `HeirGuideView`, `LegalTemplates` and `AssetDetailView`. The suite drives a real Chromium browser through the actual components, stores and router (only the IPC backend is the preview mock), covering the full asset-discovery chain, DMS check-in, report export, heir-guide tabs, legal-template preview and asset detail navigation.
 
   E2E does not feed the v8 coverage numbers above — it is a behavioural net, not a line-coverage instrument. Run it with `npm run test:e2e` (first time: `npx playwright install chromium`).
@@ -227,11 +253,13 @@ Four real defects were found by the newly added tests (all fixed):
 
 ## Data storage
 
-A single local file: `digilegacy.db` in the app data directory (`%APPDATA%\com.digilegacy.app` on Windows), holding six tables:
+A single local file: `digilegacy.db` in the app data directory (`%APPDATA%\com.digilegacy.app` on Windows), holding eight tables:
 
-`platforms` · `digital_assets` · `user_profile` · `check_in_log` · `dms_config` · `security_config`
+`platforms` · `digital_assets` · `user_profile` · `check_in_log` · `dms_config` · `security_config` · `heartbeat_config` · `platform_overrides`
 
-On first launch the database is created and seeded with the platform policy database; the platform table is **synchronised idempotently on every start**, so policy and URL corrections reach existing installations without touching user data. Older databases are migrated automatically (`credential_enc`, `recovery_seal` columns).
+On first launch the database is created and seeded with the platform policy database; the platform table is **synchronised idempotently on every start**, so policy and URL corrections reach existing installations without touching user data. Older databases are migrated automatically (`credential_enc`, `recovery_seal`, `emergency_contact_email`, `heir_primary_email` columns), and the schema version is recorded in `PRAGMA user_version` (currently `2`).
+
+`heartbeat_config` stores the optional cloud-heartbeat endpoint and token; `platform_overrides` stores user-imported policy patches, kept separate because the built-in platform table is rewritten on every start. Both are included in backups since format v2; importing an older v1 backup leaves your local copies untouched rather than wiping them.
 
 ## Privacy model
 
@@ -264,7 +292,7 @@ It never stores platform passwords in plaintext. If you choose to save credentia
 <details>
 <summary><strong>Can it automatically detect all my accounts?</strong></summary>
 
-No — and any tool claiming that would either be lying or require your credentials. DigiLegacy performs **guided discovery**: it knows 150+ mainstream platforms and asks questions that help you remember, then you confirm. The final list is always yours.
+No — and any tool claiming that would either be lying or require your credentials. DigiLegacy performs **guided discovery**: it knows 152 mainstream platforms and asks questions that help you remember, then you confirm. The final list is always yours.
 </details>
 
 <details>
@@ -276,13 +304,13 @@ With the tray resident (default) the app re-evaluates every 30 minutes while run
 <details>
 <summary><strong>Why a policy database for Chinese platforms?</strong></summary>
 
-Because that is where platform inheritance rules are most opaque and least documented — the database covers 150+ platforms used in mainland China (WeChat, Alipay, Taobao, Bilibili, Steam and more), each entry carrying its source. The architecture itself is not region-bound.
+Because that is where platform inheritance rules are most opaque and least documented — the database covers 152 platforms used in mainland China (WeChat, Alipay, Taobao, Bilibili, Steam and more), the highest-value entries carry their source citation in `data_source`. The architecture itself is not region-bound.
 </details>
 
 <details>
 <summary><strong>How can I contribute?</strong></summary>
 
-Issues and pull requests are welcome — especially policy corrections (every entry carries a source) and translations. The database is plain Rust data and easy to extend.
+Issues and pull requests are welcome — especially policy corrections (add the official policy URL and a source citation) and translations. The database is plain Rust data and easy to extend.
 </details>
 
 ## Mirrors
@@ -307,10 +335,10 @@ MIT — see [LICENSE](LICENSE).
 
 **开源 · 无服务器 · 无遥测 · 连开发者也无法读取你的数据。**
 
-- **官网**：[badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)
-- **六大模块**：资产发现（150+ 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
+- **官网**：[badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/) · **在线演示**：[badhope.github.io/digilegacy/demo](https://badhope.github.io/digilegacy/demo/)（浏览器里点开即用，数据只存本地浏览器）
+- **六大模块**：资产发现（152 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
 - **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（报告与工具包导出不含凭据；加密备份含密文以支持换机迁移）
 - **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 74 项通过（另有 1 项 ignored）、前端 `npm test` 238 项通过；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
+- **测试**：`cargo test` 86 项通过（另有 1 项 ignored）、前端 `npm test` 257 项通过、Playwright E2E 37 项通过、心跳服务器 9 项断言；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
 
 *数字有数，归处有路。*

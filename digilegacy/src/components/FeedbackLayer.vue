@@ -23,14 +23,15 @@
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
-        aria-describedby="confirm-desc"
+        :aria-describedby="confirmState.message ? 'confirm-desc' : undefined"
         ref="cardRef"
         @keydown.esc.stop="settleConfirm(false)"
+        @keydown.tab="trapFocus"
       >
         <h2 id="confirm-title" class="confirm-title">{{ confirmState.title }}</h2>
         <p v-if="confirmState.message" id="confirm-desc" class="confirm-desc">{{ confirmState.message }}</p>
         <div class="confirm-actions">
-          <button class="btn btn-secondary" @click="settleConfirm(false)">{{ confirmState.cancelText }}</button>
+          <button class="btn btn-secondary" ref="cancelBtnRef" @click="settleConfirm(false)">{{ confirmState.cancelText }}</button>
           <button
             class="btn"
             :class="confirmState.danger ? 'btn-danger' : 'btn-primary'"
@@ -50,18 +51,40 @@ import { dismissToast, settleConfirm, useFeedback } from '../composables/feedbac
 const { toasts, confirmState } = useFeedback();
 const cardRef = ref<HTMLElement | null>(null);
 const confirmBtnRef = ref<HTMLElement | null>(null);
+const cancelBtnRef = ref<HTMLElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
 
 function icon(kind: string) {
   return kind === 'success' ? '✓' : kind === 'error' ? '!' : 'i';
 }
 
-// 打开确认框时把焦点移到主按钮（危险操作则先落在取消上，避免误触回车确认）
+// 焦点困留在对话框内：Tab / Shift+Tab 只在两个按钮间循环
+function trapFocus(e: KeyboardEvent) {
+  const buttons = [cancelBtnRef.value, confirmBtnRef.value].filter(Boolean) as HTMLElement[];
+  if (buttons.length === 0) return;
+  const idx = buttons.indexOf(document.activeElement as HTMLElement);
+  e.preventDefault();
+  const next = idx === -1 ? 0 : (idx + (e.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
+  buttons[next].focus();
+}
+
+// 打开确认框时：危险操作把焦点放在「取消」上，避免一次回车就执行不可逆删除；
+// 关闭后把焦点还给触发元素，键盘用户不会丢失位置。
 watch(
   () => confirmState.open,
   async (open) => {
-    if (!open) return;
-    await nextTick();
-    confirmBtnRef.value?.focus();
+    if (open) {
+      previouslyFocused = document.activeElement as HTMLElement | null;
+      await nextTick();
+      if (confirmState.danger) {
+        cancelBtnRef.value?.focus();
+      } else {
+        confirmBtnRef.value?.focus();
+      }
+    } else {
+      previouslyFocused?.focus?.();
+      previouslyFocused = null;
+    }
   }
 );
 </script>
@@ -88,7 +111,7 @@ watch(
   padding: 13px 15px;
   border-radius: var(--radius-sm);
   /* 实色不透明：半透明在浅色背景上会「糊」，白字对比度也不稳定 */
-  background: var(--gray-900);
+  background: var(--toast-bg);
   color: #fff;
   box-shadow: 0 12px 32px rgba(35, 32, 25, 0.32), 0 2px 6px rgba(35, 32, 25, 0.18);
   font-size: 14px;
@@ -96,9 +119,9 @@ watch(
   line-height: 1.45;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.toast-success { background: var(--success-strong); border-color: rgba(255,255,255,0.14); }
-.toast-error { background: var(--danger-strong); border-color: rgba(255,255,255,0.14); }
-.toast-info { background: var(--gray-800); }
+.toast-success { background: var(--toast-success-bg); border-color: rgba(255,255,255,0.14); }
+.toast-error { background: var(--toast-error-bg); border-color: rgba(255,255,255,0.14); }
+.toast-info { background: var(--toast-info-bg); }
 
 .toast-icon {
   flex: none;
@@ -150,7 +173,7 @@ watch(
 .confirm-card {
   width: 100%;
   max-width: 420px;
-  background: #fff;
+  background: var(--surface);
   border-radius: var(--radius);
   padding: 24px;
   box-shadow: 0 24px 64px rgba(35, 32, 25, 0.28);

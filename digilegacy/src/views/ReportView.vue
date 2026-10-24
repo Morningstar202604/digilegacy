@@ -5,6 +5,20 @@
       这是一份完整的数字遗产继承方案，可打印或传给继承人参考使用。
     </p>
 
+    <div v-if="loading" class="card" aria-busy="true" aria-live="polite">
+      <div class="skeleton skeleton-line w-40"></div>
+      <div class="skeleton skeleton-line w-60"></div>
+      <div class="skeleton skeleton-line w-40"></div>
+      <div class="skeleton skeleton-line w-60"></div>
+      <p class="text-muted mt-16" style="font-size: 13px;">正在生成继承报告…</p>
+    </div>
+
+    <div v-else-if="loadError" class="card" role="alert" style="border-color: var(--danger);">
+      <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--danger-strong);">报告加载失败</h3>
+      <p class="text-muted mb-16" style="font-size: 13px;">{{ loadError }}</p>
+      <button class="btn btn-primary btn-sm" @click="loadReport">重新加载</button>
+    </div>
+
     <div v-if="report" class="report-page">
       <!-- 文档页眉：品牌标识 + 文档类型，模拟正式文书的抬头 -->
       <div class="doc-header">
@@ -107,13 +121,16 @@
     </div>
 
     <div v-if="exportPath" class="card mt-24 tag-success" style="background: var(--success-light); border-color: var(--success);">
-      报告已保存到：{{ exportPath }}
+      <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+        <span>已保存到：<code style="font-size:12px;word-break:break-all;">{{ exportPath }}</code></span>
+        <button class="btn btn-secondary btn-sm" @click="copyExportPath">复制路径</button>
+      </div>
     </div>
     <div v-if="exportError" class="card mt-24 tag-danger" style="background: var(--danger-light, #fdecea); border-color: var(--danger);" role="alert">
       {{ exportError }}
     </div>
 
-    <div class="mt-24 text-center">
+    <div class="mt-24 text-center" v-if="report">
       <button class="btn btn-primary btn-lg" @click="exportReport">📥 导出报告到文件</button>
       <button class="btn btn-secondary btn-lg ml-12" @click="exportZip">📦 导出继承工具包 ZIP</button>
       <button class="btn btn-secondary btn-lg ml-12" @click="handlePrint">🖨 打印</button>
@@ -127,6 +144,7 @@ import { invoke } from '../api/invoke';
 
 import { usePlatformsStore } from '../stores/platforms';
 import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
+import { toast } from '../composables/feedback';
 import type { ApiResponse, DigitalAsset } from '../types';
 
 interface InheritanceReportData {
@@ -147,6 +165,8 @@ const platforms = usePlatformsStore();
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
 const exportError = ref('');
+const loadError = ref('');
+const loading = ref(true);
 
 const inheritableAssets = computed(() =>
   (report.value?.assets || []).filter(a => a.disposal_method !== 'no_action')
@@ -158,12 +178,22 @@ function getPlatformProcess(platformId: number): string {
 }
 
 async function loadReport() {
+  loadError.value = '';
+  loading.value = true;
   try {
     const res = await invoke<ApiResponse<InheritanceReportData>>('get_inheritance_report');
     if (res.success && res.data) {
       report.value = res.data;
+    } else if (!res.success) {
+      loadError.value = res.message || '报告加载失败';
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    // 页面会一直停在空态；必须让用户知道是「加载失败」而不是「没有资产」
+    console.error('加载继承报告失败:', e);
+    loadError.value = '报告加载失败：' + String(e);
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function exportReport() {
@@ -280,6 +310,15 @@ async function buildAndSaveZip() {
     exportPath.value = res.data;
   } else {
     exportError.value = res.message || '导出工具包失败';
+  }
+}
+
+async function copyExportPath() {
+  try {
+    await navigator.clipboard.writeText(exportPath.value);
+    toast('导出路径已复制');
+  } catch {
+    toast('复制失败，请手动选中路径', 'error');
   }
 }
 

@@ -13,7 +13,10 @@ vi.mock('../api/invoke', () => ({
 import AssetsView from './AssetsView.vue';
 import { useAssetsStore } from '../stores/assets';
 import { invoke } from '../api/invoke';
+import { silenceExpectedErrors } from '../test-utils/silence';
 import type { Mock } from 'vitest';
+
+silenceExpectedErrors();
 
 const mockedInvoke = invoke as unknown as Mock;
 
@@ -167,5 +170,53 @@ describe('AssetsView 渲染', () => {
     await w.vm.$nextTick();
 
     expect(w.text()).toContain('-');
+  });
+
+  it('加载失败时显示错误与重试，而不是「还没有登记任何数字资产」', async () => {
+    // 历史缺陷：store 吞掉异常后 assets 保持 []，视图把失败当空态，
+    // 用户会以为资产全部丢失——遗产类产品里这是最危险的误导。
+    mockedInvoke.mockRejectedValue(new Error('数据库被占用'));
+    const w = await mountView();
+    await flushPromises();
+
+    expect(w.text()).toContain('资产列表加载失败');
+    expect(w.text()).toContain('重试');
+    expect(w.text()).not.toContain('还没有登记任何数字资产');
+  });
+
+  it('搜索按平台名/账号过滤，且无结果时提示是筛选结果', async () => {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [
+      makeAsset({ id: 1, platform_name: '支付宝', account_identifier: 'alipay-user' }),
+      makeAsset({ id: 2, platform_name: '微信', account_identifier: 'wechat-user' }),
+    ] as never;
+    await w.vm.$nextTick();
+
+    const input = w.find('input[type="search"]');
+    expect(input.exists(), '搜索框必须存在').toBe(true);
+    await input.setValue('wechat');
+    expect(w.findAll('.asset-row')).toHaveLength(1);
+    expect(w.text()).toContain('微信');
+
+    await input.setValue('不存在的关键词');
+    expect(w.findAll('.asset-row')).toHaveLength(0);
+    expect(w.text()).toContain('没有匹配的资产');
+    expect(w.text()).not.toContain('还没有登记任何数字资产');
+  });
+
+  it('排序按价值从高到低', async () => {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [
+      makeAsset({ id: 1, platform_name: '低价', estimated_value: 10 }),
+      makeAsset({ id: 2, platform_name: '高价', estimated_value: 9999 }),
+    ] as never;
+    await w.vm.$nextTick();
+
+    const select = w.find('select[aria-label="排序方式"]');
+    await select.setValue('value');
+    const rows = w.findAll('.asset-row');
+    expect(rows[0].text()).toContain('高价');
   });
 });

@@ -16,6 +16,24 @@
   --success-strong: #3a6e50;
   --warning-strong: #82561d;
   --danger-strong: #9c3a2b;
+  /* 实心按钮底色与白字：必须与"文字档"分开。
+     --*-strong 在深色主题里要变亮（当文字用），若同时当按钮底就会出现
+     "浅底 + 白字" 的低对比（历史缺陷：暗色下成功按钮 2.26:1）。
+     这一组在两种主题下都保持足够深，白字始终可读。 */
+  --solid-primary: #a04b3d;
+  --solid-success: #2f6b4a;
+  --solid-warning: #6d4d18;
+  --solid-danger: #8f3324;
+  --on-solid: #ffffff;
+  /* Toast 固定深底浅字，不随主题翻转（翻转后会出现浅底白字 1.11:1） */
+  --toast-bg: #2b2724;
+  --toast-success-bg: #2f6b4a;
+  --toast-error-bg: #8f3324;
+  --toast-info-bg: #3a3530;
+  /* 侧栏在两种主题下都是深底，文字不能复用会翻转的中性阶 */
+  --sidebar-text: rgba(255, 255, 255, 0.74);
+  --sidebar-text-strong: #ffffff;
+  --sidebar-muted: rgba(255, 255, 255, 0.58);
   /* 暖色中性阶 */
   --gray-50: #f6f3ee;
   --gray-100: #efe9e1;
@@ -111,7 +129,7 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  color: var(--gray-300);
+  color: var(--sidebar-text);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -141,7 +159,7 @@ html, body {
   padding: 14px 24px 16px;
   border-top: 1px solid rgba(255,255,255,0.1);
   font-size: 12px;
-  color: var(--gray-400);
+  color: var(--sidebar-muted);
   text-align: center;
 }
 
@@ -316,8 +334,8 @@ html, body {
 }
 
 .btn-primary {
-  background: var(--primary);
-  color: white;
+  background: var(--solid-primary);
+  color: var(--on-solid);
 }
 .btn-primary:hover {
   background: var(--primary-dark);
@@ -333,27 +351,27 @@ html, body {
 }
 
 .btn-success {
-  background: var(--success-strong);
-  color: white;
+  background: var(--solid-success);
+  color: var(--on-solid);
 }
 .btn-success:hover {
-  background: #2f5c42;
+  background: #27583d;
 }
 
 .btn-warning {
-  background: var(--warning-strong);
-  color: white;
+  background: var(--solid-warning);
+  color: var(--on-solid);
 }
 .btn-warning:hover {
-  background: #75501a;
+  background: #5b3f12;
 }
 
 .btn-danger {
-  background: var(--danger);
-  color: white;
+  background: var(--solid-danger);
+  color: var(--on-solid);
 }
 .btn-danger:hover {
-  background: #a13c2d;
+  background: #77291c;
 }
 
 .btn-ghost {
@@ -910,6 +928,20 @@ html, body {
   --success-strong: #7cba94;
   --warning-strong: #e0b878;
   --danger-strong: #e28d7b;
+
+  /* 实心底色在深色主题也不翻转：这些是"白字底"，变亮会直接毁掉可读性 */
+  --solid-primary: #a04b3d;
+  --solid-success: #2f6b4a;
+  --solid-warning: #6d4d18;
+  --solid-danger: #8f3324;
+  --on-solid: #ffffff;
+  --toast-bg: #2b2724;
+  --toast-success-bg: #2f6b4a;
+  --toast-error-bg: #8f3324;
+  --toast-info-bg: #3a3530;
+  --sidebar-text: rgba(255, 255, 255, 0.74);
+  --sidebar-text-strong: #ffffff;
+  --sidebar-muted: rgba(255, 255, 255, 0.58);
 
   --gray-50: #1a1815;
   --gray-100: #211e1a;

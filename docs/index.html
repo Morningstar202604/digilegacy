@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DigiLegacy — Open-Source Local-First Digital Legacy &amp; Digital Inheritance Manager</title>
-<meta name="description" content="DigiLegacy (归零) is a free, open-source, local-first desktop app for digital legacy planning and digital inheritance. Discover 150+ platform accounts, plan how each should be handled, and hand heirs a ready-to-execute inheritance toolkit. AES-256-GCM encryption, zero servers, zero telemetry — not even the developers can read your data.">
+<meta name="description" content="DigiLegacy (归零) is a free, open-source, local-first desktop app for digital legacy planning and digital inheritance. Discover 152 platform accounts, plan how each should be handled, and hand heirs a ready-to-execute inheritance toolkit. AES-256-GCM encryption, zero servers, zero telemetry — not even the developers can read your data.">
 <meta name="keywords" content="digital legacy,digital inheritance,digital assets management,estate planning software,dead man's switch,digital legacy manager,password inheritance,local-first software,privacy-first,open source,zero knowledge,encrypted vault,Tauri,Rust,Vue,digital estate planning,inactive account manager alternative,中国数字遗产,数字遗产管理,数字遗产继承,归零">
 <meta name="author" content="DigiLegacy contributors">
 <meta name="robots" content="index, follow">
@@ -15,7 +15,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="DigiLegacy 归零">
 <meta property="og:title" content="DigiLegacy — Open-Source Digital Legacy &amp; Inheritance Manager">
-<meta property="og:description" content="Local-first desktop app for digital legacy planning and inheritance. 150+ platform policy database, AES-256-GCM field-level encryption, three-stage inheritance trigger chain. No servers, no telemetry.">
+<meta property="og:description" content="Local-first desktop app for digital legacy planning and inheritance. 152-platform policy database, AES-256-GCM field-level encryption, three-stage inheritance trigger chain. No servers, no telemetry.">
 <meta property="og:url" content="https://badhope.github.io/digilegacy/">
 <meta property="og:image" content="https://badhope.github.io/digilegacy/screenshots/01-dashboard.png">
 <meta property="og:locale" content="en_US">
@@ -38,7 +38,7 @@
   "applicationCategory": "SecurityApplication",
   "applicationSubCategory": "Digital legacy planning and inheritance",
   "operatingSystem": "Windows 10, Windows 11",
-  "softwareVersion": "0.1.0",
+  "softwareVersion": "0.2.0",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
   "downloadUrl": "https://github.com/badhope/digilegacy",
@@ -46,7 +46,7 @@
   "programmingLanguage": ["Rust", "TypeScript", "Vue"],
   "description": "Open-source, local-first desktop application for digital legacy planning and digital inheritance. Helps users discover, register and plan the disposal of digital assets, and hands heirs an executable inheritance toolkit. Field-level AES-256-GCM encryption; no server, no telemetry.",
   "featureList": [
-    "Digital asset discovery across 150+ platform policy database",
+    "Digital asset discovery across 152-platform policy database",
     "Asset classification and registration",
     "Disposal planning (inherit, liquidate, memorialize, authorize, delete, donate)",
     "Inheritance report and executable toolkit export",
@@ -164,6 +164,7 @@ footer li{margin-bottom:6px}
       <li><a href="#screenshots">Screenshots</a></li>
       <li><a href="#security">Security</a></li>
       <li><a href="#compare">Comparison</a></li>
+      <li><a href="demo/">Live demo</a></li>
       <li><a href="#start">Get started</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ul>
@@ -182,11 +183,12 @@ footer li{margin-bottom:6px}
     </p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/badhope/digilegacy/releases">⬇ Download for Windows</a>
+      <a class="btn btn-ghost" href="demo/">▶ Try the interactive demo</a>
       <a class="btn btn-ghost" href="https://github.com/badhope/digilegacy">View source on GitHub</a>
     </div>
     <div class="badges">
       <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
-      <img src="https://img.shields.io/badge/tests-80%20Rust%20%C2%B7%20238%20frontend-brightgreen.svg" alt="80 Rust tests and 238 frontend tests passing">
+      <img src="https://img.shields.io/badge/tests-86%20Rust%20%C2%B7%20257%20frontend-brightgreen.svg" alt="86 Rust tests and 257 frontend tests passing">
       <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows 10/11">
       <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
       <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -226,7 +228,7 @@ footer li{margin-bottom:6px}
       <div class="card">
         <span class="num">01</span>
         <h3>Digital asset discovery</h3>
-        <p>A built-in policy database of <strong>150+ platforms across 16 categories</strong> plus a guided self-check questionnaire — designed to surface accounts you have already forgotten.</p>
+        <p>A built-in policy database of <strong>152 platforms across 16 categories</strong> plus a guided self-check questionnaire — designed to surface accounts you have already forgotten.</p>
       </div>
       <div class="card">
         <span class="num">02</span>
@@ -261,34 +263,50 @@ footer li{margin-bottom:6px}
   <div class="wrap">
     <h2>Screenshots</h2>
     <p class="sub">A native desktop app, about 3 MB installed. Interface shown in Simplified Chinese (the primary target locale); an English UI is on the roadmap.</p>
+    <figure style="margin-bottom:26px">
+      <video controls preload="metadata" poster="screenshots/01-dashboard.png" style="width:100%;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(34,51,59,.10)">
+        <source src="media/demo-walkthrough.mp4" type="video/mp4">
+        Your browser does not support the video tag —
+        <a href="media/demo-walkthrough.mp4">download the 32-second walkthrough</a>.
+      </video>
+      <figcaption>32-second walkthrough — discovery → registration → disposal → check-in → report → heir guide</figcaption>
+    </figure>
     <div class="shots">
       <figure>
-        <img src="screenshots/01-dashboard.png" alt="DigiLegacy dashboard showing asset totals, total estimated value and planning completion" loading="lazy">
-        <figcaption>Dashboard — asset overview and planning progress</figcaption>
+        <img src="screenshots/01-dashboard.png" alt="DigiLegacy dashboard showing asset totals, total estimated value, planning completion and asset composition chart" loading="lazy">
+        <figcaption>Dashboard — asset overview, planning progress and composition</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/02-discover.png" alt="Digital asset discovery questionnaire with 10 categories" loading="lazy">
+        <img src="screenshots/02-discover.png" alt="Digital asset discovery questionnaire with asset categories" loading="lazy">
         <figcaption>Guided discovery questionnaire</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/03-assets.png" alt="Registered digital assets list with category and disposal tags" loading="lazy">
-        <figcaption>Registered assets with disposal status</figcaption>
+        <img src="screenshots/03-assets.png" alt="Registered digital assets list with search, sort, category and disposal tags" loading="lazy">
+        <figcaption>Registered assets with search, sort and disposal status</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/05-dms.png" alt="Dead man's switch page with check-in and three-stage notification chain" loading="lazy">
+        <img src="screenshots/04-asset-detail.png" alt="Asset detail page with platform inheritance policy and encrypted credential vault" loading="lazy">
+        <figcaption>Asset detail &amp; encrypted credential vault</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/06-dms.png" alt="Dead man's switch page with check-in and three-stage notification chain" loading="lazy">
         <figcaption>Dead man's switch &amp; local reminders</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/07-heir-guide.png" alt="Heir guidance wizard with per-platform inheritance procedures" loading="lazy">
-        <figcaption>Heir guidance wizard</figcaption>
-      </figure>
-      <figure>
-        <img src="screenshots/06-report.png" alt="Generated inheritance report document" loading="lazy">
+        <img src="screenshots/07-report.png" alt="Generated inheritance report document" loading="lazy">
         <figcaption>Generated inheritance report</figcaption>
       </figure>
       <figure>
-        <img src="screenshots/08-legal.png" alt="Legal document template library with six categories" loading="lazy">
+        <img src="screenshots/08-heir-guide.png" alt="Heir guidance wizard with per-platform inheritance procedures" loading="lazy">
+        <figcaption>Heir guidance wizard</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/09-legal.png" alt="Legal document template library with six categories" loading="lazy">
         <figcaption>Legal template library</figcaption>
+      </figure>
+      <figure>
+        <img src="screenshots/10-dashboard-dark.png" alt="Dark theme dashboard" loading="lazy">
+        <figcaption>Dark theme — token-driven, WCAG AA contrast</figcaption>
       </figure>
     </div>
   </div>
@@ -355,7 +373,7 @@ footer li{margin-bottom:6px}
 
 # 2. Launch it. Your data stays in:
 #    %APPDATA%\com.digilegacy.app\digilegacy.db</code></pre>
-        <p class="note">On first launch a short guided tour explains each screen. A built-in help centre explains the encryption model and the real capability boundaries of the reminder chain.</p>
+        <p class="note">On first launch a short guided tour explains each screen. A built-in help centre explains the encryption model and the real capability boundaries of the reminder chain. Prefer to look around first? <a href="demo/">Open the interactive demo</a> — same UI, mock data in your browser, no install.</p>
       </div>
       <div>
         <h3>Build from source</h3>
@@ -371,7 +389,7 @@ npm run dev            # http://localhost:1420
 
 # Tests
 cd src-tauri &amp;&amp; cargo test</code></pre>
-        <p class="note">Stack: <strong>Tauri 2 (Rust)</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>. 80 Rust tests and 238 frontend tests, all passing.</p>
+        <p class="note">Stack: <strong>Tauri 2 (Rust)</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>. 86 Rust tests and 257 frontend tests, all passing.</p>
       </div>
     </div>
   </div>
@@ -381,8 +399,8 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
   <div class="wrap">
     <h2>Roadmap</h2>
     <div class="grid g3">
-      <div class="card"><h3>Shipped</h3><p>Asset discovery, encrypted vault, disposal planning, report &amp; toolkit export, dead man's switch with tray residency, recovery key, onboarding tour, help centre, zero-content heartbeat client &amp; reference server, <strong>offline policy-patch channel</strong> (import/export JSON overrides for the built-in platform database).</p></div>
-      <div class="card"><h3>Next</h3><p>English and multilingual UI (no i18n layer yet), encrypted cloud backup (requires a server you host or trust), mobile companion for check-ins (separate codebase), notification action buttons (native notification actions). <strong>None of these are started.</strong></p></div>
+      <div class="card"><h3>Shipped</h3><p>Asset discovery, encrypted vault, disposal planning, report &amp; toolkit export, dead man's switch with tray residency, recovery key, onboarding tour, help centre, zero-content heartbeat client &amp; reference server, <strong>offline policy-patch channel</strong>, asset search &amp; sort, composition chart, <strong>interactive browser demo</strong>, backup v2 covering heartbeat and policy patches.</p></div>
+      <div class="card"><h3>Next</h3><p>English and multilingual UI (no i18n layer yet), encrypted cloud backup (requires a server you host or trust), mobile companion for check-ins (separate codebase), notification action buttons (native notification actions), macOS/Linux installers. <strong>None of these are started.</strong></p></div>
       <div class="card"><h3>Later</h3><p>AI-assisted policy Q&amp;A (interface reserved), institution integrations, patent filings, community-contributed policy database.</p></div>
     </div>
   </div>
@@ -409,7 +427,7 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
 
     <details>
       <summary>Can it automatically detect all my accounts?</summary>
-      <p>No, and any tool claiming to do so would be lying or would need your credentials. DigiLegacy does guided discovery: it knows 150+ mainstream platforms and prompts you with questions that help you remember, then you confirm. The final list is always yours.</p>
+      <p>No, and any tool claiming to do so would be lying or would need your credentials. DigiLegacy does guided discovery: it knows 152 mainstream platforms and prompts you with questions that help you remember, then you confirm. The final list is always yours.</p>
     </details>
 
     <details>
@@ -419,7 +437,7 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
 
     <details>
       <summary>Is it about accounts on Chinese platforms specifically?</summary>
-      <p>The policy database covers 150+ platforms used in mainland China (WeChat, Alipay, Taobao, Bilibili, Steam and more) because that is where platform inheritance rules are most opaque. The architecture is not region-bound.</p>
+      <p>The policy database covers 152 platforms used in mainland China (WeChat, Alipay, Taobao, Bilibili, Steam and more) because that is where platform inheritance rules are most opaque. The architecture is not region-bound.</p>
     </details>
 
     <details>

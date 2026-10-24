@@ -9,9 +9,9 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 // 不依赖 tsconfig 的 globals 类型注入，避免影响 vue-tsc 对业务代码的检查。
 export default defineConfig({
   plugins: [vue()],
-  // 与 vite.config.ts 对齐：业务代码直接读构建期注入的 __APP_VERSION__，
-  // 测试环境缺这个 define 会让任何挂载 App.vue 的用例直接 ReferenceError。
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // 与 vite.config.ts 对齐：业务代码直接读构建期注入的 __APP_VERSION__ / __DEMO_MODE__，
+  // 测试环境缺这些 define 会让任何挂载 App.vue 的用例直接 ReferenceError。
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __DEMO_MODE__: 'false' },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.ts'],

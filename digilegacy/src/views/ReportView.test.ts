@@ -178,3 +178,25 @@ describe('打印', () => {
     expect(printSpy).toHaveBeenCalled();
   });
 });
+
+describe('报告加载失败', () => {
+  it('IPC 抛错时必须给出可见提示，而不是停在空白页', async () => {
+    const w = await mountReport({
+      get_inheritance_report: Promise.reject(new Error('数据库未初始化')),
+    });
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    expect(w.text(), '加载失败必须可见').toContain('报告加载失败');
+  });
+
+  it('后端返回 success:false 时显示后端消息', async () => {
+    const w = await mountReport({
+      get_inheritance_report: { success: false, message: '数据已加密，请先解锁', data: null },
+    });
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    expect(w.text()).toContain('数据已加密，请先解锁');
+  });
+});

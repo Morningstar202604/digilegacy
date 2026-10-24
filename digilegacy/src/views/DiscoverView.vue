@@ -50,12 +50,18 @@
 
     <!-- 步骤2：平台勾选 + 资产登记 -->
     <div v-if="currentStep === 2">
-      <div class="card mb-24" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="card mb-24" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;">
         <div>
           <div class="card-title">✅ 勾选你拥有账号的每个平台</div>
           <div class="card-subtitle">已为你筛选 {{ filteredPlatformCount }} 个平台，勾选即有 <strong>{{ platforms.selectedIds.size }}</strong> 个</div>
         </div>
-        <button class="btn btn-sm btn-secondary" @click="goToStep(1)">← 返回修改类别</button>
+        <div class="flex gap-8" style="flex-wrap: wrap;">
+          <div class="search-box">
+            <span class="search-icon" aria-hidden="true">🔎</span>
+            <input v-model="platformKeyword" class="form-input search-input" type="search" placeholder="搜索平台名…" aria-label="搜索平台" />
+          </div>
+          <button class="btn btn-sm btn-secondary" @click="goToStep(1)">← 返回修改类别</button>
+        </div>
       </div>
 
       <!-- 按大类分组展示平台（可折叠，默认展开） -->
@@ -262,20 +268,35 @@ function toggleCat(key: string) {
 
 // 按大类的平台列表（用于展示勾选卡片）
 const filteredPlatformCount = computed(() => {
-  if (selectedCats.value.size === 0) return platforms.platforms.length;
-  const dataCats = new Set(assetCategories.filter(c => selectedCats.value.has(c.key)).flatMap(c => c.cats));
-  return platforms.platforms.filter(p => dataCats.has(p.category)).length;
+  const dataCats = selectedCats.value.size === 0
+    ? null
+    : new Set(assetCategories.filter(c => selectedCats.value.has(c.key)).flatMap(c => c.cats));
+  const terms = platformKeyword.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return platforms.platforms.filter(p => {
+    if (dataCats && !dataCats.has(p.category)) return false;
+    if (terms.length === 0) return true;
+    const haystack = `${p.name} ${p.subtype} ${p.category}`.toLowerCase();
+    return terms.every(t => haystack.includes(t));
+  }).length;
 });
 
 interface CategoryWithPlatforms extends AssetCategory { platforms: Platform[] }
 
+const platformKeyword = ref('');
+
 const selectedCategoriesWithPlatforms = computed((): CategoryWithPlatforms[] => {
   if (selectedCats.value.size === 0) return [];
+  const terms = platformKeyword.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return assetCategories
     .filter(c => selectedCats.value.has(c.key))
     .map(c => ({
       ...c,
-      platforms: platforms.platforms.filter(p => c.cats.includes(p.category)),
+      platforms: platforms.platforms.filter(p => {
+        if (!c.cats.includes(p.category)) return false;
+        if (terms.length === 0) return true;
+        const haystack = `${p.name} ${p.subtype} ${p.category}`.toLowerCase();
+        return terms.every(t => haystack.includes(t));
+      }),
     }))
     .filter(c => c.platforms.length > 0);
 });
@@ -364,12 +385,15 @@ onMounted(async () => {
 
 <style scoped>
 .step-indicator { display: flex; gap: 16px; align-items: center; }
+.search-box { position: relative; width: 220px; }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: 0.7; pointer-events: none; }
+.search-input { padding-left: 30px; }
 .step-item { flex: 1; display: flex; align-items: center; gap: 8px; }
 .step-circle {
   width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
   justify-content: center; font-weight: 700; font-size: 14px; background: var(--gray-200); color: var(--gray-700);
 }
-.step-item.active .step-circle { background: var(--primary); color: white; }
+.step-item.active .step-circle { background: var(--solid-primary); color: var(--on-solid); }
 
 .category-grid {
   display: grid;
@@ -377,7 +401,7 @@ onMounted(async () => {
   gap: 16px;
 }
 .category-card {
-  background: white;
+  background: var(--surface);
   border: 2px solid var(--gray-200);
   border-radius: 12px;
   padding: 24px 20px;
@@ -397,7 +421,7 @@ onMounted(async () => {
 .category-desc { font-size: 12px; color: var(--gray-600); line-height: 1.4; }
 .category-check {
   position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
-  border-radius: 50%; background: var(--primary); color: white; display: flex;
+  border-radius: 50%; background: var(--solid-primary); color: var(--on-solid); display: flex;
   align-items: center; justify-content: center; font-size: 14px; font-weight: 700;
 }
 
@@ -406,5 +430,5 @@ onMounted(async () => {
   width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center;
   justify-content: center; font-size: 14px; background: var(--gray-100);
 }
-.platform-card.selected .platform-check { background: var(--primary); color: white; }
+.platform-card.selected .platform-check { background: var(--solid-primary); color: var(--on-solid); }
 </style>

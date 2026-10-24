@@ -7,6 +7,9 @@ import type { DigitalAsset, AssetRequest, ApiResponse } from '../types';
 export const useAssetsStore = defineStore('assets', () => {
   const assets = ref<DigitalAsset[]>([]);
   const loading = ref(false);
+  /** 最近一次加载是否失败。必须与「成功返回 0 条」区分：
+   *  失败时界面若显示空态，用户会误以为资产丢失（遗产类产品最不可接受的误导）。 */
+  const loadError = ref('');
   const currentAsset = ref<DigitalAsset | null>(null);
 
   const totalValue = computed(() =>
@@ -31,13 +34,17 @@ export const useAssetsStore = defineStore('assets', () => {
 
   async function loadAssets() {
     loading.value = true;
+    loadError.value = '';
     try {
       const res = await invoke<ApiResponse<DigitalAsset[]>>('get_all_assets');
       if (res.success && res.data) {
         assets.value = res.data;
+      } else if (!res.success) {
+        loadError.value = res.message || '加载资产列表失败';
       }
     } catch (e) {
       console.error('加载资产列表失败:', e);
+      loadError.value = '加载资产列表失败：' + String(e);
     } finally {
       loading.value = false;
     }
@@ -98,6 +105,7 @@ export const useAssetsStore = defineStore('assets', () => {
   return {
     assets,
     loading,
+    loadError,
     currentAsset,
     totalValue,
     propertyCount,

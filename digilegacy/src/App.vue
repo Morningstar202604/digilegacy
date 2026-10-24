@@ -67,6 +67,14 @@
       
       <main class="main-content">
         <div class="content-wrap">
+          <!-- 浏览器演示横幅：明确告知这是演示数据，不是真实保险库 -->
+          <div v-if="demoMode" class="demo-banner" role="note">
+            <span aria-hidden="true">🧪</span>
+            <span>
+              在线演示：所有数据只存在你的浏览器本地，用于体验界面与流程。
+              <strong>请勿填写真实账号与密码</strong>。真实使用请下载桌面版（数据加密存于本机）。
+            </span>
+          </div>
           <router-view v-slot="{ Component }">
             <transition name="fade" mode="out-in">
               <component :is="Component" />
@@ -102,10 +110,25 @@
             <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleCompleteRecovery">{{ recoveryBusy ? '处理中...' : '重设主密码' }}</button>
           </template>
           <!-- 新恢复密钥必须在重设成功后仍然可见：旧码一次性失效，
-               若此处随 recoveryUnlocked 一起隐藏，用户将永远拿不到新码。 -->
-          <p v-else-if="recoveryNewCode" class="recovery-code-box" role="alert">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
+               若此处随 recoveryUnlocked 一起隐藏，用户将永远拿不到新码。
+               并且只能由用户显式确认关闭——24 字符密钥不可能在倒计时内抄完。 -->
+          <template v-else-if="recoveryNewCode">
+            <p class="recovery-code-box" role="alert">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
+            <label class="recovery-ack">
+              <input type="checkbox" v-model="recoveryNewCodeAck" />
+              我已将新的恢复密钥抄写在安全位置
+            </label>
+            <button
+              class="btn btn-primary"
+              style="margin-top: 12px; width: 100%;"
+              :disabled="!recoveryNewCodeAck"
+              @click="finishRecovery"
+            >我已保存，关闭</button>
+          </template>
           <p v-else-if="recoveryError" role="alert" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ recoveryError }}</p>
-          <button class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="backToUnlock">返回主密码解锁</button>
+          <!-- 新恢复密钥展示期间隐藏「返回」：该按钮会离开恢复流程且不清空 recoveryNewCode，
+               用户点一下就把唯一一份新码永久丢掉。只能用下方的显式确认按钮退出。 -->
+          <button v-if="!recoveryNewCode" class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="backToUnlock">返回主密码解锁</button>
         </template>
       </div>
     </div>
@@ -122,7 +145,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { invoke } from './api/invoke';
+import { invoke, isTauriEnv } from './api/invoke';
 
 import { useDashboardStore } from './stores/dashboard';
 import { useSecurityStore } from './stores/security';
@@ -146,6 +169,8 @@ const security = useSecurityStore();
 
 // 版本号：构建期由 Vite 从 package.json 注入（见 vite.config.ts define）
 const appVersion = __APP_VERSION__;
+// 浏览器演示构建（VITE_DEMO=1）时显示醒目的「演示数据」横幅
+const demoMode = __DEMO_MODE__;
 
 const unlockPassword = ref('');
 const unlockError = ref('');
@@ -156,6 +181,7 @@ const themeIcon = computed(() => (themeResolved.value === 'dark' ? '☀️' : '�
 const themeLabel = computed(() => (themeResolved.value === 'dark' ? '切换到浅色模式' : '切换到深色模式'));
 const lockCardRef = ref<HTMLElement | null>(null);
 let stopReminders: (() => void) | null = null;
+let stopTrayEvents: (() => void) | null = null;
 
 // 焦点困留（document 捕获阶段拦截 Tab）：即使焦点因点击遮罩逃到对话框之外，
 // 下一次 Tab 也会被拉回对话框，禁止穿透到被遮罩的侧边栏与主内容
@@ -259,6 +285,21 @@ const recoveryMessage = ref('');
 const recoveryOk = ref(false);
 const recoveryBusy = ref(false);
 const recoveryNewCode = ref('');
+const recoveryNewCodeAck = ref(false);
+
+/** 用户确认已抄写新恢复密钥后才关闭恢复流程。 */
+function finishRecovery() {
+  if (!recoveryNewCodeAck.value) return;
+  security.refresh();
+  recoveryMode.value = false;
+  recoveryUnlocked.value = false;
+  recoveryNewCode.value = '';
+  recoveryNewCodeAck.value = false;
+  recoveryCode.value = '';
+  recoveryMessage.value = '';
+  recoveryOk.value = false;
+  refreshSensitiveData();
+}
 
 // 锁定遮罩出现 / 内部状态切换（主密码↔恢复模式↔设置新密码）时：
 // 1. 注册全文档捕获级 Tab 困留（焦点逃出对话框也能被拉回）
@@ -313,17 +354,11 @@ async function handleCompleteRecovery() {
     recoveryMessage.value = res.message;
     if (res.success && res.data) {
       recoveryNewCode.value = res.data;
+      recoveryNewCodeAck.value = false;
       recoveryUnlocked.value = false;
       recoveryCode.value = '';
       recoveryNewPassword.value = '';
       recoveryNewPassword2.value = '';
-      window.setTimeout(() => {
-        security.refresh();
-        recoveryMode.value = false;
-        recoveryNewCode.value = '';
-        recoveryMessage.value = '';
-        refreshSensitiveData();
-      }, 6000);
     }
   } catch (e) {
     recoveryOk.value = false;
@@ -390,14 +425,42 @@ async function handleCheckIn() {
   await dashboard.checkIn();
 }
 
+// 托盘菜单与后台线程会向前端 emit 事件：
+//   app-locked      托盘「锁定应用」——必须立刻清空界面上的已解密数据
+//   dms-checked-in  托盘「我还安好」——刷新签到状态与统计
+// 此前没有任何监听，导致托盘锁定后窗口仍显示已解密的账号与档案（安全缺陷）。
+async function bindTrayEvents(): Promise<() => void> {
+  if (!isTauriEnv()) return () => {};
+  try {
+    const { listen } = await import('@tauri-apps/api/event');
+    const unlistenLocked = await listen('app-locked', () => {
+      security.unlocked = false;
+      wipeSensitiveData();
+      bumpActivity();
+    });
+    const unlistenCheckedIn = await listen('dms-checked-in', () => {
+      dashboard.loadCheckInStatus();
+      dashboard.loadStats();
+    });
+    return () => {
+      unlistenLocked();
+      unlistenCheckedIn();
+    };
+  } catch (e) {
+    console.error('绑定托盘事件失败:', e);
+    return () => {};
+  }
+}
+
 initTheme();
 
-onMounted(() => {
+onMounted(async () => {
   security.refresh();
   registerActivityWatch();
   dashboard.loadCheckInStatus();
   dashboard.evaluateDms();
   stopReminders = startLocalReminderLoop();
+  stopTrayEvents = await bindTrayEvents();
   window.setTimeout(() => {
     const locked = security.hasMasterPassword && !security.unlocked;
     if (!locked && !localStorage.getItem('digilegacy_onboarding_done')) {
@@ -409,6 +472,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   unregisterActivityWatch();
   if (stopReminders) stopReminders();
+  if (stopTrayEvents) stopTrayEvents();
   document.removeEventListener('keydown', trapLockFocus, true);
 });
 </script>
@@ -431,7 +495,7 @@ onBeforeUnmount(() => {
   z-index: 1000;
 }
 .lock-card {
-  background: var(--gray-0, #fffdfa);
+  background: var(--surface);
   border-radius: 16px;
   padding: 32px;
   width: 380px;
@@ -452,5 +516,29 @@ onBeforeUnmount(() => {
   background: rgba(183, 121, 31, 0.08);
   font-size: 13px;
   word-break: break-all;
+}
+.recovery-ack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--gray-700);
+  cursor: pointer;
+  text-align: left;
+}
+
+.demo-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-light);
+  border: 1px solid var(--warning);
+  color: var(--warning-strong);
+  font-size: 13px;
+  line-height: 1.6;
 }
 </style>

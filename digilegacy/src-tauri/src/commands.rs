@@ -17,31 +17,35 @@ pub fn get_all_platforms_extended() -> Result<ApiResponse<Vec<PlatformExtended>>
     // 必须从数据库读（而不是直接用内置 const 表），否则用户导入的政策补丁在
     // 继承人向导 / 变现路径卡里完全不生效——两个入口会显示不一致的政策。
     let platforms = db::get_all_platforms_db()?;
+    // 扩展元数据先一次性建索引：原实现在 map 内调用 get_all_platforms_data()，
+    // 每处理一个平台就重建整张 152 条内置表（O(n²) 且每次分配上千个 String）。
+    let meta_by_id: std::collections::HashMap<i64, crate::platform_data::PlatformEntry> =
+        get_all_platforms_data()
+            .into_iter()
+            .map(|m| (m.id, m))
+            .collect();
     let extended = platforms
         .into_iter()
         .map(|p| {
-            let meta = get_all_platforms_data()
-                .into_iter()
-                .find(|m| m.id == p.id)
-                .unwrap_or_else(|| {
-                    // 补丁新增的平台在内置库里没有扩展元数据，用空值占位
-                    crate::platform_data::PlatformEntry::new(
-                        p.id,
-                        &p.name,
-                        "",
-                        &p.category,
-                        &p.subtype,
-                        p.has_property,
-                        p.has_personality,
-                        p.inheritable,
-                        &p.required_documents,
-                        &p.process_description,
-                        &p.estimated_difficulty,
-                        &p.official_policy_url,
-                        &p.estimated_time_days,
-                        &p.notes,
-                    )
-                });
+            let meta = meta_by_id.get(&p.id).cloned().unwrap_or_else(|| {
+                // 补丁新增的平台在内置库里没有扩展元数据，用空值占位
+                crate::platform_data::PlatformEntry::new(
+                    p.id,
+                    &p.name,
+                    "",
+                    &p.category,
+                    &p.subtype,
+                    p.has_property,
+                    p.has_personality,
+                    p.inheritable,
+                    &p.required_documents,
+                    &p.process_description,
+                    &p.estimated_difficulty,
+                    &p.official_policy_url,
+                    &p.estimated_time_days,
+                    &p.notes,
+                )
+            });
             PlatformExtended {
                 base: Platform {
                     id: p.id,
@@ -122,8 +126,38 @@ pub fn clear_platform_patch() -> Result<ApiResponse<usize>, String> {
 
 // ========== 数字资产 ==========
 
+/// IPC 入参上限：文本字段单条 8KB、ID 必须为正。
+/// 没有上限时，一次失控调用就能把几十 MB 写进 SQLite（且会被每日备份复制 7 份）。
+fn validate_asset_request(req: &AssetRequest) -> Result<(), String> {
+    if req.platform_id <= 0 {
+        return Err("平台 id 必须为正数".to_string());
+    }
+    for (name, value) in [
+        ("账号标识", Some(req.account_identifier.as_str())),
+        ("账号描述", Some(req.account_description.as_str())),
+        ("备注", Some(req.notes.as_str())),
+        ("继承人姓名", req.heir_name.as_deref()),
+        ("继承人联系方式", req.heir_contact.as_deref()),
+    ] {
+        if let Some(v) = value {
+            if v.chars().count() > 8_000 {
+                return Err(format!("{}过长（上限 8000 字符）", name));
+            }
+        }
+    }
+    if let Some(v) = req.estimated_value {
+        if !v.is_finite() || v < 0.0 || v > 1e12 {
+            return Err("预估价值必须是 0 到 1 万亿之间的有限数值".to_string());
+        }
+    }
+    Ok(())
+}
+
 #[command]
 pub fn add_asset(req: AssetRequest) -> Result<ApiResponse<i64>, String> {
+    if let Err(e) = validate_asset_request(&req) {
+        return Ok(ApiResponse::fail(&e));
+    }
     let id = db::add_asset_db(&req)?;
     Ok(ApiResponse::ok_with_msg(id, "数字资产添加成功"))
 }
@@ -134,12 +168,18 @@ pub fn update_asset(id: i64, req: AssetRequest) -> Result<ApiResponse<()>, Strin
     if !exists {
         return Ok(ApiResponse::fail("资产不存在或已被删除"));
     }
+    if let Err(e) = validate_asset_request(&req) {
+        return Ok(ApiResponse::fail(&e));
+    }
     db::update_asset_db(id, &req)?;
     Ok(ApiResponse::ok_with_msg((), "资产更新成功"))
 }
 
 #[command]
 pub fn delete_asset(id: i64) -> Result<ApiResponse<()>, String> {
+    if db::get_asset_by_id_db(id)?.is_none() {
+        return Ok(ApiResponse::fail("资产不存在或已被删除"));
+    }
     db::delete_asset_db(id)?;
     Ok(ApiResponse::ok_with_msg((), "资产已删除"))
 }
@@ -191,6 +231,26 @@ pub fn set_disposal_wish(
 
 #[command]
 pub fn set_user_profile(profile: UserProfile) -> Result<ApiResponse<()>, String> {
+    // 档案字段会进入继承报告与 DMS 邮件正文，必须有上限；
+    // 其中紧急联系人邮箱还会作为 SMTP 收件人。
+    for (name, value) in [
+        ("姓名", profile.full_name.as_str()),
+        ("手机号", profile.phone.as_str()),
+        ("邮箱", profile.email.as_str()),
+        ("紧急联系人姓名", profile.emergency_contact_name.as_str()),
+        ("紧急联系人电话", profile.emergency_contact_phone.as_str()),
+        ("紧急联系人邮箱", profile.emergency_contact_email.as_str()),
+        ("继承人姓名", profile.heir_primary_name.as_str()),
+        ("继承人电话", profile.heir_primary_phone.as_str()),
+        ("继承人邮箱", profile.heir_primary_email.as_str()),
+    ] {
+        if value.chars().count() > 500 {
+            return Ok(ApiResponse::fail(&format!("{}过长（上限 500 字符）", name)));
+        }
+    }
+    if !(1..=365).contains(&profile.check_in_interval_days) {
+        return Ok(ApiResponse::fail("检查间隔必须在 1 到 365 天之间"));
+    }
     db::save_user_profile_db(&profile)?;
     Ok(ApiResponse::ok_with_msg((), "用户档案已保存"))
 }
@@ -285,6 +345,11 @@ pub fn get_check_in_status() -> Result<ApiResponse<CheckInStatus>, String> {
 
 #[command]
 pub fn set_dead_mans_switch(enabled: bool, interval_days: i64) -> Result<ApiResponse<()>, String> {
+    // 合法区间与前端下拉一致：1 天（测试/特殊场景）到 365 天。
+    // 0 或负数会让「到期日」落在过去，第一天就触发三级通知；极端大值等于永不提醒。
+    if !(1..=365).contains(&interval_days) {
+        return Ok(ApiResponse::fail("检查间隔必须在 1 到 365 天之间"));
+    }
     db::set_dms_config_db(enabled, interval_days)?;
     let msg = if enabled {
         format!("Dead Man's Switch 已开启，每 {} 天检查一次", interval_days)
@@ -1037,5 +1102,72 @@ mod tests {
 
         crate::vault::clear_key();
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// 资产入参必须在命令层被拦下：超长文本、非有限估值、非法平台 id。
+    /// 这些值会写入 SQLite 并被每日备份复制 7 份，不能只靠前端约束。
+    #[test]
+    fn asset_commands_reject_oversized_and_invalid_payloads() {
+        let _g = crate::vault::test_lock();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_val_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        let base = |over: AssetRequest| over;
+        let mk = || AssetRequest {
+            platform_id: 1,
+            account_identifier: "acc".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        };
+
+        let too_long = base(AssetRequest {
+            account_identifier: "x".repeat(8_001),
+            ..mk()
+        });
+        let r = add_asset(too_long).unwrap();
+        assert!(!r.success, "超长账号标识必须被拒绝");
+
+        let nan_value = base(AssetRequest {
+            estimated_value: Some(f64::NAN),
+            ..mk()
+        });
+        let r = add_asset(nan_value).unwrap();
+        assert!(!r.success, "NaN 估值必须被拒绝");
+
+        let bad_platform = base(AssetRequest {
+            platform_id: 0,
+            ..mk()
+        });
+        let r = add_asset(bad_platform).unwrap();
+        assert!(!r.success, "非法平台 id 必须被拒绝");
+
+        // 合法请求仍应成功（防止校验过严把正常路径也拦掉）
+        let r = add_asset(mk()).unwrap();
+        assert!(r.success, "合法请求必须通过: {}", r.message);
+    }
+
+    /// DMS 间隔必须有界：0/负数会立刻触发三级通知，超大值等于永不提醒。
+    #[test]
+    fn dms_interval_must_be_within_range() {
+        let _g = crate::vault::test_lock();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_dms_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        for bad in [0i64, -1, 366, 100_000] {
+            let r = set_dead_mans_switch(true, bad).unwrap();
+            assert!(!r.success, "间隔 {} 必须被拒绝", bad);
+        }
+        let r = set_dead_mans_switch(true, 30).unwrap();
+        assert!(r.success);
+        assert_eq!(db::get_check_in_status_db().unwrap().interval_days, 30);
     }
 }

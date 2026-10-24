@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   width: 430px;
   max-width: calc(100vw - 48px);
-  background: var(--gray-0, #fffdfa);
+  background: var(--surface);
   z-index: 1110;
   box-shadow: -12px 0 40px rgba(0, 0, 0, 0.18);
   display: flex;

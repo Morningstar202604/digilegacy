@@ -8,12 +8,13 @@
 |---|---|---|
 | 依赖一致性 | `npm ci` | PASS |
 | 类型检查 | `npx vue-tsc --noEmit` | PASS (exit 0) |
-| 测试 + 覆盖率门禁 | `npm run test:coverage` | 238 tests / 24 files，statements 79.9%（79.8 / 73.4 / 81.1，阈值 78/78/71/79） |
+| 测试 + 覆盖率门禁 | `npm run test:coverage` | 257 tests / 25 files，statements 79.11%（branches 78.44 / functions 72.64 / lines 80.45，阈值 78/78/71/79） |
 | 生产构建 | `npm run build` | PASS |
 | E2E（Playwright） | `npx playwright test` | **37 passed**（7 视图 + 发现链路 + 全站 UI 健全性 + 深色模式 + 视觉验收） |
 | 格式 | `cargo fmt --check` | PASS |
 | Lint | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
-| Rust 测试 | `cargo test --locked` | 80 passed, 0 failed, 1 ignored |
+| Rust 测试 | `cargo test --locked` | 86 passed, 0 failed, 1 ignored |
+| 心跳服务器行为测试 | `node server/heartbeat-server.test.mjs` | 9 assertions PASS |
 
 ## 跨平台验证（Ubuntu 24.04 容器，真实 Linux）
 
@@ -24,7 +25,7 @@ Ubuntu 24.04 容器内用 Rust 1.99.1 完整复跑：
 |---|---|
 | `cargo fmt --check` | PASS |
 | `cargo clippy --all-targets -- -D warnings` | PASS，0 warnings |
-| `cargo test --locked` | 59 passed, 0 failed, 1 ignored（68.04s，当时套件；此后用例增加至 66，容器未重跑） |
+| `cargo test --locked` | 59 passed, 0 failed, 1 ignored（68.04s）— **历史记录**，当时套件规模；此后用例增至 86，容器未重跑 |
 
 ## E2E 跨平台验证（Ubuntu 24.04 容器）
 
@@ -39,7 +40,7 @@ E2E 首次在 Linux 容器内运行时 18 个用例全失败，排查后确认**
 | **18 passed / 0 failed** | 27.5s |
 
 结论：E2E 用例本身跨平台可跑通；CI 上浏览器由 `npx playwright install --with-deps chromium`
-安装，job 已设 `timeout-minutes: 15` 避免大包下载被截断。
+安装，job 已设 `timeout-minutes: 15` 避免大包下载被截断。该记录为当时 18 例规模，当前套件为 37 例。
 
 ## E2E 变异验证
 
@@ -64,15 +65,17 @@ E2E 的价值在于能抓住视图层变异（单测覆盖不到）：
 
 ## Node 版本
 
-依赖链 engines 要求 `^22.22.2 || ^24.15.0 || >=26`。本机 Node 24.14.0 **不满足**，
-CI 固定 `22.22.2`。已在 Node 22.22.2 下复跑前端全量：110 tests 通过、覆盖率一致（补测后为 122）。
+依赖链 engines 要求 `^22.22.2 || ^24.15.0 || >=26`（jsdom 及其传递依赖）。本机 Node 24.14.0
+**不满足**该范围（`npm ci` 会打印 EBADENGINE，但可运行），CI 固定 `22.22.2`，并在
+`digilegacy/package.json` 的 `engines` 字段与本文件同步声明，`.nvmrc` 固定版本。
 
 ## 未能在本机验证的部分
 
 - **GitHub Actions 运行结果**：`api.github.com` 在本机 TLS 不可达（curl exit 35），
   代理 `ghfast.top` 仅支持 git 协议。首次成功运行已由独立评审通过 GitHub API
-  核实：run `39558924027`（sha `3fc3b68`）**completed / success**，三个 job 全绿。
-  后续提交的构建结果需在 Actions 页面确认：
+  核实：run `39558924027`（sha `3fc3b68`）**completed / success**，当时三个 job 全绿。
+  CI 现为五个 job（前端 / E2E / Rust / 心跳服务器 / 发布构建），本次改动后的运行结果
+  仍需在 Actions 页面确认：
   https://github.com/badhope/digilegacy/actions
 
 ## 视觉与品牌验证
@@ -110,3 +113,87 @@ WiX 默认 codepage 1252 无法编码中文产品名「归零」，MSI 打包直
 | `归零_0.1.0_x64-setup.exe` (NSIS) | 3.34 MB | 生成成功 |
 
 CI 新增 `release-build` job（windows-latest）断言两个产物都存在并上传 artifact。
+
+## 2026-10-23 审计修复验证（本轮）
+
+本轮审计修复的每一项都带真实命令与结果。凡是未重跑的历史结论，均标注为「历史」。
+
+### 修复项与回归网
+
+| 缺陷 | 级别 | 回归测试 | 结果 |
+|---|---|---|---|
+| `encrypt_existing_data_db` 档案分支索引越界 panic（先填档案再设主密码必崩） | P0 | `cargo test --lib encrypt_existing_data_covers_all_profile_fields` | 修复前 `index out of bounds: the len is 10 but the index is 10`；修复后 PASS |
+| 恢复成功后新恢复密钥 6 秒自动消失（旧码已失效） | P0 | `npx vitest run src/App.test.ts -t "新恢复密钥在用户确认抄写前不得自动消失"` | 修复前 FAIL；修复后 20 例 PASS |
+| 托盘「锁定」事件无监听，界面仍显示已解密数据 | P1 | `npx vitest run src/App.test.ts` | 20 例 PASS（`bindTrayEvents` 在非 Tauri 环境为 no-op） |
+| 深色模式三处硬编码白底（`.category-card` / `.modal-content` / `.confirm-card`） | P1 | `npx playwright test`（theme.spec + visual.spec） | 37 passed |
+| `get_all_platforms_extended` O(n²) 重建平台表 | P2 | `cargo test --locked` | 81 passed |
+| 报告加载失败静默（只有 console.error） | P2 | `npx vitest run src/views/ReportView.test.ts` | 8 例 PASS |
+
+### 全量命令
+
+| 命令 | 结果 |
+|---|---|
+| `npx vue-tsc --noEmit` | exit 0 |
+| `npm test` | 22 files / **241 passed** |
+| `npm run test:coverage` | statements 79.43 / branches 78.75 / functions 73.64 / lines 80.63（阈值 78/78/71/79） |
+| `npx playwright test` | **37 passed**（31.4s） |
+| `cargo fmt --check` | PASS |
+| `cargo clippy --all-targets -- -D warnings` | PASS，0 warning |
+| `cargo test --locked` | **81 passed, 0 failed, 1 ignored**（92.93s） |
+
+### 文档与治理补齐
+
+新增 `CONTRIBUTING.md`、`SECURITY.md`、`CODE_OF_CONDUCT.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、
+`.gitattributes`、`.editorconfig`、`.nvmrc`、`.github/dependabot.yml`、
+`.github/ISSUE_TEMPLATE/{bug_report,policy_correction,config}.yml`、`.github/PULL_REQUEST_TEMPLATE.md`、
+`.github/workflows/release.yml`。
+
+数字核对（以代码为准，逐条 grep 验证）：
+- Tauri 注册命令 **42**（`commands.rs` 41 个 `#[command]` + `notify::evaluate_dms`）
+- SQLite 表 **8**（`grep -c "CREATE TABLE" src-tauri/src/db.rs`）
+- 内置平台 **152** 条 / **16** 分类（`PlatformEntry::{new,with_source}` 计数与 id 去重）
+- 前端 mock 与 Rust 平台库 id 全集一致（152 vs 152，diff 为空）
+
+### 明确未验证
+
+- GitHub Actions 本轮改动后的运行结果：本机 `api.github.com` TLS 不可达，需在 Actions 页面确认。
+- Windows 安装包未在本轮重新构建（`cargo test` 与前端构建产物已验证，`tauri:build` 未重跑）。
+- 深色模式三处修复的**像素级**观感：由 `theme.spec.ts` 截图产出，未逐张人工比对。
+
+## 2026-10-24 交付轮（v0.2.0）
+
+### 修复与新增能力
+
+| 项目 | 级别 | 回归网 | 结果 |
+|---|---|---|---|
+| CI Rust job 连续两次失败：`cargo audit --deny vulnerabilities` 是 0.22 已移除的取值 | 阻断 | 本地 `cargo audit`（默认遇漏洞 exit 1） | 0 漏洞、5 条上游 unmaintained/unsound 警告 |
+| 资产列表加载失败被渲染成「还没有登记任何数字资产」 | P1 | `AssetsView.test.ts`（mock reject） | 12 例 PASS |
+| 资产详情直接改 store，取消不撤销、保存失败无提示 | P1 | `AssetDetailView.test.ts`（失败留在页面） | 16 例 PASS |
+| 危险确认框默认焦点落在「删除」上 | P1 | `FeedbackLayer.test.ts` | PASS |
+| 导入备份后 store 全是旧数据 | P1 | `ProfileView.test.ts`（断言重取资产/统计） | 19 例 PASS |
+| DMS 配置双事实源（保存档案会覆盖 DMS 页的间隔） | P1 | `ProfileView.test.ts`（断言不调用 `set_dead_mans_switch`） | PASS |
+| 暗色三处浮层 `--gray-0` 未定义、侧栏 1.72:1、实心按钮 2.26–3.49:1、继承人提示卡硬编码浅黄 | P1 | Playwright theme/visual spec + 手工对比度计算 | 5.88–9.22:1 |
+| 报告页加载中为空白壳、导出按钮可点但静默 | P2 | `ReportView.test.ts` | 8 例 PASS |
+| 备份 v1 缺 heartbeat_config / platform_overrides | P2 | `backup_v2_covers_heartbeat_and_platform_overrides`、`legacy_v1_backup_imports_without_wiping_v2_config` | PASS |
+| 命令层无输入上限（8KB 文本 / 估值有限性 / 平台 id / DMS 1–365 天 / 档案 500 字符） | P2 | `asset_commands_reject_oversized_and_invalid_payloads`、`dms_interval_must_be_within_range` | PASS |
+| 心跳服务器 `/check` 无鉴权、任意令牌可写状态、`_alerted` 只在内存 | P2 | `server/heartbeat-server.test.mjs` | 9 断言 PASS |
+
+### 本轮全量命令
+
+| 命令 | 结果 |
+|---|---|
+| `npx vue-tsc --noEmit` | exit 0 |
+| `npm test` | 25 files / **257 passed**，stderr 无未预期错误 |
+| `npm run test:coverage` | 79.11 / 78.44 / 72.64 / 80.45（阈值 78/78/71/79） |
+| `npm run build` | PASS；**产物中已无 mock 分块**（`dist/assets` 不含 `mock-*.js`） |
+| `npm run build:demo` | PASS；`docs/demo/` 0.91 MB，hash 路由，浏览器实测无控制台错误 |
+| `npx playwright test` | **37 passed** |
+| `node server/heartbeat-server.test.mjs` | 9 assertions PASS |
+| `cargo test --locked` | **86 passed, 0 failed, 1 ignored** |
+| `cargo audit` | 0 漏洞（5 条 unmaintained/unsound 警告，来自 Tauri 上游） |
+
+### 明确未验证
+
+- macOS / Linux 安装包构建：仅 Windows 目标在 CI 中产出。
+- CI 上本轮改动的运行结果：需推送后由 Actions 确认。
+- 演示视频为 32 秒 1200×800 mp4，未做多语言字幕。

@@ -113,6 +113,7 @@ describe('渲染', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/', component: { template: '<div/>' } },
+        { path: '/assets', component: { template: '<div/>' } },
         { path: '/profile', component: { template: '<div/>' } },
         { path: '/assets/:id', component: AssetDetailView },
       ],
@@ -305,23 +306,21 @@ describe('保存资产', () => {
     expect(mockedInvoke.mock.calls.some(c => c[0] === 'update_asset')).toBe(true);
   });
 
-  it('保存失败时不跳转（异常向上冒泡，由调用方处理）', async () => {
+  it('保存失败时留在页面并显示错误（不得静默、不得假装成功）', async () => {
     const w = await mountDetail({
       invokeOverrides: { update_asset: { success: false, message: '锁定状态', data: null } },
     });
     const saveBtn = w.findAll('button').find(b => b.text() === '保存修改')!;
 
-    // 组件内的 async 处理器会抛出未捕获拒绝；用 Vue 的错误钩子接住，
-    // 否则会污染整个测试进程（曾导致 1 个 unhandled error）。
-    const errors: unknown[] = [];
-    const app = w.vm.$;
-    app.appContext.config.errorHandler = (e: unknown) => errors.push(e);
-
     await saveBtn.trigger('click');
     await flushPromises();
 
     expect(mockedInvoke.mock.calls.some(c => c[0] === 'update_asset')).toBe(true);
-    expect(errors.length, '失败必须有异常传出，不能静默吞掉').toBeGreaterThan(0);
+    // 页面必须给出可见错误，且不能离开当前路由（用户还要重试）
+    const alert = w.find('[role="alert"]');
+    expect(alert.exists(), '失败必须渲染 role=alert 的错误提示').toBe(true);
+    expect(alert.text()).toContain('保存失败');
+    expect(w.find('#detail-identifier').exists()).toBe(true);
   });
 });
 

@@ -404,7 +404,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'export_backup': {
       const backup = {
         app: 'digilegacy',
-        version: 1,
+        version: 2,
         created_at: now(),
         tables: {
           digital_assets: state.assets,
@@ -412,6 +412,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
           check_in_log: state.checkIns.map((t, i) => ({ id: i + 1, checked_at: t, status: 'ok', note: '' })),
           dms_config: state.dms,
           security_config: state.masterPassword ? { kdf_salt: 'preview', verifier: 'preview' } : null,
+          heartbeat_config: null,
+          platform_overrides: [],
         },
       };
       download(`归零加密备份_预览_${Date.now()}.json`, new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }));
@@ -421,7 +423,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'import_backup': {
       try {
         const parsed = JSON.parse(String(a['content'] ?? ''));
-        if (parsed.app !== 'digilegacy' || parsed.version !== 1) return fail<null>('不是有效的归零备份文件') as T;
+        if (parsed.app !== 'digilegacy' || ![1, 2].includes(parsed.version)) return fail<null>('不是有效的归零备份文件') as T;
         const tables = parsed.tables || {};
         state.assets = (tables.digital_assets || []).map((x: DigitalAsset) => withPlatformName(x));
         state.profile = (tables.user_profile || [])[0] || null;

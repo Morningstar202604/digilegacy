@@ -41,6 +41,22 @@ jobs:
       - name: 生产构建
         run: npm run build
 
+      - name: 演示构建（VITE_DEMO=1，静态站）
+        run: npm run build:demo
+
+      # 生产包必须不含演示后端：设为 true 时重新构建并断言无 mock 分块。
+      # 注意：上一步 build:demo 的输出会覆盖 dist，因此这条断言之前必须再 build 一次。
+      - name: 生产包必须不含演示后端
+        # mock.ts 只在 DEV / DEMO 构建里可达；这条断言防止一次 import 改动
+        # 把整个演示 mock（含 localStorage 明文逻辑）悄悄塞进安装包。
+        run: |
+          npm run build
+          if ls dist/assets | grep -q '^mock-'; then
+            echo "::error::生产构建包含 mock 分块，演示后端泄漏进安装包"
+            ls dist/assets | grep '^mock-'
+            exit 1
+          fi
+
       - name: 依赖漏洞扫描（npm）
         # 默认镜像的 audit 端点常不可用，显式指向官方 registry
         run: npm audit --audit-level=high --registry=https://registry.npmjs.org
@@ -130,11 +146,13 @@ jobs:
         run: cargo test --locked
 
       - name: 依赖漏洞扫描（RustSec）
-        # 只对「漏洞」判定失败；unmaintained/unsound 属信息级警告，
-        # 由 Tauri 上游依赖链决定，不应阻断本项目构建。
+        # cargo-audit 0.22 的 --deny 只接受 warnings/unmaintained/unsound/yanked，
+        # 不接受 `vulnerabilities`（旧写法直接以 “invalid value” 失败，
+        # CI 曾连续两次红在这一步，与真实漏洞无关）。默认行为即：
+        # 发现漏洞 → exit 1；unmaintained/unsound 仅告警。
         run: |
           cargo install cargo-audit --locked --quiet || true
-          cargo audit --deny vulnerabilities
+          cargo audit
 
   heartbeat-server:
     name: 心跳服务器 · 语法与行为
@@ -152,26 +170,8 @@ jobs:
       - name: 语法检查
         run: node --check heartbeat-server.mjs
 
-      - name: 启动并验证 /heartbeat 与 /check
-        run: |
-          HEARTBEAT_PORT=18080 node heartbeat-server.mjs &
-          SERVER_PID=$!
-          # 等待端口就绪（最多 10 秒）
-          for i in $(seq 1 20); do
-            curl -sf -o /dev/null http://127.0.0.1:18080/check && break
-            sleep 0.5
-          done
-          echo "--- 上报一次心跳 ---"
-          curl -sf -X POST http://127.0.0.1:18080/heartbeat \
-            -H 'Content-Type: application/json' \
-            -d '{"token":"ci-token"}' | tee /tmp/hb.json
-          grep -q '"ok":true' /tmp/hb.json
-          echo "--- 拒绝非法请求 ---"
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18080/heartbeat -d '{}')
-          test "$code" = "400"
-          echo "--- 查询检查端点 ---"
-          curl -sf http://127.0.0.1:18080/check | tee /tmp/check.json
-          kill $SERVER_PID
+      - name: 行为测试（鉴权 / 未注册令牌 / 413 / 健康探针）
+        run: node heartbeat-server.test.mjs
 
   # 发布构建：验证安装包真的能产出。
   # 这条曾经缺失，导致「MSI 因中文产品名 + WiX codepage 1252 打包失败」

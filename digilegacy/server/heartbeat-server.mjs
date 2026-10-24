@@ -2,25 +2,44 @@
 //
 // 设计原则（与客户端 heartbeat.rs 对应）：
 //   1. 零内容：只接收令牌，不接收/不存储任何资产、凭据、档案数据；
-//   2. 失联提醒：令牌超期未心跳 → 通过预注册的 Webhook（如邮件网关）发提醒；
-//   3. 可自托管：单文件、无外部服务依赖，数据仅 内存/一个 JSON 文件。
+//   2. 失联提醒：令牌超期未心跳 → /check 返回提醒载荷，由你的定时任务转发 webhook；
+//   3. 可自托管：单文件、无外部依赖，状态落一个 JSON 文件。
 //
-// 运行：HEARTBEAT_PORT=8080 node heartbeat-server.mjs
-// 客户端环境变量：DMS_HEARTBEAT_ENABLED=1  DMS_HEARTBEAT_TOKEN=<令牌>
-//                DMS_HEARTBEAT_ENDPOINT=http://<host>:8080
+// 运行：
+//   HEARTBEAT_ADMIN_TOKEN=<长随机串> node heartbeat-server.mjs
 //
-// 注册令牌：向 registrations.json 添加 {"<token>": {"notify_webhook": "...", "grace_days": 21}}
-// Webhook 载荷：POST {"token","last_seen","silent_days"} —— 由网关侧转换为邮件/短信。
+// 客户端配置（应用内「我的档案 → 云端心跳」，或环境变量）：
+//   endpoint = http://<host>:8080     token = <在 registrations.json 里预注册的令牌>
+//
+// registrations.json（与脚本同目录，不入库）：
+//   { "<token>": { "notify_webhook": "https://…", "grace_days": 21 } }
+//
+// 安全边界（相比早期版本的三处加固）：
+//   - `/check` 必须带 `Authorization: Bearer $HEARTBEAT_ADMIN_TOKEN`；
+//     未配置管理令牌时直接 503，避免「谁都能读到全部令牌与 webhook」。
+//   - 心跳只接受**已注册**令牌（除非显式 HEARTBEAT_ALLOW_ANY=1 用于本地试验），
+//     否则任意字符串都会写进状态文件，可被用来撑爆磁盘。
+//   - 告警状态随 state.json 持久化，并在收到新心跳时复位；
+//     旧实现把 `_alerted` 放在内存里，进程重启后会重复轰炸，且第二次失联永不告警。
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.HEARTBEAT_PORT || 8080);
+const ADMIN_TOKEN = process.env.HEARTBEAT_ADMIN_TOKEN || '';
+const ALLOW_ANY = process.env.HEARTBEAT_ALLOW_ANY === '1';
+const MAX_BODY = 4096;
+const MAX_TOKENS = Number(process.env.HEARTBEAT_MAX_TOKENS || 10000);
+const DEFAULT_GRACE_DAYS = 21;
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const REG_FILE = path.join(__dirname, 'registrations.json');
-const STATE_FILE = path.join(__dirname, 'state.json');
+// 数据目录可覆盖：测试用临时目录，部署时一般保持默认（脚本同目录）
+const DATA_DIR = process.env.HEARTBEAT_DATA_DIR || __dirname;
+const REG_FILE = path.join(DATA_DIR, 'registrations.json');
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
 
 function loadJson(file, fallback) {
   try {
@@ -31,56 +50,166 @@ function loadJson(file, fallback) {
 }
 
 const registrations = loadJson(REG_FILE, {});
-const state = loadJson(STATE_FILE, {}); // { [token]: last_seen_iso }
-
-function saveState() {
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+if (typeof registrations !== 'object' || registrations === null || Array.isArray(registrations)) {
+  console.error('registrations.json 必须是 { "<token>": {...} } 形式的对象');
+  process.exit(1);
 }
 
-const server = http.createServer((req, res) => {
-  if (req.method === 'POST' && req.url === '/heartbeat') {
+/** state: { "<token>": { last_seen: ISO, alerted: boolean } } */
+const state = loadJson(STATE_FILE, {});
+
+function saveState() {
+  const tmp = `${STATE_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+  fs.renameSync(tmp, STATE_FILE);
+}
+
+function json(res, code, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(code, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Length': Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
+/** 定长比较，避免用 === 比较管理令牌时泄漏前缀长度信息 */
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+function authorized(req) {
+  const header = req.headers['authorization'] || '';
+  const m = /^Bearer\s+(.+)$/i.exec(String(header));
+  return !!ADMIN_TOKEN && !!m && safeEqual(m[1], ADMIN_TOKEN);
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
-    req.on('end', () => {
-      try {
-        const { token } = JSON.parse(body);
-        if (!token || typeof token !== 'string') {
-          res.writeHead(400).end('{"error":"token required"}');
-          return;
-        }
-        state[token] = new Date().toISOString();
-        saveState();
-        res.writeHead(200).end('{"ok":true}');
-      } catch {
-        res.writeHead(400).end('{"error":"bad json"}');
+    let overflow = false;
+    req.on('data', (chunk) => {
+      if (overflow) return; // 超限后继续排空但不累积，避免占用内存
+      body += chunk;
+      if (body.length > MAX_BODY) {
+        overflow = true;
+        body = '';
       }
     });
+    req.on('end', () => {
+      // 不 destroy 连接：直接断开会让客户端收到 "fetch failed"，
+      // 拿不到明确的 413，排障时会被误判成服务器没起来。
+      if (overflow) reject(Object.assign(new Error('body too large'), { code: 413 }));
+      else resolve(body);
+    });
+    req.on('error', reject);
+  });
+}
+
+const startedAt = Date.now();
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url || '/', `http://localhost:${PORT}`);
+  const route = url.pathname;
+
+  if (req.method === 'GET' && (route === '/health' || route === '/')) {
+    json(res, 200, { ok: true, uptime_seconds: Math.floor((Date.now() - startedAt) / 1000) });
     return;
   }
 
-  if (req.method === 'GET' && req.url === '/check') {
+  if (req.method === 'POST' && route === '/heartbeat') {
+    let body;
+    try {
+      body = await readBody(req);
+    } catch (e) {
+      if (e.code === 413) json(res, 413, { error: 'body too large' });
+      else json(res, 400, { error: 'bad request' });
+      return;
+    }
+
+    let token;
+    try {
+      token = JSON.parse(body).token;
+    } catch {
+      json(res, 400, { error: 'bad json' });
+      return;
+    }
+    if (typeof token !== 'string' || token.length === 0 || token.length > 256) {
+      json(res, 400, { error: 'token required' });
+      return;
+    }
+    if (!ALLOW_ANY && !Object.prototype.hasOwnProperty.call(registrations, token)) {
+      // 未注册令牌一律拒绝：既防状态文件被灌爆，也让配置错误立即暴露
+      json(res, 403, { error: 'unknown token' });
+      return;
+    }
+    if (!ALLOW_ANY && !Object.prototype.hasOwnProperty.call(state, token) && Object.keys(state).length >= MAX_TOKENS) {
+      json(res, 429, { error: 'too many tokens' });
+      return;
+    }
+
+    state[token] = { last_seen: new Date().toISOString(), alerted: false };
+    saveState();
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === 'GET' && route === '/check') {
+    if (!ADMIN_TOKEN) {
+      json(res, 503, { error: 'HEARTBEAT_ADMIN_TOKEN 未配置，/check 已禁用（fail-closed）' });
+      return;
+    }
+    if (!authorized(req)) {
+      json(res, 401, { error: 'unauthorized' });
+      return;
+    }
+
     const now = Date.now();
     const alerts = [];
     for (const [token, reg] of Object.entries(registrations)) {
-      const last = state[token];
-      const graceDays = reg.grace_days ?? 21;
-      if (!last) continue;
-      const silentDays = (now - new Date(last).getTime()) / 86400000;
-      if (silentDays >= graceDays && !reg._alerted) {
-        alerts.push({ token, last_seen: last, silent_days: Math.floor(silentDays), webhook: reg.notify_webhook });
-        reg._alerted = true; // 内存标记，避免重复轰炸；真实部署可用数据库
+      const entry = state[token];
+      if (!entry || !entry.last_seen) continue;
+      const graceDays = Number(reg.grace_days ?? DEFAULT_GRACE_DAYS);
+      const silentDays = (now - new Date(entry.last_seen).getTime()) / 86_400_000;
+      if (silentDays >= graceDays && !entry.alerted) {
+        alerts.push({
+          token,
+          last_seen: entry.last_seen,
+          silent_days: Math.floor(silentDays),
+          webhook: reg.notify_webhook,
+        });
+        entry.alerted = true;
       }
     }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ alerts, checked_at: new Date().toISOString() }, null, 2));
+    if (alerts.length > 0) saveState();
+
+    json(res, 200, { alerts, checked_at: new Date().toISOString() });
     return;
   }
 
-  res.writeHead(404).end('not found');
+  json(res, 404, { error: 'not found' });
 });
 
 server.listen(PORT, () => {
   console.log(`心跳服务器已启动: http://localhost:${PORT}`);
-  console.log(`  POST /heartbeat  {"token":"..."}`);
-  console.log(`  GET  /check      检查超时令牌并返回提醒载荷（由定时任务调用后转发 webhook）`);
+  console.log(`  POST /heartbeat  {"token":"..."}          （需已注册）`);
+  console.log(`  GET  /check      检查超时令牌              （需 Bearer 管理令牌）`);
+  console.log(`  GET  /health     存活探针`);
+  if (!ADMIN_TOKEN) {
+    console.warn('警告：未设置 HEARTBEAT_ADMIN_TOKEN，/check 将返回 503（这是有意的 fail-closed）。');
+  }
+  if (ALLOW_ANY) {
+    console.warn('警告：HEARTBEAT_ALLOW_ANY=1，任意令牌都会被接受——仅用于本地试验。');
+  }
 });
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    console.log(`收到 ${sig}，正在关闭…`);
+    server.close(() => process.exit(0));
+  });
+}

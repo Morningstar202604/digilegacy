@@ -27,6 +27,8 @@ export default defineConfig(async () => ({
   clearScreen: false,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // 演示构建要把 mock 后端打进去；生产桌面构建保持 false，mock 不进包。
+    __DEMO_MODE__: JSON.stringify(process.env.VITE_DEMO === "1"),
   },
   server: {
     port: 1420,
@@ -36,6 +38,8 @@ export default defineConfig(async () => ({
     },
   },
   envPrefix: ["VITE_", "TAURI_"],
+  // 在线演示：构建产物放在 /digilegacy/demo/ 下，静态托管即可点开体验。
+  base: process.env.VITE_DEMO === "1" ? "/digilegacy/demo/" : "/",
   build: {
     target: process.env.TAURI_PLATFORM == "windows" ? "chrome105" : "safari13",
     minify: process.env.TAURI_DEBUG ? false : "oxc",

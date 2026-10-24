@@ -10,6 +10,15 @@ vi.mock('../api/invoke', () => ({
   isTauriEnv: () => true,
 }));
 
+// 导入备份/导入补丁走动态 import 的文件对话框；jsdom 里真实插件不可用，
+// 这里给一个稳定的桩，让「选择文件 → 读内容 → 调后端」整条链可测。
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: vi.fn(async () => '/tmp/backup.json'),
+}));
+vi.mock('@tauri-apps/plugin-fs', () => ({
+  readTextFile: vi.fn(async () => '{"app":"digilegacy","version":2,"tables":{"digital_assets":[]}}'),
+}));
+
 import ProfileView from './ProfileView.vue';
 import { useFeedback } from '../composables/feedback';
 import { invoke } from '../api/invoke';
@@ -41,7 +50,13 @@ async function mountProfile(over?: Record<string, (args?: Record<string, unknown
   mockedInvoke.mockImplementation(defaultImpl(over) as never);
   const pinia = createPinia();
   setActivePinia(pinia);
-  const w = mount(ProfileView, { global: { plugins: [pinia] } });
+  const w = mount(ProfileView, {
+    global: {
+      plugins: [pinia],
+      // ProfileView 的 DMS 卡片用 router-link 指向「安心传承」；单测不挂路由
+      stubs: { RouterLink: { template: '<a><slot /></a>' } },
+    },
+  });
   // onMounted 里有多条 await（loadUser / get_recovery_seal_exists / heartbeat / patch），
   // 单次 flushPromises 不够，需要多轮让 security.refresh 落地后 DOM 才切到已加密分支。
   for (let i = 0; i < 3; i++) {
@@ -184,9 +199,9 @@ describe('政策补丁', () => {
 });
 
 describe('档案保存（saveProfile）', () => {
-  it('保存成功时必须同时提交 DMS 配置', async () => {
-    // 变异守卫：删掉 configureDms 调用后，UI 仍报「保存成功」，
-    // 但 DMS 间隔/开关不会落库（111 个测试曾对此全绿）。
+  it('保存档案不得改写 DMS 配置（单一事实源在「安心传承」页）', async () => {
+    // 历史缺陷：档案页把 user_profile 里的旧间隔回写 dms_config，
+    // 用户在 DMS 页设的 90 天会被一次无关的「保存档案」静默改回 30 天。
     const calls: string[] = [];
     const w = await mountProfile({
       set_user_profile: () => { calls.push('set_user_profile'); return { success: true, message: 'ok', data: null }; },
@@ -198,7 +213,7 @@ describe('档案保存（saveProfile）', () => {
     await flushPromises();
 
     expect(calls).toContain('set_user_profile');
-    expect(calls).toContain('set_dead_mans_switch');
+    expect(calls, '档案保存不得触碰 dms_config').not.toContain('set_dead_mans_switch');
   });
 
   it('保存失败必须明确报错，不得静默', async () => {
@@ -273,5 +288,114 @@ describe('改主密码（changeMasterPassword）', () => {
 
     expect(mockedInvoke).not.toHaveBeenCalledWith('change_master_password', expect.anything());
     expect(w.text()).toContain('至少 8 位');
+  });
+
+  it('两次新密码不一致时本地拦截', async () => {
+    const w = await mountProfile({
+      security_status: () => ({ success: true, message: '', data: { has_master_password: true, unlocked: true } }),
+    });
+    const sec = useSecurityStore();
+    sec.hasMasterPassword = true;
+    sec.unlocked = true;
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    await w.find('#pf-old-pw').setValue('old-master-1');
+    await w.find('#pf-new-pw').setValue('new-master-22');
+    await w.find('#pf-new-pw2').setValue('new-master-33');
+    const btn = w.findAll('button').find(b => b.text().includes('更新主密码'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke).not.toHaveBeenCalledWith('change_master_password', expect.anything());
+    expect(w.text()).toContain('不一致');
+  });
+
+  it('缺少当前密码时本地拦截', async () => {
+    const w = await mountProfile({
+      security_status: () => ({ success: true, message: '', data: { has_master_password: true, unlocked: true } }),
+    });
+    const sec = useSecurityStore();
+    sec.hasMasterPassword = true;
+    sec.unlocked = true;
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    await w.find('#pf-new-pw').setValue('new-master-22');
+    await w.find('#pf-new-pw2').setValue('new-master-22');
+    const btn = w.findAll('button').find(b => b.text().includes('更新主密码'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke).not.toHaveBeenCalledWith('change_master_password', expect.anything());
+    expect(w.text()).toContain('请填写当前主密码');
+  });
+
+  it('后端拒绝时展示失败原因，不得显示成功', async () => {
+    const w = await mountProfile({
+      security_status: () => ({ success: true, message: '', data: { has_master_password: true, unlocked: true } }),
+      change_master_password: () => ({ success: false, message: '当前主密码错误', data: null }),
+    });
+    const sec = useSecurityStore();
+    sec.hasMasterPassword = true;
+    sec.unlocked = true;
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    await w.find('#pf-old-pw').setValue('wrong-old-1');
+    await w.find('#pf-new-pw').setValue('new-master-22');
+    await w.find('#pf-new-pw2').setValue('new-master-22');
+    const btn = w.findAll('button').find(b => b.text().includes('更新主密码'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('当前主密码错误');
+  });
+
+  it('异常抛出时也展示错误（不吞异常）', async () => {
+    const w = await mountProfile({
+      security_status: () => ({ success: true, message: '', data: { has_master_password: true, unlocked: true } }),
+      change_master_password: () => { throw new Error('IPC 断开'); },
+    });
+    const sec = useSecurityStore();
+    sec.hasMasterPassword = true;
+    sec.unlocked = true;
+    await flushPromises();
+    await w.vm.$nextTick();
+
+    await w.find('#pf-old-pw').setValue('old-master-1');
+    await w.find('#pf-new-pw').setValue('new-master-22');
+    await w.find('#pf-new-pw2').setValue('new-master-22');
+    const btn = w.findAll('button').find(b => b.text().includes('更新主密码'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('IPC 断开');
+  });
+});
+
+describe('导入备份（导入后必须刷新全部数据视图）', () => {
+  it('导入成功后重新拉取资产与统计，而不是只刷新安全状态', async () => {
+    // 历史缺陷：备份覆盖了数据库，但前端 store 仍是导入前的数据，
+    // 用户看到旧列表会以为「恢复失败」并反复导入。
+    const calls: string[] = [];
+    const w = await mountProfile({
+      import_backup: () => { calls.push('import_backup'); return { success: true, message: '已恢复', data: '2 条' }; },
+      get_all_assets: () => { calls.push('get_all_assets'); return { success: true, message: '', data: [] }; },
+      get_dashboard_stats: () => { calls.push('get_dashboard_stats'); return { success: true, message: '', data: null }; },
+    });
+
+    const btn = w.findAll('button').find(b => b.text().includes('导入备份文件'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    // 覆盖导入需要二次确认
+    const { settleConfirm } = await import('../composables/feedback');
+    settleConfirm(true);
+    for (let i = 0; i < 4; i++) await flushPromises();
+
+    expect(calls).toContain('import_backup');
+    expect(calls, '导入后必须重取资产列表').toContain('get_all_assets');
+    expect(calls, '导入后必须重取统计').toContain('get_dashboard_stats');
+    expect(w.text()).toContain('已恢复');
   });
 });

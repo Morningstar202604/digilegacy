@@ -371,7 +371,7 @@ function downloadTemplate(tmpl: LegalTemplate) {
   z-index: 1000;
 }
 .modal-content {
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
   max-width: 700px;
   width: 90%;

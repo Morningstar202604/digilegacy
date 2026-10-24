@@ -11,8 +11,9 @@ export const usePlatformsStore = defineStore('platforms', () => {
   const selectedIds = ref<Set<number>>(new Set());
   const loaded = ref(false);
 
-  async function loadPlatforms() {
-    if (loaded.value) return;
+  /** @param force 跳过「已加载」缓存；导入备份/政策补丁后必须强制重取 */
+  async function loadPlatforms(force = false) {
+    if (loaded.value && !force) return;
     loading.value = true;
     try {
       const res = await invoke<ApiResponse<Platform[]>>('get_all_platforms');

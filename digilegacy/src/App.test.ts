@@ -14,7 +14,7 @@ import type { Mock } from 'vitest';
 // 却放在 src/views 下会解析到项目根部，导致 mock 静默失效、测试实际打真实 IPC）。
 vi.mock('./api/invoke', () => ({
   invoke: vi.fn(),
-  isTauriEnv: () => false,
+  isTauriEnv: vi.fn(() => false),
 }));
 
 import App from './App.vue';
@@ -325,6 +325,51 @@ describe('恢复密钥流程', () => {
     await flushPromises();
 
     expect(w.text()).toContain('NEW1-NEW2-NEW3-NEW4-NEW5-NEW6');
+  });
+
+  it('新恢复密钥在用户确认抄写前不得自动消失', async () => {
+    // 先挂载（挂载内的 setTimeout(0) 需要真实计时器），再切假计时器推进 6 秒后的自动关闭逻辑
+    const w = await lockedApp();
+    vi.useFakeTimers();
+    try {
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'security_status') {
+          return { success: true, message: '', data: { has_master_password: true, unlocked: false } };
+        }
+        if (cmd === 'start_recovery') {
+          return { success: true, message: '', data: { has_master_password: true, unlocked: false } };
+        }
+        if (cmd === 'complete_recovery') {
+          return { success: true, message: '主密码已重设', data: 'NEW1-NEW2-NEW3-NEW4-NEW5-NEW6' };
+        }
+        return { success: true, message: '', data: [] };
+      });
+
+      const card = w.find('.lock-card');
+      await card.findAll('button').find(b => b.text().includes('恢复密钥'))!.trigger('click');
+      await w.find('input[aria-label="恢复密钥"]').setValue('ABCD-EFGH-JKLM-NPQR-STUV-WXYZ');
+      await card.findAll('button').find(b => b.text().includes('验证恢复密钥'))!.trigger('click');
+      await flushPromises();
+
+      await w.find('input[aria-label="新主密码（至少 8 位）"]').setValue('brand-new-pass');
+      await w.find('input[aria-label="确认新主密码"]').setValue('brand-new-pass');
+      await card.findAll('button').find(b => b.text().includes('重设主密码'))!.trigger('click');
+      await flushPromises();
+
+      // 旧实现 6 秒后无条件关闭遮罩并清空 recoveryNewCode：用户还在抄写时新码就消失，
+      // 而旧码已随轮换失效，等于把唯一的恢复通道烧掉。
+      await vi.advanceTimersByTimeAsync(60_000);
+      await w.vm.$nextTick();
+
+      expect(w.text(), '新恢复密钥不得因计时器自动消失').toContain('NEW1-NEW2-NEW3-NEW4-NEW5-NEW6');
+      expect(
+        card.findAll('button').some(b => b.text().includes('我已保存')),
+        '必须提供显式确认按钮，由用户决定何时关闭',
+      ).toBe(true);
+      w.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

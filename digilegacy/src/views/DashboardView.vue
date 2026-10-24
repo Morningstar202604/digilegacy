@@ -71,6 +71,21 @@
       </p>
     </div>
 
+    <!-- 资产构成：图表比三段文字更快回答「我到底有多少、偏哪一类」 -->
+    <div class="card mb-32">
+      <div class="card-header">
+        <div>
+          <div class="card-title">资产构成</div>
+          <div class="card-subtitle">按财产价值属性划分</div>
+        </div>
+      </div>
+      <AssetCompositionChart
+        :property="stats?.property_count ?? 0"
+        :personality="stats?.personality_count ?? 0"
+        :mixed="stats?.mixed_count ?? 0"
+      />
+    </div>
+
     <!-- 三类资产 -->
     <div class="grid grid-3 mb-32">
       <div class="card">
@@ -123,6 +138,7 @@ import { useDashboardStore } from '../stores/dashboard';
 import { useAssetsStore } from '../stores/assets';
 import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
 import EmptyState from '../components/EmptyState.vue';
+import AssetCompositionChart from '../components/AssetCompositionChart.vue';
 
 const dashboard = useDashboardStore();
 const assetsStore = useAssetsStore();
@@ -143,7 +159,7 @@ onMounted(async () => {
   border: none;
   color: white;
 }
-.btn-white { background: white; color: var(--primary); }
+.btn-white { background: white; color: var(--solid-primary); }
 .stat-blue { background: var(--primary-light); }
 .stat-green { background: var(--success-light); }
 .stat-purple { background: var(--secondary-light); }

@@ -4,6 +4,18 @@
       <button class="btn btn-secondary btn-sm" @click="$router.back()">← 返回</button>
     </div>
 
+    <div v-if="loading" class="card" aria-busy="true">
+      <div class="skeleton skeleton-line w-40"></div>
+      <div class="skeleton skeleton-line w-60"></div>
+      <div class="skeleton skeleton-line w-40"></div>
+    </div>
+
+    <div v-else-if="loadError" class="card" role="alert" style="border-color: var(--danger);">
+      <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--danger-strong);">无法加载资产</h3>
+      <p class="text-muted" style="font-size: 13px;">{{ loadError }}</p>
+      <router-link to="/assets" class="btn btn-primary btn-sm mt-16">返回资产列表</router-link>
+    </div>
+
     <div v-if="asset" class="card">
       <div class="flex items-center gap-12 mb-24">
         <div style="width: 56px; height: 56px; border-radius: 14px; background: var(--primary-light); display: flex; align-items: center; justify-content: center; font-size: 28px;">{{ platformIcon(asset.platform_name) }}</div>
@@ -60,11 +72,13 @@
 
       <div class="form-group mt-16"><label class="form-label" for="detail-notes">备注</label><textarea class="form-textarea" id="detail-notes" v-model="asset.notes" placeholder="关于此资产的其他说明..."></textarea></div>
 
+      <p v-if="saveError" role="alert" style="font-size: 13px; color: var(--danger-strong); margin-top: 16px;">{{ saveError }}</p>
+
       <div style="display: flex; gap: 12px; justify-content: space-between; margin-top: 24px;">
-        <button class="btn btn-danger btn-sm" @click="handleDelete">删除此资产</button>
+        <button class="btn btn-danger btn-sm" :disabled="saving" @click="handleDelete">删除此资产</button>
         <div style="display: flex; gap: 12px;">
-          <button class="btn btn-secondary btn-sm" @click="$router.back()">取消</button>
-          <button class="btn btn-primary btn-sm" @click="handleSave">保存修改</button>
+          <button class="btn btn-secondary btn-sm" :disabled="saving" @click="$router.back()">取消</button>
+          <button class="btn btn-primary btn-sm" :disabled="saving" @click="handleSave">{{ saving ? '保存中…' : '保存修改' }}</button>
         </div>
       </div>
     </div>
@@ -80,7 +94,7 @@ import { useAssetsStore } from '../stores/assets';
 import { usePlatformsStore } from '../stores/platforms';
 import { useSecurityStore } from '../stores/security';
 import { platformIcon } from '../utils/format';
-import { toast, confirmDialog } from '../composables/feedback';
+import { confirmDialog } from '../composables/feedback';
 import type { ApiResponse, DigitalAsset } from '../types';
 
 const route = useRoute();
@@ -94,6 +108,10 @@ const credentialInput = ref('');
 const showCredential = ref(false);
 const credentialStatus = ref('');
 const linkStatus = ref('');
+const saveError = ref('');
+const saving = ref(false);
+const loadError = ref('');
+const loading = ref(true);
 
 const platformInfo = computed(() => {
   if (!asset.value) return undefined;
@@ -191,19 +209,30 @@ async function openOfficial() {
 }
 
 async function handleSave() {
-  if (!asset.value?.id) return;
-  await assetsStore.updateAsset(asset.value.id, {
-    platform_id: asset.value.platform_id,
-    account_identifier: asset.value.account_identifier,
-    account_description: asset.value.account_description,
-    category: asset.value.category,
-    estimated_value: asset.value.estimated_value,
-    disposal_method: asset.value.disposal_method,
-    heir_name: asset.value.heir_name || undefined,
-    heir_contact: asset.value.heir_contact || undefined,
-    notes: asset.value.notes,
-  });
-  router.back();
+  if (!asset.value?.id || saving.value) return;
+  saving.value = true;
+  saveError.value = '';
+  try {
+    await assetsStore.updateAsset(asset.value.id, {
+      platform_id: asset.value.platform_id,
+      account_identifier: asset.value.account_identifier,
+      account_description: asset.value.account_description,
+      category: asset.value.category,
+      estimated_value: asset.value.estimated_value,
+      disposal_method: asset.value.disposal_method,
+      heir_name: asset.value.heir_name || undefined,
+      heir_contact: asset.value.heir_contact || undefined,
+      notes: asset.value.notes,
+    });
+    router.back();
+  } catch (e) {
+    // 保存失败必须留在页面并提示：旧实现直接 await 后 back()，
+    // 失败时抛出的拒绝无人处理，用户既没保存成功也不知道为什么。
+    console.error('保存资产失败:', e);
+    saveError.value = '保存失败：' + String(e);
+  } finally {
+    saving.value = false;
+  }
 }
 
 async function handleDelete() {
@@ -215,13 +244,35 @@ async function handleDelete() {
     danger: true,
   });
   if (!ok) return;
-  await assetsStore.deleteAsset(asset.value.id);
-  router.back();
+  try {
+    await assetsStore.deleteAsset(asset.value.id);
+    router.back();
+  } catch (e) {
+    console.error('删除资产失败:', e);
+    saveError.value = '删除失败：' + String(e);
+  }
 }
 
 onMounted(async () => {
-  await Promise.all([assetsStore.loadAssets(), platformsStore.loadPlatforms(), security.refresh()]);
-  const id = Number(route.params.id);
-  asset.value = assetsStore.assets.find(a => a.id === id) || null;
+  try {
+    await Promise.all([platformsStore.loadPlatforms(), security.refresh()]);
+    const id = Number(route.params.id);
+    // 直接向后端取单条：列表可能尚未加载、也可能已过期。
+    // 关键：拿深拷贝，编辑只改本地草稿，「取消」才不会把未保存的值留在 store/报告里。
+    const res = await invoke<ApiResponse<DigitalAsset | null>>('get_asset_by_id', { id });
+    if (!res.success) {
+      loadError.value = res.message || '加载资产失败';
+      return;
+    }
+    if (!res.data) {
+      loadError.value = '资产不存在或已被删除';
+      return;
+    }
+    asset.value = JSON.parse(JSON.stringify(res.data)) as DigitalAsset;
+  } catch (e) {
+    loadError.value = '加载资产失败：' + String(e);
+  } finally {
+    loading.value = false;
+  }
 });
 </script>
