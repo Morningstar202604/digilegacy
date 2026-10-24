@@ -72,7 +72,8 @@
             <span aria-hidden="true">🧪</span>
             <span>
               在线演示：所有数据只存在你的浏览器本地，用于体验界面与流程。
-              <strong>请勿填写真实账号与密码</strong>。真实使用请下载桌面版（数据加密存于本机）。
+              <strong>请勿填写真实账号与密码</strong>。真实使用请下载桌面版（数据加密存于本机）。<br>
+              <span lang="en">Live demo: data stays in your browser only. Do not enter real credentials — download the desktop app for real use.</span>
             </span>
           </div>
           <router-view v-slot="{ Component }">

@@ -1,5 +1,7 @@
 # DigiLegacy 归零 — Open-Source Digital Legacy & Inheritance Manager
 
+**English** · [简体中文](README.zh-CN.md)
+
 [![CI](https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg)](https://github.com/badhope/digilegacy/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/cargo%20test-86%20passed-brightgreen.svg)](#development--verification)
@@ -7,7 +9,7 @@
 [![No servers](https://img.shields.io/badge/servers-none-4a7c8c.svg)](#privacy-model)
 [![No telemetry](https://img.shields.io/badge/telemetry-none-4a7c8c.svg)](#privacy-model)
 
-**Website: [badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/)** · **[Live demo](https://badhope.github.io/digilegacy/demo/)** · [中文说明见下方](#中文说明) · [Screenshots](https://badhope.github.io/digilegacy/#screenshots)
+**Website: [badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/) ([中文站](https://badhope.github.io/digilegacy/zh/))** · **[Live demo](https://badhope.github.io/digilegacy/demo/)** · [Screenshots](https://badhope.github.io/digilegacy/#screenshots)
 
 > **Plan your digital legacy. Leave your family a toolkit, not a puzzle.**
 
@@ -36,7 +38,7 @@ DigiLegacy is a free, open-source, **local-first desktop application** for **dig
 - [FAQ](#faq)
 - [Mirrors](#mirrors)
 - [License](#license)
-- [中文说明](#中文说明)
+- [简体中文说明](README.zh-CN.md)
 
 ---
 
@@ -85,7 +87,7 @@ Existing tools each answer a fragment: Google and Apple cover only their own eco
 
 **Demo video:** [`docs/media/demo-walkthrough.mp4`](docs/media/demo-walkthrough.mp4) — a 32-second click-through of the full flow (discovery → registration → disposal → check-in → report → heir guide).
 
-> The interface is currently in Simplified Chinese (the primary target locale); an English UI is on the roadmap. All screens are also viewable on the [website](https://badhope.github.io/digilegacy/#screenshots).
+> The desktop interface is currently in Simplified Chinese (the primary target locale); an in-app English UI is on the roadmap and has not been started. This README, the [Chinese README](README.zh-CN.md), the website (EN + [中文](https://badhope.github.io/digilegacy/zh/)) and the browser demo are bilingual. All screens are also viewable on the [website](https://badhope.github.io/digilegacy/#screenshots).
 
 ## Security model
 
@@ -328,16 +330,6 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-## 中文说明
+## 简体中文
 
-**归零 DigiLegacy** 是一款**开源（MIT）、本地优先**的桌面应用，用于**数字遗产规划**与**数字资产继承管理**：帮你在生前理清所有网络账号、为每一项安排好身后的处置方式，并给家人留下一份可以直接照做的**继承工具包**。
-
-**开源 · 无服务器 · 无遥测 · 连开发者也无法读取你的数据。**
-
-- **官网**：[badhope.github.io/digilegacy](https://badhope.github.io/digilegacy/) · **在线演示**：[badhope.github.io/digilegacy/demo](https://badhope.github.io/digilegacy/demo/)（浏览器里点开即用，数据只存本地浏览器）
-- **六大模块**：资产发现（152 平台政策库）→ 分类登记 → 处置意愿 → 继承报告与工具包 → 安心传承（三级确认链 + 托盘常驻 + 可选零内容心跳）→ 继承人向导
-- **安全**：主密码 + AES-256-GCM 字段级加密、一次性恢复密钥、闲置自动锁定、凭据加密保管（报告与工具包导出不含凭据；加密备份含密文以支持换机迁移）
-- **诚实的边界**：本地加密无法防止以你的身份运行的恶意软件，也无法阻止知道主密码的人；报告与工具包是明文文件，请像对待纸质文件一样对待它
-- **测试**：`cargo test` 86 项通过（另有 1 项 ignored）、前端 `npm test` 265 项通过、Playwright E2E 37 项通过、心跳服务器 9 项断言；CI 在每次推送与 PR 时自动运行 typecheck、覆盖率门禁、构建、fmt、clippy、测试与心跳服务器验证
-
-*数字有数，归处有路。*
+完整中文文档见 [README.zh-CN.md](README.zh-CN.md)，中文官网见 [badhope.github.io/digilegacy/zh](https://badhope.github.io/digilegacy/zh/)。

@@ -10,7 +10,7 @@ Thanks for considering a contribution. This project handles data people care abo
 | Platform additions | same file + `digilegacy/src/api/mock-platforms.json` | The mock seed is used by the browser preview and E2E; keep both in sync. |
 | Bug reports | GitHub Issues | Include version, OS, reproduction steps, and the exact error text. |
 | Translations | currently none — see Roadmap in README | The UI is Simplified Chinese only; an i18n framework has not been chosen yet. |
-| Documentation | `README.md`, `docs/` | Screenshots and the demo video are generated, not hand-drawn (see below). |
+| Documentation | `README.md`, `README.zh-CN.md`, `docs/` | English and Chinese docs must be updated together; screenshots and the demo video are generated, not hand-drawn (see below). |
 
 ## Development setup
 
@@ -56,7 +56,8 @@ Scope is the module (`vault`, `db`, `report`, `profile`, `ci`, `docs`). Keep the
 
 - One logical change per pull request. Refactors that are not required by the change belong in a separate pull request.
 - Update `CHANGELOG.md` under `## [Unreleased]` for user-visible changes.
-- If you change a documented number (test count, table count, command count, platform count), update every place that states it — `README.md`, `docs/index.html`, and `docs/VERIFICATION.md` are cross-checked by hand.
+- If you change a documented number (test count, table count, command count, platform count), update every place that states it — `README.md`, `README.zh-CN.md`, `docs/index.html`, `docs/zh/index.html`, and `docs/VERIFICATION.md` are cross-checked by hand.
+- The website is bilingual: `docs/index.html` (English) and `docs/zh/index.html` (Chinese) share `docs/site.css`; the nav language switch must keep working in both directions.
 
 ## Regenerating screenshots and the demo video
 
