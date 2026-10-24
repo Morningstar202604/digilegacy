@@ -190,7 +190,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          crypto layer
 ├── docs/                                  # project website (GitHub Pages)
 ├── digilegacy/
 │   ├── src/                               # Vue frontend
-│   │   ├── views/                         # 9 screens
+│   │   ├── views/                         # 9 nav screens + 404
 │   │   ├── stores/                        # Pinia state
 │   │   ├── api/                           # invoke wrapper + browser-preview mock
 │   │   ├── components/                    # onboarding tour, help drawer

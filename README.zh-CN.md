@@ -190,7 +190,7 @@ aes-gcm · pbkdf2-sha2 · rand · base64          加密层
 ├── docs/                                  # 项目官网（GitHub Pages）
 ├── digilegacy/
 │   ├── src/                               # Vue 前端
-│   │   ├── views/                         # 9 个界面
+│   │   ├── views/                         # 9 个导航界面 + 404
 │   │   ├── stores/                        # Pinia 状态
 │   │   ├── api/                           # invoke 封装 + 浏览器预览 mock
 │   │   ├── components/                    # 新手引导、帮助抽屉、构成图
