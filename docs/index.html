@@ -108,13 +108,15 @@
       <a class="btn btn-ghost" href="demo/">▶ Try the interactive demo</a>
       <a class="btn btn-ghost" href="https://github.com/badhope/digilegacy">View source on GitHub</a>
     </div>
-    <div class="badges">
-      <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
-      <img src="https://img.shields.io/badge/tests-86%20Rust%20%C2%B7%20265%20frontend-brightgreen.svg" alt="86 Rust tests and 265 frontend tests passing">
-      <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows 10/11">
-      <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
-      <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
-    </div>
+    <!-- 徽章用本地 span 而不是 shields.io 图片：后者在中国大陆常被阻断，
+         一个加载失败的 <img> 会显示成破图，比没有徽章更糟。 -->
+    <ul class="badges" aria-label="Project facts">
+      <li class="pill">MIT License</li>
+      <li class="pill">86 Rust · 265 frontend tests</li>
+      <li class="pill">Windows 10/11</li>
+      <li class="pill">No servers</li>
+      <li class="pill">No telemetry</li>
+    </ul>
 
     <figure class="hero-shot">
       <img src="screenshots/01-dashboard.png" width="2400" height="1600" alt="DigiLegacy dashboard: asset totals, estimated value, planning completion and an asset composition donut chart" fetchpriority="high">
