@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-86%20Rust%20%C2%B7%20265%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-86%20Rust%20%C2%B7%20318%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">

@@ -4,7 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- 前端视觉重构收官：接入 Naive UI 主题桥接，全应用 emoji 图标迁移至 Ionicon/FontAwesome 矢量图标（新增 `PlatformIcon.vue`，覆盖 24+ 平台与 16 分类品牌映射）。
+- `main.css` 新增视觉升级层：暖色氛围光、毛玻璃头部、胶囊化导航、卡片双层高光、深色模式全套样式。
+- 路由标题解析抽为可测函数 `resolveTitleKey`；清理导航 meta 的 emoji 残留。
+
+### Fixed
+
+- DiscoverView 步骤指示器渲染键名原文（漏包 `t()`）的缺陷。
+- 前端单测由 296 增至 318（补托盘事件、解锁边界、恢复密钥确认、卡片定位等分支），分支覆盖率 76.82% → 78.01%，全部门禁转绿。
+- README 中英双语测试数徽章同步为 86 Rust · 318 frontend · 37 E2E。
 
 ## [0.2.0] - 2026-10-24
 
