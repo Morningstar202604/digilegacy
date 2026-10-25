@@ -19,7 +19,7 @@ const SEAL_PREFIX_V2: &str = "RS2.";
 pub fn generate_recovery_code() -> String {
     const ALPHABET: &[u8; 32] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去除易混 I/O/0/1（含 L，共 32 字符满足 5 位索引）
     let mut bytes = [0u8; 15];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     let mut out = String::with_capacity(29);
     let mut bits: u32 = 0;
     let mut acc: u32 = 0;

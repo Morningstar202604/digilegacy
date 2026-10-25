@@ -26,7 +26,7 @@ pub const SALT_PREFIX_V2: &str = "v2.";
 /// 生成随机12字节nonce
 pub fn generate_nonce() -> [u8; 12] {
     let mut nonce = [0u8; 12];
-    rand::thread_rng().fill_bytes(&mut nonce);
+    rand::rng().fill_bytes(&mut nonce);
     nonce
 }
 
@@ -45,7 +45,7 @@ pub fn derive_key_bytes_v(password: &str, salt: &[u8], iterations: u32) -> Zeroi
 /// 生成 v2 随机盐（自描述前缀 + base64），存库为 TEXT
 pub fn generate_salt_v2() -> String {
     let mut salt = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut salt);
     format!("{}{}", SALT_PREFIX_V2, BASE64.encode(salt))
 }
 
@@ -105,7 +105,7 @@ pub fn decrypt_with_key(encrypted: &str, key: &[u8; 32]) -> Result<String, Strin
 /// 生成随机盐
 pub fn generate_salt() -> [u8; 16] {
     let mut salt = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut salt);
+    rand::rng().fill_bytes(&mut salt);
     salt
 }
 
