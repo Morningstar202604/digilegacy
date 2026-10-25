@@ -108,9 +108,9 @@ describe('AssetsView 渲染', () => {
     await w.vm.$nextTick();
 
     const text = w.text();
-    expect(text).toContain('💰 财产型 (1)');
-    expect(text).toContain('📷 人格型 (2)');
-    expect(text).toContain('🔗 混合型 (0)');
+    expect(text).toContain('财产型 (1)');
+    expect(text).toContain('人格型 (2)');
+    expect(text).toContain('混合型 (0)');
   });
 
   it('点击筛选后只渲染对应类别', async () => {

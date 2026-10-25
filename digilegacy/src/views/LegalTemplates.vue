@@ -1,22 +1,25 @@
 <template>
   <div class="legal fade-in">
-    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">📜 法律文书模板库</h2>
+    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">{{ t('legal.title') }}</h2>
     <p class="text-muted mb-32" style="font-size: 14px;">
-      数字遗产继承相关的法律文书模板，可直接下载使用或参考修改。
+      {{ t('legal.subtitle') }}
     </p>
+    <div v-if="isEn" class="card mb-24" style="background: var(--warning-light); border-color: var(--warning);">
+      <p style="font-size: 13px; color: var(--warning-strong);"><WarningOutline /> {{ t('legal.enNotice') }}</p>
+    </div>
 
     <!-- 分类筛选 -->
     <div class="card mb-24">
-      <div class="card-title mb-16">📂 按类型筛选</div>
-      <div class="flex gap-8 flex-wrap" role="group" aria-label="按文书类型筛选">
-        <button class="btn btn-sm" :class="typeFilter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="typeFilter === 'all'" @click="typeFilter = 'all'">全部</button>
-        <button class="btn btn-sm" v-for="t in templateTypes" :key="t.value" :class="typeFilter === t.value ? 'btn-primary' : 'btn-secondary'" :aria-pressed="typeFilter === t.value" @click="typeFilter = t.value">{{ t.label }}</button>
+      <div class="card-title mb-16">{{ t('legal.filterTitle') }}</div>
+      <div class="flex gap-8 flex-wrap" role="group" :aria-label="t('legal.filterLabel')">
+        <button class="btn btn-sm" :class="typeFilter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="typeFilter === 'all'" @click="typeFilter = 'all'">{{ t('legal.all') }}</button>
+        <button class="btn btn-sm" v-for="typ in templateTypes" :key="typ.value" :class="typeFilter === typ.value ? 'btn-primary' : 'btn-secondary'" :aria-pressed="typeFilter === typ.value" @click="typeFilter = typ.value">{{ t(typ.labelKey) }}</button>
       </div>
     </div>
 
     <!-- 模板列表 -->
     <div class="card mb-24">
-      <div class="card-title mb-16">📋 模板清单</div>
+      <div class="card-title mb-16">{{ t('legal.listTitle') }}</div>
       <div v-for="tmpl in filteredTemplates" :key="tmpl.id" class="mb-16" style="border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;">
         <div style="padding: 12px 16px; background: var(--gray-50); display: flex; justify-content: space-between; align-items: center;">
           <div class="flex items-center gap-8">
@@ -24,8 +27,8 @@
             <span class="tag tag-secondary">{{ tmpl.type }}</span>
           </div>
           <div class="flex gap-8">
-            <button class="btn btn-sm btn-secondary" @click="previewTemplate = tmpl">预览</button>
-            <button class="btn btn-sm btn-primary" @click="downloadTemplate(tmpl)">下载</button>
+            <button class="btn btn-sm btn-secondary" @click="previewTemplate = tmpl">{{ t('legal.preview') }}</button>
+            <button class="btn btn-sm btn-primary" @click="downloadTemplate(tmpl)">{{ t('legal.download') }}</button>
           </div>
         </div>
         <div style="padding: 16px;">
@@ -42,7 +45,7 @@
       <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="legal-preview-title" ref="previewRef" @keydown.tab="trapPreviewFocus">
         <div class="modal-header">
           <h3 id="legal-preview-title" style="font-size: 18px; font-weight: 600; margin: 0;">{{ previewTemplate.name }}</h3>
-          <button class="btn btn-sm btn-secondary" ref="previewCloseRef" @click="closePreview">关闭</button>
+          <button class="btn btn-sm btn-secondary" ref="previewCloseRef" @click="closePreview">{{ t('common.close') }}</button>
         </div>
         <div class="modal-body">
           <pre style="white-space: pre-wrap; font-size: 13px; line-height: 1.6; color: var(--gray-700);">{{ previewTemplate.content }}</pre>
@@ -52,12 +55,12 @@
 
     <!-- 使用说明 -->
     <div class="card" style="background: var(--gray-50);">
-      <div class="card-title mb-16">📖 使用说明</div>
+      <div class="card-title mb-16">{{ t('legal.usageTitle') }}</div>
       <ul style="font-size: 13px; color: var(--gray-600); line-height: 2; padding-left: 20px;">
-        <li>本模板库仅供参考，具体文书内容请根据实际情况修改</li>
-        <li>建议在律师指导下使用正式法律文书</li>
-        <li>各地公证处可能有自己的模板要求，请以当地要求为准</li>
-        <li>涉及重大财产继承时，建议委托专业律师处理</li>
+        <li>{{ t('legal.usage1') }}</li>
+        <li>{{ t('legal.usage2') }}</li>
+        <li>{{ t('legal.usage3') }}</li>
+        <li>{{ t('legal.usage4') }}</li>
       </ul>
     </div>
   </div>
@@ -65,6 +68,8 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
+import WarningOutline from '@vicons/ionicons5/es/WarningOutline';
+import { useI18n } from '../i18n';
 
 interface LegalTemplate {
   id: string;
@@ -75,15 +80,16 @@ interface LegalTemplate {
   tags: string[];
 }
 
+const { t, isEn } = useI18n();
 const typeFilter = ref('all');
 
 const templateTypes = [
-  { value: 'will', label: '遗嘱' },
-  { value: 'inheritance', label: '继承声明' },
-  { value: 'power_of_attorney', label: '授权委托书' },
-  { value: 'affidavit', label: '宣誓书/保证书' },
-  { value: 'application', label: '申请书' },
-  { value: 'agreement', label: '协议书' },
+  { value: 'will', zhLabel: '遗嘱', labelKey: 'legal.typeWill' },
+  { value: 'inheritance', zhLabel: '继承声明', labelKey: 'legal.typeInheritance' },
+  { value: 'power_of_attorney', zhLabel: '授权委托书', labelKey: 'legal.typePowerOfAttorney' },
+  { value: 'affidavit', zhLabel: '宣誓书/保证书', labelKey: 'legal.typeAffidavit' },
+  { value: 'application', zhLabel: '申请书', labelKey: 'legal.typeApplication' },
+  { value: 'agreement', zhLabel: '协议书', labelKey: 'legal.typeAgreement' },
 ];
 
 const templates: LegalTemplate[] = [
@@ -295,9 +301,10 @@ const filteredTemplates = computed(() => {
   // typeFilter 存的是 templateTypes 的 value（英文 key，如 'will'），
   // 而模板的 type 字段是中文标签（如 '遗嘱'）。此处必须先映射成标签再比较，
   // 否则任何分类筛选都会返回空列表（历史缺陷）。
-  const label = templateTypes.find(t => t.value === typeFilter.value)?.label;
-  if (!label) return templates;
-  return templates.filter(t => t.type === label);
+  const hit = templateTypes.find(t => t.value === typeFilter.value);
+  if (!hit) return templates;
+  // 模板 type 字段存的是中文规范标签，筛选必须按 zhLabel 比较（与界面语言无关）
+  return templates.filter(t => t.type === hit.zhLabel);
 });
 
 const previewTemplate = ref<LegalTemplate | null>(null);

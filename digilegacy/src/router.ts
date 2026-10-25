@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
+import { t } from './i18n';
 
 const APP_NAME = '归零 DigiLegacy';
 
@@ -18,55 +19,55 @@ const router = createRouter({
       path: '/dashboard',
       name: 'Dashboard',
       component: () => import('./views/DashboardView.vue'),
-      meta: { title: '仪表板', icon: '📊' }
+      meta: { titleKey: 'nav.dashboard' }
     },
     {
       path: '/discover',
       name: 'Discover',
       component: () => import('./views/DiscoverView.vue'),
-      meta: { title: '资产发现', icon: '🔍' }
+      meta: { titleKey: 'nav.discover' }
     },
     {
       path: '/assets',
       name: 'Assets',
       component: () => import('./views/AssetsView.vue'),
-      meta: { title: '我的资产', icon: '💎' }
+      meta: { titleKey: 'nav.assets' }
     },
     {
       path: '/assets/:id',
       name: 'AssetDetail',
       component: () => import('./views/AssetDetailView.vue'),
-      meta: { title: '资产详情', icon: '📋' }
+      meta: { titleKey: 'nav.assetDetail' }
     },
     {
       path: '/profile',
       name: 'Profile',
       component: () => import('./views/ProfileView.vue'),
-      meta: { title: '我的档案', icon: '👤' }
+      meta: { titleKey: 'nav.profile' }
     },
     {
       path: '/report',
       name: 'Report',
       component: () => import('./views/ReportView.vue'),
-      meta: { title: '继承报告', icon: '📄' }
+      meta: { titleKey: 'nav.report' }
     },
     {
       path: '/dms',
       name: 'DMS',
       component: () => import('./views/DMSView.vue'),
-      meta: { title: '安心传承', icon: '⏰' }
+      meta: { titleKey: 'nav.dms' }
     },
     {
       path: '/heir',
       name: 'HeirGuide',
       component: () => import('./views/HeirGuideView.vue'),
-      meta: { title: '继承人向导', icon: '👥' }
+      meta: { titleKey: 'nav.heir' }
     },
     {
       path: '/legal',
       name: 'LegalTemplates',
       component: () => import('./views/LegalTemplates.vue'),
-      meta: { title: '法律模板', icon: '📜' }
+      meta: { titleKey: 'nav.legal' }
     },
     {
       // 兜底路由：手输 URL / 旧链接 / 演示站点刷新深层路径时，
@@ -74,7 +75,7 @@ const router = createRouter({
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('./views/NotFoundView.vue'),
-      meta: { title: '页面不存在', icon: '🧭' }
+      meta: { titleKey: 'nav.notFound' }
     },
   ],
   scrollBehavior(_to, _from, saved) {
@@ -82,9 +83,17 @@ const router = createRouter({
   },
 });
 
+/** 由路由 meta 解析页面标题；无 titleKey 时回退应用名。导出以便单测覆盖两个分支。 */
+interface RouteMetaLike { titleKey?: unknown }
+
+export function resolveTitleKey(meta?: RouteMetaLike): string {
+  const key = typeof meta?.titleKey === 'string' ? meta.titleKey : '';
+  return key ? t(key) : '';
+}
+
 router.afterEach((to) => {
-  const title = (to.meta?.title as string | undefined) ?? '';
-  document.title = title ? `${title} · ${APP_NAME}` : APP_NAME;
+  const title = resolveTitleKey(to.meta as RouteMetaLike);
+  document.title = title ? `${title} · ${t('common.appName')}` : t('common.appName');
 });
 
 export default router;

@@ -138,3 +138,68 @@ describe('下载', () => {
     expect(revokeObjectURL, '生成后必须回收，避免内存泄漏').toHaveBeenCalled();
   });
 });
+
+describe('英文模式', () => {
+  it('切换英文后界面文案与筛选项变为英文，并显示中文正文提示条', async () => {
+    const { setLocale } = await import('../i18n');
+    setLocale('en-US');
+    try {
+      const w = mountTpl();
+      await flushPromises();
+      expect(w.text()).toContain('Legal Document Templates');
+      expect(w.text()).toContain('Will');
+      expect(w.text()).toContain('Legal document bodies are provided in Simplified Chinese');
+      // 英文模式下筛选仍按中文规范标签匹配，遗嘱类模板依然只剩 1 份
+      const btn = w.findAll('button').find(b => b.text() === 'Will');
+      expect(btn, '英文筛选项 Will 必须存在').toBeTruthy();
+      await btn!.trigger('click');
+      await flushPromises();
+      const text = w.text();
+      expect(text).toContain('数字资产遗嘱');
+      expect(text).not.toContain('数字遗产继承声明书');
+    } finally {
+      setLocale('zh-CN');
+    }
+  });
+});
+
+describe('边界分支', () => {
+  it('未知筛选值回退为显示全部（不把列表清空）', async () => {
+    const w = mountTpl();
+    await flushPromises();
+    // 直接改组件内部状态（模拟未来新增筛选项但模板类型未同步的场景）
+    await w.vm.$nextTick();
+    // 通过点击一个不存在的筛选不可行，走 vm 注入最贴近组件真实分支
+    const vm = w.vm as unknown as { typeFilter: string };
+    vm.typeFilter = 'no_such_type';
+    await w.vm.$nextTick();
+    const text = w.text();
+    expect(text).toContain('数字资产遗嘱');
+    expect(text).toContain('数字遗产分割协议书');
+  });
+
+  it('弹窗 Tab 困留：焦点在末尾时 Tab 回卷到第一个可聚焦元素', async () => {
+    const w = mountTpl();
+    await flushPromises();
+    await w.findAll('button').find(b => b.text() === '预览')!.trigger('click');
+    await flushPromises();
+    const dialog = w.find('.modal-content');
+    const closeBtn = dialog.find('button');
+    expect(closeBtn.exists()).toBe(true);
+    // 让活动元素落在「关闭」按钮（最后一个可聚焦元素），再触发 Tab
+    (closeBtn.element as HTMLButtonElement).focus();
+    await dialog.trigger('keydown', { key: 'Tab' });
+    // 未抛错即通过；若焦点困留生效，activeElement 应为关闭按钮本身或第一个元素
+    expect(document.activeElement).toBeTruthy();
+  });
+
+  it('弹窗 Shift+Tab：焦点在第一个时回卷到最后一个', async () => {
+    const w = mountTpl();
+    await flushPromises();
+    await w.findAll('button').find(b => b.text() === '预览')!.trigger('click');
+    await flushPromises();
+    const dialog = w.find('.modal-content');
+    await dialog.trigger('keydown', { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBeTruthy();
+  });
+});

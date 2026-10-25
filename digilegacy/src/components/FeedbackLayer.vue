@@ -3,15 +3,15 @@
   <div class="toast-stack" aria-live="polite" aria-atomic="false">
     <transition-group name="toast">
       <div
-        v-for="t in toasts"
-        :key="t.id"
+        v-for="toast in toasts"
+        :key="toast.id"
         class="toast"
-        :class="`toast-${t.kind}`"
+        :class="`toast-${toast.kind}`"
         role="status"
       >
-        <span class="toast-icon" aria-hidden="true">{{ icon(t.kind) }}</span>
-        <span class="toast-msg">{{ t.message }}</span>
-        <button class="toast-close" aria-label="关闭提示" @click="dismissToast(t.id)">×</button>
+        <span class="toast-icon" aria-hidden="true">{{ icon(toast.kind) }}</span>
+        <span class="toast-msg">{{ toast.message }}</span>
+        <button class="toast-close" :aria-label="t('common.closeToast')" @click="dismissToast(toast.id)">×</button>
       </div>
     </transition-group>
   </div>
@@ -46,8 +46,10 @@
 
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue';
+import { useI18n } from '../i18n';
 import { dismissToast, settleConfirm, useFeedback } from '../composables/feedback';
 
+const { t } = useI18n();
 const { toasts, confirmState } = useFeedback();
 const cardRef = ref<HTMLElement | null>(null);
 const confirmBtnRef = ref<HTMLElement | null>(null);

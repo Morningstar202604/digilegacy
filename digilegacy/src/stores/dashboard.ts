@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { invoke } from '../api/invoke';
+import { t } from '../i18n';
 
 import type { DashboardStats, CheckInStatus, UserProfile, ApiResponse, DmsEvaluation } from '../types';
 
@@ -74,7 +75,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       if (!res.success) {
         // 写路径失败必须以异常上抛：ProfileView 依赖它来提示失败，
         // 否则锁定态拒写会被 UI 报成「保存成功」。
-        throw new Error(res.message || '保存档案失败');
+        throw new Error(res.message || t('err.saveProfile'));
       }
       user.value = { ...user.value, ...profile };
       return res;
@@ -91,7 +92,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         intervalDays,
       });
       if (!res.success) {
-        throw new Error(res.message || '保存设置失败');
+        throw new Error(res.message || t('err.saveSettings'));
       }
       await loadCheckInStatus();
       return res;

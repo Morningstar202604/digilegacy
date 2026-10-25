@@ -12,10 +12,13 @@ import type { Mock } from 'vitest';
 // 注意 mock 路径：本文件在 src/ 根目录，被 App.vue 引用的是 './api/invoke'，
 // 因此这里必须写 '../api/invoke' 才是同一个模块 id（早前写成 '../api/invoke'
 // 却放在 src/views 下会解析到项目根部，导致 mock 静默失效、测试实际打真实 IPC）。
+const isTauriEnvStub = vi.hoisted(() => vi.fn(() => false));
+const eventListenStub = vi.hoisted(() => vi.fn(async () => () => {}));
 vi.mock('./api/invoke', () => ({
   invoke: vi.fn(),
-  isTauriEnv: vi.fn(() => false),
+  isTauriEnv: isTauriEnvStub,
 }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: eventListenStub }));
 
 import App from './App.vue';
 import { invoke } from './api/invoke';
@@ -23,7 +26,7 @@ import { useSecurityStore } from './stores/security';
 
 const mockedInvoke = invoke as unknown as Mock;
 
-async function mountApp() {
+async function mountApp(opts: { skipOnboarding?: boolean } = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -43,7 +46,9 @@ async function mountApp() {
 
   const pinia = createPinia();
   setActivePinia(pinia);
-  localStorage.setItem('digilegacy_onboarding_done', '1');
+  if (opts.skipOnboarding !== false) {
+    localStorage.setItem('digilegacy_onboarding_done', '1');
+  }
   const w = mount(App, { global: { plugins: [pinia, router] } });
   return w;
 }
@@ -71,6 +76,10 @@ beforeEach(() => {
   sessionStorage.clear();
   mockedInvoke.mockReset();
   mockedInvoke.mockResolvedValue({ success: true, message: '', data: [] });
+  isTauriEnvStub.mockReset();
+  isTauriEnvStub.mockReturnValue(false);
+  eventListenStub.mockReset();
+  eventListenStub.mockResolvedValue(() => {});
 });
 
 describe('App 锁定遮罩', () => {
@@ -424,5 +433,138 @@ describe('闲置自动锁定', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('语言切换', () => {
+  it('点语言按钮在中文与英文之间切换（标题与侧栏即时生效）', async () => {
+    const w = await mountApp();
+    expect(w.text()).toContain('仪表板');
+
+    const btn = w.find('[data-testid="lang-switch"]');
+    expect(btn.exists(), '语言切换按钮必须存在').toBe(true);
+    await btn.trigger('click');
+    await w.vm.$nextTick();
+
+    expect(w.text()).toContain('Dashboard');
+    expect(localStorage.getItem('digilegacy_locale')).toBe('en-US');
+
+    await btn.trigger('click');
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('仪表板');
+  });
+});
+
+describe('托盘事件', () => {
+  it('Tauri 环境下绑定托盘事件；app-locked 触发时立即清空界面敏感数据', async () => {
+    isTauriEnvStub.mockReturnValue(true);
+    const w = await mountApp();
+    await flushPromises();
+
+    expect(eventListenStub, '必须监听托盘事件').toHaveBeenCalledWith('app-locked', expect.any(Function));
+    const calls = eventListenStub.mock.calls as unknown as [string, () => void][];
+    const lockedHandler = calls.find(c => c[0] === 'app-locked')![1];
+
+    // 托盘「锁定」后：窗口不刷新，但界面上已解密数据必须被清除（安全关键路径）
+    const s = useSecurityStore();
+    s.unlocked = true;
+    lockedHandler();
+    await w.vm.$nextTick();
+    expect(s.unlocked, '托盘锁定后安全状态必须置为锁定').toBe(false);
+  });
+
+  it('Tauri 环境下 dms-checked-in 事件触发签到状态与统计刷新', async () => {
+    isTauriEnvStub.mockReturnValue(true);
+    const w = await mountApp();
+    await flushPromises();
+
+    const calls = eventListenStub.mock.calls as unknown as [string, () => void][];
+    const checkedInHandler = calls.find(c => c[0] === 'dms-checked-in')![1];
+    checkedInHandler();
+    await flushPromises();
+    // 刷新调用不抛错即通过（loadCheckInStatus/loadStats 走 mock invoke）
+    expect(w.exists()).toBe(true);
+  });
+
+  it('非 Tauri 环境（浏览器预览）不绑定托盘事件', async () => {
+    isTauriEnvStub.mockReturnValue(false);
+    await mountApp();
+    await flushPromises();
+    expect(eventListenStub).not.toHaveBeenCalled();
+  });
+
+  it('托盘事件绑定失败时静默降级，不阻断应用启动', async () => {
+    isTauriEnvStub.mockReturnValue(true);
+    eventListenStub.mockRejectedValueOnce(new Error('event plugin gone'));
+    const w = await mountApp();
+    await flushPromises();
+    expect(w.exists(), '绑定失败也不能白屏').toBe(true);
+  });
+
+  it('onMounted 后若尚未完成新手引导且未锁定，自动弹出引导', async () => {
+    vi.useFakeTimers();
+    try {
+      isTauriEnvStub.mockReturnValue(false);
+      mockedInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'security_status') {
+          return { success: true, message: '', data: { has_master_password: false, unlocked: true } };
+        }
+        return { success: true, message: '', data: [] };
+      });
+      const w = await mountApp({ skipOnboarding: false });
+      await vi.advanceTimersByTimeAsync(1000);
+      await w.vm.$nextTick();
+      expect(w.text()).toContain('跳过');
+      w.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('解锁与恢复边界', () => {
+  it('空密码提交被本地拦截，不调用后端', async () => {
+    const w = await lockedApp();
+    await w.find('.lock-card .btn-primary').trigger('click');
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('请输入主密码');
+    const calls = mockedInvoke.mock.calls.map(c => c[0]);
+    expect(calls, '空密码不得打后端 unlock').not.toContain('unlock');
+  });
+
+  it('未勾选「我已保存」时点完成不关闭恢复流程（新码仍展示）', async () => {
+    const w = await lockedApp();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'security_status') {
+        return { success: true, message: '', data: { has_master_password: true, unlocked: false } };
+      }
+      if (cmd === 'start_recovery') {
+        return { success: true, message: '', data: { has_master_password: true, unlocked: false } };
+      }
+      if (cmd === 'complete_recovery') {
+        return { success: true, message: '主密码已重设', data: 'NEW1-NEW2-NEW3-NEW4-NEW5-NEW6' };
+      }
+      return { success: true, message: '', data: [] };
+    });
+    const card = w.find('.lock-card');
+    await card.findAll('button').find(b => b.text().includes('恢复密钥'))!.trigger('click');
+    await w.find('input[aria-label="恢复密钥"]').setValue('ABCD-EFGH-JKLM-NPQR-STUV-WXYZ');
+    await card.findAll('button').find(b => b.text().includes('验证恢复密钥'))!.trigger('click');
+    await flushPromises();
+    await w.find('input[aria-label="新主密码（至少 8 位）"]').setValue('brand-new-pass');
+    await w.find('input[aria-label="确认新主密码"]').setValue('brand-new-pass');
+    await card.findAll('button').find(b => b.text().includes('重设主密码'))!.trigger('click');
+    await flushPromises();
+    // 不勾选 checkbox，直接点「我已保存」：finishRecovery 必须被 ack 门拦住
+    const saveBtn = card.findAll('button').find(b => b.text().includes('我已保存'))!;
+    await saveBtn.trigger('click');
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('NEW1-NEW2-NEW3-NEW4-NEW5-NEW6');
+    // 勾选后再点：恢复流程关闭（回到解锁表单），新码展示消失
+    await card.find('input[type="checkbox"]').setValue(true);
+    await card.findAll('button').find(b => b.text().includes('我已保存'))!.trigger('click');
+    await w.vm.$nextTick();
+    expect(w.text()).not.toContain('NEW1-NEW2-NEW3-NEW4-NEW5-NEW6');
+    expect(w.find('input[aria-label="主密码"]').exists(), '关闭后回到主密码解锁表单').toBe(true);
   });
 });

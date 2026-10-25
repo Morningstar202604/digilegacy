@@ -24,7 +24,7 @@ describe('router', () => {
     const router = await loadRouter();
     const resolved = router.resolve('/this/path/does/not/exist');
     expect(resolved.name).toBe('NotFound');
-    expect(resolved.meta.title).toBe('页面不存在');
+    expect(resolved.meta.titleKey).toBe('nav.notFound');
   });
 
   it('深层未知路径同样命中兜底（例如旧的 /assets/abc/def）', async () => {
@@ -44,6 +44,13 @@ describe('router', () => {
     const resolved = router.resolve('/');
     const redirected = resolved.matched.flatMap(r => (r.redirect ? [r.redirect] : []));
     expect(redirected).toContain('/dashboard');
+  });
+
+  it('resolveTitleKey：缺失 titleKey 时回退应用名（空标题分支）', async () => {
+    const { resolveTitleKey } = await import('./router');
+    expect(resolveTitleKey({})).toBe('');
+    expect(resolveTitleKey({ titleKey: 42 })).toBe('');
+    expect(resolveTitleKey({ titleKey: 'nav.dashboard' })).toContain('仪表板');
   });
 
   it('scrollBehavior：无历史位置时回到顶部，有则恢复', async () => {

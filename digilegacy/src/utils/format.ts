@@ -4,35 +4,39 @@
 // 文案与规则只在此处维护，避免出现「待设定 / 待定」之类的不一致漂移
 // （曾因三视图各持一份副本导致同一枚举值显示两种文案的实际缺陷）。
 
-/** 金额格式化：≥1万显示「x.x万」，否则千分位；空值/0 显示「0」 */
+import { t } from '../i18n';
+
+/** 金额格式化：≥1万显示「x.x万 / x.xk」，否则千分位；空值/0 显示「0」 */
 export function formatMoney(n: number): string {
   if (!n) return '0';
-  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+  if (n >= 10000) {
+    return t('common.tenThousand', { value: (n / 10000).toFixed(1) });
+  }
   return n.toLocaleString('zh-CN');
 }
 
 /** 资产类别文案 */
 export function categoryLabel(cat: string): string {
   const map: Record<string, string> = {
-    property: '财产型',
-    personality: '人格型',
-    mixed: '混合型',
+    property: 'cat.property',
+    personality: 'cat.personality',
+    mixed: 'cat.mixed',
   };
-  return map[cat] || cat;
+  return t(map[cat] || cat);
 }
 
 /** 处置意愿文案（no_action 统一为「待设定」，与资产详情下拉选项「暂不设定」语义对应） */
 export function disposalLabel(method: string): string {
   const map: Record<string, string> = {
-    inherit: '指定继承',
-    liquidate: '变现分配',
-    memorialize: '保留纪念',
-    authorize_view: '授权查阅',
-    delete: '彻底删除',
-    donate: '捐赠',
-    no_action: '待设定',
+    inherit: 'disposalLabel.inherit',
+    liquidate: 'disposalLabel.liquidate',
+    memorialize: 'disposalLabel.memorialize',
+    authorize_view: 'disposalLabel.authorize_view',
+    delete: 'disposalLabel.delete',
+    donate: 'disposalLabel.donate',
+    no_action: 'disposalLabel.no_action',
   };
-  return map[method] || method;
+  return t(map[method] || method);
 }
 
 // 平台名 → 图标：资产列表与资产详情页共用，新增平台在此补一行

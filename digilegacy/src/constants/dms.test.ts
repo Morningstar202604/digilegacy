@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { t } from '../i18n';
 import { INTERVAL_OPTIONS, intervalLabel } from './dms';
 
 // 两个页面共用同一份选项：任何一处单独改文案/数值都会让「档案页显示 60 天、
@@ -11,10 +12,12 @@ describe('DMS 间隔常量', () => {
     expect(values).toEqual([7, 14, 30, 60, 90]);
   });
 
-  it('每个选项都有长短两种文案', () => {
+  it('每个选项都有长短两种文案（经 i18n 解析后非空）', () => {
     for (const opt of INTERVAL_OPTIONS) {
-      expect(opt.label.length).toBeGreaterThan(0);
-      expect(opt.short.length).toBeGreaterThan(0);
+      expect(opt.labelKey.length).toBeGreaterThan(0);
+      expect(opt.shortKey.length).toBeGreaterThan(0);
+      expect(t(opt.labelKey).length).toBeGreaterThan(0);
+      expect(t(opt.shortKey).length).toBeGreaterThan(0);
     }
   });
 

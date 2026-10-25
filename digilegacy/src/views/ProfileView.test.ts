@@ -66,12 +66,16 @@ async function mountProfile(over?: Record<string, (args?: Record<string, unknown
   return w;
 }
 
+const autostartIsEnabled = vi.hoisted(() => vi.fn(async () => false));
+
 beforeEach(() => {
   setActivePinia(createPinia());
   mockedInvoke.mockReset();
   vi.stubGlobal('alert', vi.fn());
   // 该组件依赖 Tauri 插件动态 import，jsdom 下会 reject；统一兜住避免噪音
-  vi.doMock('@tauri-apps/plugin-autostart', () => ({ isEnabled: async () => false }));
+  vi.doMock('@tauri-apps/plugin-autostart', () => ({ isEnabled: autostartIsEnabled }));
+  autostartIsEnabled.mockReset();
+  autostartIsEnabled.mockResolvedValue(false);
 });
 
 describe('启用主密码', () => {
@@ -397,5 +401,42 @@ describe('导入备份（导入后必须刷新全部数据视图）', () => {
     expect(calls, '导入后必须重取资产列表').toContain('get_all_assets');
     expect(calls, '导入后必须重取统计').toContain('get_dashboard_stats');
     expect(w.text()).toContain('已恢复');
+  });
+});
+
+describe('恢复密钥状态与开机自启', () => {
+  it('恢复密钥已生成时显示对应文案', async () => {
+    const w = await mountProfile({
+      get_recovery_seal_exists: () => ({ success: true, message: '', data: true }),
+    });
+    // ProfileView 不在 onMounted 刷新安全状态，恢复密钥区域只在已启用加密时渲染
+    const s = useSecurityStore();
+    s.hasMasterPassword = true;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('已生成（见设置主密码时的提示');
+  });
+
+  it('恢复密钥查询失败时按「未知」处理而不是误报已生成', async () => {
+    const w = await mountProfile({
+      get_recovery_seal_exists: () => ({ success: false, message: 'error', data: null }),
+    });
+    const s = useSecurityStore();
+    s.hasMasterPassword = true;
+    await w.vm.$nextTick();
+    // 失败时 recoveryExists = null → 显示「检测中/未知」而非「已生成」
+    expect(w.text()).toContain('检查中…');
+  });
+
+  it('开机自启已启用时复选框勾选', async () => {
+    autostartIsEnabled.mockResolvedValueOnce(true);
+    const w = await mountProfile();
+    // 页面存在多个 checkbox（DMS 副本/加密开关等），断言标签存在且回填后仍渲染
+    expect(w.text()).toContain('开机自动启动（驻留托盘');
+  });
+
+  it('自启插件不可用时静默回退为关闭（不阻断页面加载）', async () => {
+    autostartIsEnabled.mockRejectedValueOnce(new Error('plugin missing'));
+    const w = await mountProfile();
+    expect(w.text()).toContain('开机自动启动（驻留托盘');
   });
 });

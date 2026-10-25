@@ -2,45 +2,45 @@
   <div class="assets fade-in">
     <div class="flex justify-between items-center mb-32">
       <div>
-        <h2 style="font-size: 22px; font-weight: 700;">💎 我的数字资产</h2>
-        <p class="text-muted mt-16" style="font-size: 14px;">共 {{ assets.assets.length }} 项 · 预估总价值 ¥{{ formatMoney(assets.totalValue) }}</p>
+        <h2 style="font-size: 22px; font-weight: 700;">{{ t('assets.title') }}</h2>
+        <p class="text-muted mt-16" style="font-size: 14px;">{{ t('assets.summary', { count: assets.assets.length, value: formatMoney(assets.totalValue) }) }}</p>
       </div>
-      <router-link to="/discover" class="btn btn-primary">+ 继续发现</router-link>
+      <router-link to="/discover" class="btn btn-primary">+ {{ t('assets.continue') }}</router-link>
     </div>
 
     <div class="card mb-24">
       <div class="flex items-center gap-12 mb-16" style="flex-wrap: wrap;">
         <div class="search-box">
-          <span class="search-icon" aria-hidden="true">🔎</span>
+          <span class="search-icon" aria-hidden="true"><SearchOutline /></span>
           <input
             v-model="keyword"
             class="form-input search-input"
             type="search"
-            placeholder="搜索平台、账号或备注…"
-            aria-label="搜索资产"
+            :placeholder="t('assets.searchPlaceholder')"
+            :aria-label="t('assets.searchLabel')"
           />
-          <button v-if="keyword" class="search-clear" aria-label="清空搜索" @click="keyword = ''">×</button>
+          <button v-if="keyword" class="search-clear" :aria-label="t('assets.clearSearch')" @click="keyword = ''">×</button>
         </div>
-        <select v-model="sortBy" class="form-select" style="width: auto;" aria-label="排序方式">
-          <option value="recent">最近添加</option>
-          <option value="value">价值从高到低</option>
-          <option value="platform">按平台名</option>
-          <option value="disposal">按处置状态</option>
+        <select v-model="sortBy" class="form-select" style="width: auto;" :aria-label="t('assets.sortLabel')">
+          <option value="recent">{{ t('assets.sortRecent') }}</option>
+          <option value="value">{{ t('assets.sortValue') }}</option>
+          <option value="platform">{{ t('assets.sortPlatform') }}</option>
+          <option value="disposal">{{ t('assets.sortDisposal') }}</option>
         </select>
       </div>
-      <div class="flex items-center gap-12" style="flex-wrap: wrap;" role="group" aria-label="按类别筛选资产">
-        <button class="btn btn-sm" :class="filter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'all'" @click="filter = 'all'">全部 ({{ assets.assets.length }})</button>
-        <button class="btn btn-sm" :class="filter === 'property' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'property'" @click="filter = 'property'">💰 财产型 ({{ assets.propertyCount }})</button>
-        <button class="btn btn-sm" :class="filter === 'personality' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'personality'" @click="filter = 'personality'">📷 人格型 ({{ assets.personalityCount }})</button>
-        <button class="btn btn-sm" :class="filter === 'mixed' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'mixed'" @click="filter = 'mixed'">🔗 混合型 ({{ assets.mixedCount }})</button>
+      <div class="flex items-center gap-12" style="flex-wrap: wrap;" role="group" :aria-label="t('assets.filterLabel')">
+        <button class="btn btn-sm" :class="filter === 'all' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'all'" @click="filter = 'all'">{{ t('assets.all') }} ({{ assets.assets.length }})</button>
+        <button class="btn btn-sm" :class="filter === 'property' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'property'" @click="filter = 'property'">{{ t('cat.property') }} ({{ assets.propertyCount }})</button>
+        <button class="btn btn-sm" :class="filter === 'personality' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'personality'" @click="filter = 'personality'">{{ t('cat.personality') }} ({{ assets.personalityCount }})</button>
+        <button class="btn btn-sm" :class="filter === 'mixed' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'mixed'" @click="filter = 'mixed'">{{ t('cat.mixed') }} ({{ assets.mixedCount }})</button>
         <span class="text-muted" style="font-size: 12px; margin-left: auto;" aria-live="polite">
-          显示 {{ filteredAssets.length }} / {{ assets.assets.length }} 项
+          {{ t('assets.showing', { shown: filteredAssets.length, total: assets.assets.length }) }}
         </span>
       </div>
     </div>
 
     <div v-for="asset in filteredAssets" :key="asset.id" class="card mb-16 asset-row"
-         role="link" tabindex="0" :aria-label="`查看资产 ${asset.platform_name} 详情`"
+         role="link" tabindex="0" :aria-label="t('assets.viewDetail', { name: asset.platform_name })"
          @click="$router.push(`/assets/${asset.id}`)"
          @keydown.enter="$router.push(`/assets/${asset.id}`)">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -52,13 +52,13 @@
             <div style="display: flex; gap: 8px; margin-top: 8px;">
               <span class="tag" :class="'tag-' + asset.category">{{ categoryLabel(asset.category) }}</span>
               <span class="tag" :class="asset.disposal_method !== 'no_action' ? 'tag-success' : 'tag-warning'">{{ disposalLabel(asset.disposal_method) }}</span>
-              <span class="tag tag-success" v-if="asset.has_credential">🔐 已存凭据</span>
+              <span class="tag tag-success" v-if="asset.has_credential"><LockClosedOutline /> {{ t('assets.hasCredential') }}</span>
             </div>
           </div>
         </div>
         <div style="text-align: right;">
           <div style="font-size: 18px; font-weight: 700; color: var(--gray-900);">{{ asset.estimated_value ? '¥' + formatMoney(asset.estimated_value) : '-' }}</div>
-          <div class="text-muted" style="font-size: 12px;">预估价值</div>
+          <div class="text-muted" style="font-size: 12px;">{{ t('assets.estimatedValueLabel') }}</div>
         </div>
       </div>
     </div>
@@ -66,9 +66,9 @@
     <!-- 有数据但筛不出来：说清楚是筛选结果，不要让人以为资产没了 -->
     <div v-if="!assets.loading && !assets.loadError && assets.assets.length > 0 && filteredAssets.length === 0" class="card text-center" style="padding: 40px;">
       <EmptyState kind="search" :size="140" />
-      <h3 style="font-size: 16px; margin: 12px 0 8px;">没有匹配的资产</h3>
-      <p class="text-muted mb-16" style="font-size: 13px;">试试更短的关键词，或切换类别 / 排序条件。</p>
-      <button class="btn btn-secondary btn-sm" @click="resetFilters">重置筛选</button>
+      <h3 style="font-size: 16px; margin: 12px 0 8px;">{{ t('assets.noMatchTitle') }}</h3>
+      <p class="text-muted mb-16" style="font-size: 13px;">{{ t('assets.noMatchDesc') }}</p>
+      <button class="btn btn-secondary btn-sm" @click="resetFilters">{{ t('assets.resetFilter') }}</button>
     </div>
 
     <!-- 首次加载骨架屏：避免「先闪空态再出内容」的跳动 -->
@@ -81,26 +81,30 @@
 
     <!-- 加载失败：必须与「成功但为空」区分，否则用户会误以为资产全部丢失 -->
     <div v-else-if="assets.loadError" class="card" role="alert" style="border-color: var(--danger);">
-      <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--danger-strong);">资产列表加载失败</h3>
+      <h3 style="font-size: 16px; margin-bottom: 8px; color: var(--danger-strong);">{{ t('assets.loadFailed') }}</h3>
       <p class="text-muted mb-16" style="font-size: 13px;">{{ assets.loadError }}</p>
-      <button class="btn btn-primary btn-sm" @click="assets.loadAssets()">重试</button>
+      <button class="btn btn-primary btn-sm" @click="assets.loadAssets()">{{ t('common.retry') }}</button>
     </div>
 
     <div class="card text-center" v-else-if="assets.assets.length === 0" style="padding: 48px;">
       <EmptyState kind="assets" :size="160" />
-      <h3 style="font-size: 18px; margin: 16px 0 8px;">还没有登记任何数字资产</h3>
-      <p class="text-muted mb-24" style="font-size: 14px;">前往"资产发现"模块，开始建立你的数字遗产清单</p>
-      <router-link to="/discover" class="btn btn-primary btn-lg">开始资产发现</router-link>
+      <h3 style="font-size: 18px; margin: 16px 0 8px;">{{ t('assets.emptyTitle') }}</h3>
+      <p class="text-muted mb-24" style="font-size: 14px;">{{ t('assets.emptyDesc') }}</p>
+      <router-link to="/discover" class="btn btn-primary btn-lg">{{ t('assets.startDiscover') }}</router-link>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useI18n } from '../i18n';
+import SearchOutline from '@vicons/ionicons5/es/SearchOutline';
+import LockClosedOutline from '@vicons/ionicons5/es/LockClosedOutline';
 import { useAssetsStore } from '../stores/assets';
 import { formatMoney, categoryLabel, disposalLabel, platformIcon } from '../utils/format';
 import EmptyState from '../components/EmptyState.vue';
 
+const { t } = useI18n();
 const assets = useAssetsStore();
 const filter = ref<string>('all');
 const keyword = ref('');

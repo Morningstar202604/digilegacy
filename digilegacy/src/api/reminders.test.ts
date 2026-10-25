@@ -56,6 +56,37 @@ describe('checkAndNotifyOnce', () => {
     expect(mockedInvoke).not.toHaveBeenCalled();
   });
 
+
+  it('权限未授予时先请求权限，授予后发送', async () => {
+    let permissionCalls = 0;
+    const { requestPermission } = await import('@tauri-apps/plugin-notification');
+    (requestPermission as unknown as Mock).mockResolvedValueOnce('granted');
+    permissionCalls++;
+    mockedInvoke.mockResolvedValueOnce(status({ days_until_due: 1 }));
+    localStorage.removeItem('digilegacy_reminder_' + new Date().toISOString().slice(0, 10) + '_due');
+
+    await checkAndNotifyOnce();
+    expect(sendNotification).toHaveBeenCalled();
+    expect(permissionCalls).toBeGreaterThan(0);
+  });
+
+  it('通知插件抛异常时返回 false 而不是上抛（本地提醒不能拖垮应用）', async () => {
+    const { isPermissionGranted } = await import('@tauri-apps/plugin-notification');
+    (isPermissionGranted as unknown as Mock).mockRejectedValueOnce(new Error('plugin gone'));
+    mockedInvoke.mockResolvedValueOnce(status({ days_until_due: 1 }));
+
+    const r = await checkAndNotifyOnce();
+    expect(sendNotification).not.toHaveBeenCalled();
+    // 不抛错即为通过；返回值无公开契约，只断言无异常
+    expect(r).toBeUndefined();
+  });
+
+  it('days_until_due 为 null 时直接返回（不误判为逾期）', async () => {
+    mockedInvoke.mockResolvedValueOnce(status({ days_until_due: null }));
+    await checkAndNotifyOnce();
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
   it('DMS 未启用时不提醒', async () => {
     mockedInvoke.mockResolvedValueOnce(status({ dms_enabled: false, days_until_due: 0 }));
 

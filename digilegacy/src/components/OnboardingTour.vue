@@ -1,7 +1,7 @@
 <template>
   <div class="tour-root">
     <!-- 遮罩可点击关闭：避免用户找不到出口时被"困"在引导里 -->
-    <div class="tour-blocker" @click="finish" title="点击关闭引导" aria-label="点击关闭引导"></div>
+    <div class="tour-blocker" @click="finish" :title="t('tour.close')" :aria-label="t('tour.close')"></div>
 
     <div v-if="rect" class="tour-spotlight" :style="spotlightStyle"></div>
 
@@ -11,14 +11,14 @@
       </div>
       <!-- 切步时读屏自动播报（4.1.3 状态消息） -->
       <div aria-live="polite">
-        <div class="tour-title" id="tour-title">{{ current.title }}</div>
-        <div class="tour-desc">{{ current.desc }}</div>
+        <div class="tour-title" id="tour-title">{{ t(current.titleKey) }}</div>
+        <div class="tour-desc">{{ t(current.descKey) }}</div>
       </div>
       <div class="tour-actions">
-        <button class="btn btn-secondary btn-sm" @click="skip">跳过</button>
+        <button class="btn btn-secondary btn-sm" @click="skip">{{ t('tour.skip') }}</button>
         <div style="display: flex; gap: 8px;">
-          <button v-if="index > 0" class="btn btn-secondary btn-sm" @click="prev">上一步</button>
-          <button class="btn btn-primary btn-sm" @click="next">{{ index === steps.length - 1 ? '完成' : '下一步' }}</button>
+          <button v-if="index > 0" class="btn btn-secondary btn-sm" @click="prev">{{ t('tour.prev') }}</button>
+          <button class="btn btn-primary btn-sm" @click="next">{{ index === steps.length - 1 ? t('tour.done') : t('tour.next') }}</button>
         </div>
       </div>
       <div class="tour-step-text">{{ index + 1 }} / {{ steps.length }}</div>
@@ -28,28 +28,30 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from '../i18n';
 
 interface TourStep {
   target: string | null;
-  title: string;
-  desc: string;
+  titleKey: string;
+  descKey: string;
 }
 
+const { t } = useI18n();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const cardRef = ref<HTMLElement | null>(null);
 let previouslyFocused: HTMLElement | null = null;
 
 const steps: TourStep[] = [
-  { target: null, title: '欢迎使用「归零」', desc: '30 秒带你认识主要功能，之后的每一步都可以点「跳过」。' },
-  { target: '[data-tour="nav-discover"]', title: '① 资产发现', desc: '回答一份自检问卷，从 152 个平台库里找出你可能已经遗忘的账号。' },
-  { target: '[data-tour="nav-assets"]', title: '② 我的资产', desc: '确认并登记资产；点开任意资产，可以加密保存账号凭据、跳转平台官网。' },
-  { target: '[data-tour="nav-profile"]', title: '③ 我的档案', desc: '填写本人与继承人信息；在这里设置主密码启用加密，也可以导出加密备份。' },
-  { target: '[data-tour="nav-dms"]', title: '④ 安心传承', desc: '定期点一下「我还安好」。万一长时间未确认，会按三级确认链通知你关心的人。' },
-  { target: '[data-tour="nav-report"]', title: '⑤ 继承报告', desc: '一键生成继承方案，导出 HTML 报告与工具包 ZIP 交给家人。' },
-  { target: '[data-tour="nav-heir"]', title: '⑥ 继承人向导', desc: '家人按平台查办理流程、所需材料与变现过户路径。' },
-  { target: '[data-tour="checkin"]', title: '顶部快捷确认', desc: '不想进页面？点这里的按钮就能一键完成安全确认。' },
-  { target: '[data-tour="help"]', title: '需要帮助？', desc: '点「帮助」随时打开帮助中心，也可以在里面重新播放本引导。祝使用顺利！' },
+  { target: null, titleKey: 'tour.welcome', descKey: 'tour.welcomeDesc' },
+  { target: '[data-tour="nav-discover"]', titleKey: 'tour.discover', descKey: 'tour.discoverDesc' },
+  { target: '[data-tour="nav-assets"]', titleKey: 'tour.assets', descKey: 'tour.assetsDesc' },
+  { target: '[data-tour="nav-profile"]', titleKey: 'tour.profile', descKey: 'tour.profileDesc' },
+  { target: '[data-tour="nav-dms"]', titleKey: 'tour.dms', descKey: 'tour.dmsDesc' },
+  { target: '[data-tour="nav-report"]', titleKey: 'tour.report', descKey: 'tour.reportDesc' },
+  { target: '[data-tour="nav-heir"]', titleKey: 'tour.heir', descKey: 'tour.heirDesc' },
+  { target: '[data-tour="checkin"]', titleKey: 'tour.checkin', descKey: 'tour.checkinDesc' },
+  { target: '[data-tour="help"]', titleKey: 'tour.help', descKey: 'tour.helpDesc' },
 ];
 
 const index = ref(0);

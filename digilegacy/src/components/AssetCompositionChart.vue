@@ -10,15 +10,16 @@
       <li v-for="item in legend" :key="item.name">
         <span class="dot" :style="{ background: item.color }" aria-hidden="true"></span>
         <span class="name">{{ item.name }}</span>
-        <span class="value">{{ item.value }} 项 · {{ percent(item.value) }}%</span>
+        <span class="value">{{ item.value }} {{ t('dashboard.itemSuffix') }} · {{ percent(item.value) }}%</span>
       </li>
     </ul>
-    <p v-else class="text-muted asset-chart-empty">还没有资产数据，登记后会在这里显示构成。</p>
+    <p v-else class="text-muted asset-chart-empty">{{ t('chart.empty') }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useI18n } from '../i18n';
 import * as echarts from 'echarts/core';
 import { PieChart } from 'echarts/charts';
 import { TooltipComponent, LegendComponent } from 'echarts/components';
@@ -31,6 +32,8 @@ const props = defineProps<{
   personality: number;
   mixed: number;
 }>();
+
+const { t } = useI18n();
 
 const host = ref<HTMLElement | null>(null);
 let chart: echarts.ECharts | null = null;
@@ -54,13 +57,13 @@ function canvasAvailable(): boolean {
 const total = computed(() => props.property + props.personality + props.mixed);
 
 const legend = computed(() => [
-  { name: '财产型', value: props.property, color: '#b4594a' },
-  { name: '人格型', value: props.personality, color: '#3f6f6a' },
-  { name: '混合型', value: props.mixed, color: '#c08a3e' },
+  { name: t('cat.property'), value: props.property, color: '#b4594a' },
+  { name: t('cat.personality'), value: props.personality, color: '#3f6f6a' },
+  { name: t('cat.mixed'), value: props.mixed, color: '#c08a3e' },
 ]);
 
 const ariaLabel = computed(
-  () => `资产构成：财产型 ${props.property} 项，人格型 ${props.personality} 项，混合型 ${props.mixed} 项，共 ${total.value} 项`
+  () => t('chart.aria', { p: props.property, q: props.personality, m: props.mixed, total: total.value })
 );
 
 function percent(v: number) {
@@ -71,7 +74,7 @@ function render() {
   if (!host.value || !canvasAvailable()) return;
   if (!chart) chart = echarts.init(host.value, undefined, { renderer: 'canvas' });
   chart.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c} 项 ({d}%)' },
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ' + t('dashboard.itemSuffix') + ' ({d}%)' },
     series: [
       {
         type: 'pie',

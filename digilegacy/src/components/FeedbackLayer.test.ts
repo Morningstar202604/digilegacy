@@ -141,3 +141,42 @@ describe('确认框', () => {
     await expect(second).resolves.toBe(true);
   });
 });
+
+describe('边界分支', () => {
+  it('info 类型 toast 使用默认样式（非 success/error 分支）', async () => {
+    const w = mountLayer();
+    toast('请稍候', 'info');
+    await flushPromises();
+    const el = w.find('.toast');
+    expect(el.classes()).toContain('toast-info');
+  });
+
+  it('点遮罩空白处等价于取消', async () => {
+    const w = mountLayer();
+    const p = confirmDialog({ title: '遮罩取消' });
+    await flushPromises();
+    await w.find('.confirm-overlay').trigger('click'); // @click.self
+    await expect(p).resolves.toBe(false);
+  });
+
+  it('Tab 在确认框两按钮间循环（焦点困留）', async () => {
+    const w = mountLayer();
+    confirmDialog({ title: '焦点困留' });
+    await flushPromises();
+    const card = w.find('.confirm-card');
+    const buttons = w.findAll('.confirm-actions button');
+    (buttons[1].element as HTMLButtonElement).focus();
+    await card.trigger('keydown', { key: 'Tab' });
+    expect(document.activeElement).toBe(buttons[0].element);
+    await card.trigger('keydown', { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(buttons[1].element);
+  });
+
+  it('danger 确认框初始焦点落在「取消」，避免回车误执行不可逆操作', async () => {
+    const w = mountLayer();
+    confirmDialog({ title: '危险', danger: true });
+    await flushPromises();
+    const buttons = w.findAll('.confirm-actions button');
+    expect(document.activeElement).toBe(buttons[0].element);
+  });
+});

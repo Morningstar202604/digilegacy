@@ -68,6 +68,21 @@ describe('导航', () => {
     expect(w.find('.tour-card').text()).toContain('欢迎使用「归零」');
   });
 
+
+  it('最后一步点「完成」关闭并写 localStorage 标记', async () => {
+    const w = mountTour();
+    for (let i = 0; i < 8; i++) {
+      await w.findAll('button').find(b => b.text().includes('下一步'))!.trigger('click');
+      await flushPromises();
+    }
+    const done = w.findAll('button').find(b => b.text().includes('完成'));
+    expect(done, '最后一步应有完成按钮').toBeTruthy();
+    await done!.trigger('click');
+    await flushPromises();
+    expect(w.emitted('close')).toBeTruthy();
+    expect(localStorage.getItem('digilegacy_onboarding_done')).toBe('1');
+  });
+
   it('点「跳过」关闭并写入 localStorage 标记', async () => {
     const w = mountTour();
     await w.findAll('button').find(b => b.text().includes('跳过'))!.trigger('click');
@@ -136,5 +151,50 @@ describe('焦点与清理', () => {
     w.unmount();
     // 不应抛错
     expect(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))).not.toThrow();
+  });
+});
+
+describe('卡片定位分支', () => {
+  function injectTarget(left: number, top: number) {
+    const el = document.createElement('div');
+    el.setAttribute('data-tour', 'nav-discover');
+    el.getBoundingClientRect = () => ({
+      left, top, right: left + 120, bottom: top + 40, width: 120, height: 40,
+      x: left, y: top, toJSON() { return {}; },
+    }) as DOMRect;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  async function advanceToNav(w: { vm: { $nextTick: () => Promise<void> } }) {
+    // 首步是欢迎页（无目标），前进到第 2 步即 nav-discover
+    const btn = document.querySelector('.tour-actions .btn-primary') as HTMLButtonElement;
+    btn.click();
+    await w.vm.$nextTick();
+  }
+
+  it('目标贴近左缘时卡片放在目标右侧', async () => {
+    injectTarget(100, 200);
+    const w = mountTour();
+    await advanceToNav(w);
+    const card = document.querySelector('.tour-card') as HTMLElement;
+    expect(card.style.left).toBe('236px'); // right(220) + 16
+  });
+
+  it('目标在下半区时卡片放在目标下方', async () => {
+    injectTarget(500, 200);
+    const w = mountTour();
+    await advanceToNav(w);
+    const card = document.querySelector('.tour-card') as HTMLElement;
+    expect(card.style.left).toBe('500px');
+    expect(card.style.top).toBe('254px'); // bottom(240) + 14
+  });
+
+  it('目标贴近底边时卡片放在目标上方（兜底分支）', async () => {
+    injectTarget(500, 700);
+    const w = mountTour();
+    await advanceToNav(w);
+    const card = document.querySelector('.tour-card') as HTMLElement;
+    expect(card.style.top).toBe('470px'); // 700 - 230 上移（兜底分支）
   });
 });

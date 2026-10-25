@@ -10,6 +10,7 @@
 //   if (await fb.confirm({ title: '确认删除？', danger: true })) { ... }
 
 import { reactive, readonly } from 'vue';
+import { t } from '../i18n';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -38,8 +39,8 @@ const confirmState = reactive<ConfirmState>({
   open: false,
   title: '',
   message: '',
-  confirmText: '确定',
-  cancelText: '取消',
+  confirmText: t('common.confirm'),
+  cancelText: t('common.cancel'),
   danger: false,
   resolve: null,
 });
@@ -67,8 +68,8 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
     confirmState.open = true;
     confirmState.title = opts.title;
     confirmState.message = opts.message ?? '';
-    confirmState.confirmText = opts.confirmText ?? '确定';
-    confirmState.cancelText = opts.cancelText ?? '取消';
+    confirmState.confirmText = opts.confirmText ?? t('common.confirm');
+    confirmState.cancelText = opts.cancelText ?? t('common.cancel');
     confirmState.danger = opts.danger ?? false;
     confirmState.resolve = resolve;
   });

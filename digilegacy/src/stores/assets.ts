@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { invoke } from '../api/invoke';
+import { t } from '../i18n';
 
 import type { DigitalAsset, AssetRequest, ApiResponse } from '../types';
 
@@ -40,11 +41,11 @@ export const useAssetsStore = defineStore('assets', () => {
       if (res.success && res.data) {
         assets.value = res.data;
       } else if (!res.success) {
-        loadError.value = res.message || '加载资产列表失败';
+        loadError.value = res.message || t('err.loadAssets');
       }
     } catch (e) {
       console.error('加载资产列表失败:', e);
-      loadError.value = '加载资产列表失败：' + String(e);
+      loadError.value = t('err.loadAssetsDetail', { msg: String(e) });
     } finally {
       loading.value = false;
     }

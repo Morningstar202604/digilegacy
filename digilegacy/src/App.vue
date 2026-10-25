@@ -1,4 +1,6 @@
 <template>
+  <n-config-provider :theme="naiveTheme" :locale="naiveLocale" :theme-overrides="themeOverrides">
+  <n-global-style />
   <div class="app-container">
     <!-- 侧边栏 -->
     <aside class="sidebar">
@@ -33,18 +35,18 @@
           :class="{ active: currentRoute === route.path }"
           :data-tour="'nav-' + route.path.slice(1)"
         >
-          <span class="nav-icon" aria-hidden="true">{{ route.icon }}</span>
-          <span>{{ route.title }}</span>
+          <span class="nav-icon" aria-hidden="true"><component :is="route.icon" /></span>
+          <span>{{ t(route.titleKey) }}</span>
         </router-link>
       </nav>
       
       <div class="sidebar-footer">
         <div class="sidebar-security">
-          <router-link v-if="!security.hasMasterPassword" to="/profile" style="color: var(--warning); text-decoration: none;"><span aria-hidden="true">⚠️</span> 未启用加密 · 点此设置主密码</router-link>
-          <span v-else>数据本地加密存储 · 已启用主密码</span>
+          <router-link v-if="!security.hasMasterPassword" to="/profile" style="color: var(--warning); text-decoration: none;"><component :is="WarningOutline" aria-hidden="true" /> {{ t('app.noEncryption') }}</router-link>
+          <span v-else>{{ t('app.encryptedLocal') }}</span>
         </div>
         <div class="sidebar-brandline">
-          <span>v{{ appVersion }} · 开源 MIT</span>
+          <span>v{{ appVersion }} · {{ t('common.openSource') }}</span>
         </div>
       </div>
     </aside>
@@ -55,12 +57,15 @@
         <div class="header-title">{{ currentPageTitle }}</div>
         <div class="header-actions">
           <button class="btn btn-sm btn-secondary" :aria-label="themeLabel" :title="themeLabel" @click="toggleTheme">
-            <span aria-hidden="true">{{ themeIcon }}</span>
+            <component :is="themeIcon" aria-hidden="true" />
           </button>
-          <button class="btn btn-sm btn-secondary" data-tour="help" @click="showHelp = true"><span aria-hidden="true">❓</span> 帮助</button>
-          <button class="btn btn-sm btn-secondary" v-if="security.hasMasterPassword && security.unlocked" @click="handleLock"><span aria-hidden="true">🔒</span> 锁定</button>
+          <button class="btn btn-sm btn-secondary" data-testid="lang-switch" :title="locale === 'zh-CN' ? 'Switch to English' : '切换到中文'" @click="toggleLocale">
+            <component :is="LanguageOutline" aria-hidden="true" /> {{ locale === 'zh-CN' ? 'EN' : '中文' }}
+          </button>
+          <button class="btn btn-sm btn-secondary" data-tour="help" @click="showHelp = true"><component :is="HelpCircleOutline" aria-hidden="true" /> {{ t('app.help') }}</button>
+          <button class="btn btn-sm btn-secondary" v-if="security.hasMasterPassword && security.unlocked" @click="handleLock"><component :is="LockClosedOutline" aria-hidden="true" /> {{ t('app.lock') }}</button>
           <button class="btn btn-sm" data-tour="checkin" :class="checkBtnClass" @click="handleCheckIn">
-            <span v-if="checkBtnIcon" aria-hidden="true">{{ checkBtnIcon }}</span> {{ checkBtnText }}
+            <component v-if="checkBtnIcon" :is="checkBtnIcon" aria-hidden="true" /> {{ checkBtnText }}
           </button>
         </div>
       </header>
@@ -69,11 +74,10 @@
         <div class="content-wrap">
           <!-- 浏览器演示横幅：明确告知这是演示数据，不是真实保险库 -->
           <div v-if="demoMode" class="demo-banner" role="note">
-            <span aria-hidden="true">🧪</span>
+            <component :is="FlaskOutline" aria-hidden="true" />
             <span>
-              在线演示：所有数据只存在你的浏览器本地，用于体验界面与流程。
-              <strong>请勿填写真实账号与密码</strong>。真实使用请下载桌面版（数据加密存于本机）。<br>
-              <span lang="en">Live demo: data stays in your browser only. Do not enter real credentials — download the desktop app for real use.</span>
+              {{ locale === 'zh-CN' ? t('app.demoBannerZh') : t('app.demoBannerEn') }}<br>
+              <span :lang="locale === 'zh-CN' ? 'en' : 'zh'">{{ locale === 'zh-CN' ? t('app.demoBannerEn') : t('app.demoBannerZh') }}</span>
             </span>
           </div>
           <router-view v-slot="{ Component }">
@@ -89,47 +93,47 @@
     <div v-if="security.hasMasterPassword && !security.unlocked" class="lock-overlay">
       <div class="lock-card" role="dialog" aria-modal="true" aria-labelledby="lock-title" ref="lockCardRef">
         <template v-if="!recoveryMode">
-          <div style="font-size: 40px;" aria-hidden="true">🔒</div>
-          <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">应用已锁定</h2>
-          <p class="text-muted" style="font-size: 13px; margin-top: 8px;">输入主密码解锁。数据以 AES-256-GCM 加密存储于本机，开发者无法读取。</p>
-          <input class="form-input" type="password" v-model="unlockPassword" aria-label="主密码" placeholder="主密码" style="margin-top: 16px;" @keyup.enter="handleUnlock" />
+          <div class="lock-hero-icon" aria-hidden="true"><component :is="LockClosedOutline" /></div>
+          <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">{{ t('lock.title') }}</h2>
+          <p class="text-muted" style="font-size: 13px; margin-top: 8px;">{{ t('lock.desc') }}</p>
+          <input class="form-input" type="password" v-model="unlockPassword" :aria-label="t('lock.passwordLabel')" :placeholder="t('lock.passwordPlaceholder')" style="margin-top: 16px;" @keyup.enter="handleUnlock" />
           <p v-if="unlockError" role="alert" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ unlockError }}</p>
-          <button class="btn btn-primary" style="margin-top: 16px; width: 100%;" :disabled="security.busy" @click="handleUnlock">{{ security.busy ? '验证中...' : '解锁' }}</button>
-          <button class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="recoveryMode = true">忘记主密码？用恢复密钥重设</button>
-          <p class="text-muted" style="font-size: 12px; margin-top: 12px;">主密码只用于本机解密；恢复密钥是设置时生成的一次性代码</p>
+          <button class="btn btn-primary" style="margin-top: 16px; width: 100%;" :disabled="security.busy" @click="handleUnlock">{{ security.busy ? t('lock.verifying') : t('app.unlock') }}</button>
+          <button class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="recoveryMode = true">{{ t('lock.forgot') }}</button>
+          <p class="text-muted" style="font-size: 12px; margin-top: 12px;">{{ t('lock.hint') }}</p>
         </template>
         <template v-else>
-          <div style="font-size: 40px;" aria-hidden="true">🔑</div>
-          <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">恢复访问</h2>
-          <p class="text-muted" style="font-size: 13px; margin-top: 8px;">输入设置主密码时保存的恢复密钥（形如 XXXX-XXXX-XXXX-XXXX-XXXX-XXXX）。</p>
-          <input class="form-input" v-model="recoveryCode" aria-label="恢复密钥" placeholder="恢复密钥" style="margin-top: 16px;" @keyup.enter="handleStartRecovery" />
-          <button v-if="!recoveryUnlocked" class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleStartRecovery">{{ recoveryBusy ? '验证中...' : '验证恢复密钥' }}</button>
+          <div class="lock-hero-icon" aria-hidden="true"><component :is="KeyOutline" /></div>
+          <h2 id="lock-title" style="font-size: 18px; font-weight: 700; margin-top: 8px;">{{ t('recovery.title') }}</h2>
+          <p class="text-muted" style="font-size: 13px; margin-top: 8px;">{{ t('recovery.desc') }}</p>
+          <input class="form-input" v-model="recoveryCode" :aria-label="t('recovery.codeLabel')" :placeholder="t('recovery.codePlaceholder')" style="margin-top: 16px;" @keyup.enter="handleStartRecovery" />
+          <button v-if="!recoveryUnlocked" class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleStartRecovery">{{ recoveryBusy ? t('lock.verifying') : t('recovery.verify') }}</button>
           <template v-if="recoveryUnlocked">
-            <input class="form-input" type="password" v-model="recoveryNewPassword" data-autofocus-pw aria-label="新主密码（至少 8 位）" placeholder="新主密码（至少 8 位）" style="margin-top: 12px;" />
-            <input class="form-input" type="password" v-model="recoveryNewPassword2" aria-label="确认新主密码" placeholder="确认新主密码" style="margin-top: 12px;" />
+            <input class="form-input" type="password" v-model="recoveryNewPassword" data-autofocus-pw :aria-label="t('recovery.newPasswordLabel')" :placeholder="t('recovery.newPasswordPlaceholder')" style="margin-top: 12px;" />
+            <input class="form-input" type="password" v-model="recoveryNewPassword2" :aria-label="t('recovery.confirmPasswordLabel')" :placeholder="t('recovery.confirmPasswordPlaceholder')" style="margin-top: 12px;" />
             <p v-if="recoveryMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: recoveryOk ? 'var(--success)' : 'var(--danger)' }" class="recovery-msg">{{ recoveryMessage }}</p>
-            <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleCompleteRecovery">{{ recoveryBusy ? '处理中...' : '重设主密码' }}</button>
+            <button class="btn btn-primary" style="margin-top: 12px; width: 100%;" :disabled="recoveryBusy" @click="handleCompleteRecovery">{{ recoveryBusy ? t('recovery.processing') : t('recovery.reset') }}</button>
           </template>
           <!-- 新恢复密钥必须在重设成功后仍然可见：旧码一次性失效，
                若此处随 recoveryUnlocked 一起隐藏，用户将永远拿不到新码。
                并且只能由用户显式确认关闭——24 字符密钥不可能在倒计时内抄完。 -->
           <template v-else-if="recoveryNewCode">
-            <p class="recovery-code-box" role="alert">新的恢复密钥（立即抄写保存）：{{ recoveryNewCode }}</p>
+            <p class="recovery-code-box" role="alert">{{ t('recovery.newCode', { code: recoveryNewCode }) }}</p>
             <label class="recovery-ack">
               <input type="checkbox" v-model="recoveryNewCodeAck" />
-              我已将新的恢复密钥抄写在安全位置
+              {{ t('recovery.ack') }}
             </label>
             <button
               class="btn btn-primary"
               style="margin-top: 12px; width: 100%;"
               :disabled="!recoveryNewCodeAck"
               @click="finishRecovery"
-            >我已保存，关闭</button>
+            >{{ t('recovery.savedClose') }}</button>
           </template>
           <p v-else-if="recoveryError" role="alert" style="color: var(--danger); font-size: 13px; margin-top: 8px;">{{ recoveryError }}</p>
           <!-- 新恢复密钥展示期间隐藏「返回」：该按钮会离开恢复流程且不清空 recoveryNewCode，
                用户点一下就把唯一一份新码永久丢掉。只能用下方的显式确认按钮退出。 -->
-          <button v-if="!recoveryNewCode" class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="backToUnlock">返回主密码解锁</button>
+          <button v-if="!recoveryNewCode" class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;" @click="backToUnlock">{{ t('recovery.backToUnlock') }}</button>
         </template>
       </div>
     </div>
@@ -141,18 +145,40 @@
     <!-- 全局反馈层：Toast + 确认框（替代原生 alert/confirm） -->
     <FeedbackLayer />
   </div>
+  </n-config-provider>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { NConfigProvider, NGlobalStyle, darkTheme, zhCN, enUS } from 'naive-ui';
+import BookOutline from '@vicons/ionicons5/es/BookOutline';
+import CheckmarkOutline from '@vicons/ionicons5/es/CheckmarkOutline';
+import DiamondOutline from '@vicons/ionicons5/es/DiamondOutline';
+import DocumentTextOutline from '@vicons/ionicons5/es/DocumentTextOutline';
+import FlaskOutline from '@vicons/ionicons5/es/FlaskOutline';
+import GridOutline from '@vicons/ionicons5/es/GridOutline';
+import HelpCircleOutline from '@vicons/ionicons5/es/HelpCircleOutline';
+import KeyOutline from '@vicons/ionicons5/es/KeyOutline';
+import LanguageOutline from '@vicons/ionicons5/es/LanguageOutline';
+import LockClosedOutline from '@vicons/ionicons5/es/LockClosedOutline';
+import MoonOutline from '@vicons/ionicons5/es/MoonOutline';
+import PeopleOutline from '@vicons/ionicons5/es/PeopleOutline';
+import PersonOutline from '@vicons/ionicons5/es/PersonOutline';
+import SearchOutline from '@vicons/ionicons5/es/SearchOutline';
+import SunnyOutline from '@vicons/ionicons5/es/SunnyOutline';
+import TimeOutline from '@vicons/ionicons5/es/TimeOutline';
+import WarningOutline from '@vicons/ionicons5/es/WarningOutline';
+import type { Component } from 'vue';
 import { useRoute } from 'vue-router';
 import { invoke, isTauriEnv } from './api/invoke';
+import { themeOverrides } from './ui/naiveTheme';
 
 import { useDashboardStore } from './stores/dashboard';
 import { useSecurityStore } from './stores/security';
 import { useAssetsStore } from './stores/assets';
 import { startLocalReminderLoop } from './api/reminders';
 import { initTheme, toggleTheme, useTheme } from './composables/theme';
+import { useI18n } from './i18n';
 import OnboardingTour from './components/OnboardingTour.vue';
 import HelpDrawer from './components/HelpDrawer.vue';
 import FeedbackLayer from './components/FeedbackLayer.vue';
@@ -160,13 +186,14 @@ import type { ApiResponse, SecurityStatus } from './types';
 
 interface NavRoute {
   path: string;
-  title: string;
-  icon: string;
+  titleKey: string;
+  icon: Component;
 }
 
 const route = useRoute();
 const dashboard = useDashboardStore();
 const security = useSecurityStore();
+const { t, locale, toggleLocale } = useI18n();
 
 // 版本号：构建期由 Vite 从 package.json 注入（见 vite.config.ts define）
 const appVersion = __APP_VERSION__;
@@ -178,8 +205,8 @@ const unlockError = ref('');
 const showTour = ref(false);
 const showHelp = ref(false);
 const { resolved: themeResolved } = useTheme();
-const themeIcon = computed(() => (themeResolved.value === 'dark' ? '☀️' : '🌙'));
-const themeLabel = computed(() => (themeResolved.value === 'dark' ? '切换到浅色模式' : '切换到深色模式'));
+const themeIcon = computed(() => (themeResolved.value === 'dark' ? SunnyOutline : MoonOutline));
+const themeLabel = computed(() => (themeResolved.value === 'dark' ? t('app.themeToLight') : t('app.themeToDark')));
 const lockCardRef = ref<HTMLElement | null>(null);
 let stopReminders: (() => void) | null = null;
 let stopTrayEvents: (() => void) | null = null;
@@ -245,7 +272,7 @@ function unregisterActivityWatch() {
 async function handleUnlock() {
   unlockError.value = '';
   if (!unlockPassword.value) {
-    unlockError.value = '请输入主密码';
+    unlockError.value = t('lock.enterPassword');
     return;
   }
   const err = await security.unlockWith(unlockPassword.value);
@@ -326,7 +353,7 @@ watch(
 async function handleStartRecovery() {
   recoveryError.value = '';
   if (!recoveryCode.value.trim()) {
-    recoveryError.value = '请输入恢复密钥';
+    recoveryError.value = t('recovery.enterCode');
     return;
   }
   try {
@@ -377,30 +404,32 @@ function backToUnlock() {
 }
 
 const navRoutes: NavRoute[] = [
-  { path: '/dashboard', title: '仪表板', icon: '📊' },
-  { path: '/discover', title: '资产发现', icon: '🔍' },
-  { path: '/assets', title: '我的资产', icon: '💎' },
-  { path: '/profile', title: '我的档案', icon: '👤' },
-  { path: '/dms', title: '安心传承', icon: '⏰' },
-  { path: '/report', title: '继承报告', icon: '📄' },
-  { path: '/heir', title: '继承人向导', icon: '👥' },
-  { path: '/legal', title: '法律模板', icon: '📜' },
+  { path: '/dashboard', titleKey: 'nav.dashboard', icon: GridOutline },
+  { path: '/discover', titleKey: 'nav.discover', icon: SearchOutline },
+  { path: '/assets', titleKey: 'nav.assets', icon: DiamondOutline },
+  { path: '/profile', titleKey: 'nav.profile', icon: PersonOutline },
+  { path: '/dms', titleKey: 'nav.dms', icon: TimeOutline },
+  { path: '/report', titleKey: 'nav.report', icon: DocumentTextOutline },
+  { path: '/heir', titleKey: 'nav.heir', icon: PeopleOutline },
+  { path: '/legal', titleKey: 'nav.legal', icon: BookOutline },
 ];
 
 const currentRoute = computed(() => route.path);
 const currentPageTitle = computed(() => {
-  return navRoutes.find(r => r.path === route.path)?.title || (route.meta?.title as string) || '归零';
+  return navRoutes.find(r => r.path === route.path)?.titleKey
+    ? t(navRoutes.find(r => r.path === route.path)!.titleKey)
+    : ((route.meta?.titleKey as string) ? t(route.meta.titleKey as string) : t('common.appName'));
 });
 
 const checkBtnText = computed(() => {
   const status = dashboard.checkInStatus;
-  if (!status) return '检查中...';
-  if (!status.dms_enabled) return 'DMS未启用';
+  if (!status) return t('app.checking');
+  if (!status.dms_enabled) return t('app.dmsDisabled');
   const days = status.days_until_due;
-  if (days === null) return '点击检查';
-  if (days <= 0) return '请确认安全';
-  if (days <= 3) return `${days}天后需检查`;
-  return `${days}天后检查`;
+  if (days === null) return t('app.checkNow');
+  if (days <= 0) return t('app.checkSafety');
+  if (days <= 3) return t('app.checkInDays', { days });
+  return t('app.checkInDaysPlain', { days });
 });
 
 // 图标与文案分离：emoji 走 aria-hidden 装饰位，读屏只读语义文本
@@ -409,9 +438,9 @@ const checkBtnIcon = computed(() => {
   if (!status?.dms_enabled) return '';
   const days = status.days_until_due;
   if (days === null) return '';
-  if (days <= 0) return '⚠️';
+  if (days <= 0) return WarningOutline;
   if (days <= 3) return '';
-  return '✓';
+  return CheckmarkOutline;
 });
 
 const checkBtnClass = computed(() => {
@@ -453,6 +482,9 @@ async function bindTrayEvents(): Promise<() => void> {
   }
 }
 
+const naiveTheme = computed(() => (themeResolved.value === 'dark' ? darkTheme : null));
+const naiveLocale = computed(() => (locale.value === 'zh-CN' ? zhCN : enUS));
+
 initTheme();
 
 onMounted(async () => {
@@ -488,34 +520,32 @@ onBeforeUnmount(() => {
 .lock-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(40, 34, 28, 0.55);
-  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 .lock-card {
-  background: var(--surface);
-  border-radius: 16px;
-  padding: 32px;
+  padding: 34px 32px;
   width: 380px;
   max-width: calc(100vw - 48px);
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
 }
-.recovery-msg {
-  word-break: break-all;
+.lock-hero-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(196, 106, 92, 0.16), rgba(196, 106, 92, 0.06));
+  color: var(--primary);
 }
-.recovery-code-box {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border: 1px dashed var(--warning, #b7791f);
-  border-radius: 8px;
-  background: rgba(183, 121, 31, 0.08);
-  font-size: 13px;
+.lock-hero-icon :deep(svg) { width: 30px; height: 30px; }
+.recovery-msg {
   word-break: break-all;
 }
 .recovery-ack {
@@ -535,11 +565,9 @@ onBeforeUnmount(() => {
   gap: 10px;
   margin-bottom: 20px;
   padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  background: var(--warning-light);
-  border: 1px solid var(--warning);
   color: var(--warning-strong);
   font-size: 13px;
   line-height: 1.6;
 }
+.demo-banner :deep(svg) { width: 18px; height: 18px; flex-shrink: 0; }
 </style>

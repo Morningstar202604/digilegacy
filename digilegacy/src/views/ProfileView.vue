@@ -1,216 +1,216 @@
 <template>
   <div class="profile fade-in">
-    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">👤 我的档案</h2>
-    <p class="text-muted mb-32" style="font-size: 14px;">完善你的个人信息，帮助继承人顺利找到并继承你的数字遗产。</p>
+    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">{{ t('nav.profile') }}</h2>
+    <p class="text-muted mb-32" style="font-size: 14px;">{{ t('profile.subtitle') }}</p>
 
     <div class="grid grid-2">
       <div class="card">
-        <div class="card-title mb-16">📝 基本信息</div>
+        <div class="card-title mb-16">{{ t('profile.basicTitle') }}</div>
         <div class="form-group">
-          <label class="form-label" for="pf-full-name">姓名</label>
-          <input class="form-input" id="pf-full-name" v-model="profile.full_name" placeholder="你的姓名" />
+          <label class="form-label" for="pf-full-name">{{ t('profile.fullName') }}</label>
+          <input class="form-input" id="pf-full-name" v-model="profile.full_name" :placeholder="t('profile.fullNamePlaceholder')" />
         </div>
         <div class="form-group">
-          <label class="form-label" for="pf-phone">手机号</label>
-          <input class="form-input" id="pf-phone" v-model="profile.phone" placeholder="手机号码" />
+          <label class="form-label" for="pf-phone">{{ t('profile.phone') }}</label>
+          <input class="form-input" id="pf-phone" v-model="profile.phone" :placeholder="t('profile.phonePlaceholder')" />
         </div>
         <div class="form-group">
-          <label class="form-label" for="pf-email">邮箱</label>
-          <input class="form-input" id="pf-email" v-model="profile.email" placeholder="电子邮箱" />
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title mb-16">🚨 紧急联系人</div>
-        <div class="form-group">
-          <label class="form-label" for="pf-ec-name">姓名</label>
-          <input class="form-input" id="pf-ec-name" v-model="profile.emergency_contact_name" placeholder="紧急联系人姓名" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="pf-ec-phone">电话</label>
-          <input class="form-input" id="pf-ec-phone" v-model="profile.emergency_contact_phone" placeholder="联系电话" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="pf-ec-email">邮箱</label>
-          <input class="form-input" id="pf-ec-email" v-model="profile.emergency_contact_email" placeholder="电子邮箱（安心传承二阶段通知将优先发到该邮箱）" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="pf-ec-relation">关系</label>
-          <input class="form-input" id="pf-ec-relation" v-model="profile.emergency_contact_relation" placeholder="如：子女、配偶" />
+          <label class="form-label" for="pf-email">{{ t('profile.email') }}</label>
+          <input class="form-input" id="pf-email" v-model="profile.email" :placeholder="t('profile.emailPlaceholder')" />
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title mb-16">👑 主要继承人</div>
+        <div class="card-title mb-16">{{ t('profile.emergencyTitle') }}</div>
         <div class="form-group">
-          <label class="form-label" for="pf-heir-name">姓名</label>
-          <input class="form-input" id="pf-heir-name" v-model="profile.heir_primary_name" placeholder="继承人姓名" />
+          <label class="form-label" for="pf-ec-name">{{ t('profile.fullName') }}</label>
+          <input class="form-input" id="pf-ec-name" v-model="profile.emergency_contact_name" :placeholder="t('profile.emergencyNamePlaceholder')" />
         </div>
         <div class="form-group">
-          <label class="form-label" for="pf-heir-phone">电话</label>
-          <input class="form-input" id="pf-heir-phone" v-model="profile.heir_primary_phone" placeholder="联系电话" />
+          <label class="form-label" for="pf-ec-phone">{{ t('profile.phone') }}</label>
+          <input class="form-input" id="pf-ec-phone" v-model="profile.emergency_contact_phone" :placeholder="t('profile.contactPhonePlaceholder')" />
         </div>
         <div class="form-group">
-          <label class="form-label" for="pf-heir-email">邮箱</label>
-          <input class="form-input" id="pf-heir-email" v-model="profile.heir_primary_email" placeholder="电子邮箱（安心传承三阶段通知将优先发到该邮箱）" />
+          <label class="form-label" for="pf-ec-email">{{ t('profile.email') }}</label>
+          <input class="form-input" id="pf-ec-email" v-model="profile.emergency_contact_email" :placeholder="t('profile.emergencyEmailPlaceholder')" />
         </div>
         <div class="form-group">
-          <label class="form-label" for="pf-heir-relation">关系</label>
-          <input class="form-input" id="pf-heir-relation" v-model="profile.heir_primary_relation" placeholder="如：子女、父母" />
+          <label class="form-label" for="pf-ec-relation">{{ t('profile.relation') }}</label>
+          <input class="form-input" id="pf-ec-relation" v-model="profile.emergency_contact_relation" :placeholder="t('profile.relationPlaceholder')" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title mb-16">{{ t('profile.heirTitle') }}</div>
+        <div class="form-group">
+          <label class="form-label" for="pf-heir-name">{{ t('profile.fullName') }}</label>
+          <input class="form-input" id="pf-heir-name" v-model="profile.heir_primary_name" :placeholder="t('profile.heirNamePlaceholder')" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pf-heir-phone">{{ t('profile.phone') }}</label>
+          <input class="form-input" id="pf-heir-phone" v-model="profile.heir_primary_phone" :placeholder="t('profile.contactPhonePlaceholder')" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pf-heir-email">{{ t('profile.email') }}</label>
+          <input class="form-input" id="pf-heir-email" v-model="profile.heir_primary_email" :placeholder="t('profile.heirEmailPlaceholder')" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="pf-heir-relation">{{ t('profile.relation') }}</label>
+          <input class="form-input" id="pf-heir-relation" v-model="profile.heir_primary_relation" :placeholder="t('profile.relationPlaceholder2')" />
         </div>
       </div>
 
       <div class="card">
         <div class="card-title mb-16">⏰ Dead Man's Switch</div>
         <p style="font-size: 13px; color: var(--gray-600);">
-          检查间隔与开关只在「安心传承」页维护，避免两处设置互相覆盖。
+          {{ t('profile.dmsNote') }}
         </p>
         <p class="form-hint" style="margin-top: 8px;">
           当前：{{ dmsSummary }}
         </p>
-        <router-link to="/dms" class="btn btn-secondary btn-sm mt-16">前往「安心传承」设置 →</router-link>
+        <router-link to="/dms" class="btn btn-secondary btn-sm mt-16">{{ t('profile.dmsGo') }} →</router-link>
       </div>
     </div>
 
     <div class="card mt-24">
-      <div class="card-title mb-16">🔐 安全与加密</div>
+      <div class="card-title mb-16">{{ t('profile.securityTitle') }}</div>
       <template v-if="security.hasMasterPassword">
-        <p style="font-size: 13px; color: var(--gray-600);">已启用主密码。资产账号、凭据、档案等敏感字段均以 AES-256-GCM 加密存储于本机，开发者也无法读取。</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top: 12px;" @click="lockNow">🔒 立即锁定</button>
+        <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.securityEnabledDesc') }}</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top: 12px;" @click="lockNow"><LockClosedOutline /> {{ t('profile.lockNow') }}</button>
 
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--gray-200, #e8e4de);">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">🔑 恢复密钥</div>
-          <p class="form-hint" style="margin-top: 0;">忘记主密码时，凭恢复密钥可重设密码并找回全部数据。设置主密码时已生成一次，请核对手抄记录是否可用；如已遗失，"修改主密码"会自动生成新的恢复密钥。</p>
-          <div style="font-size: 13px; color: var(--gray-600);">状态：{{ recoveryExists === null ? '检查中…' : recoveryExists ? '已生成（见设置主密码时的提示，或随改密轮换）' : '未生成（建议修改一次主密码以生成）' }}</div>
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">{{ t('profile.recoveryKey') }}</div>
+          <p class="form-hint" style="margin-top: 0;">{{ t('profile.recoveryKeyHint') }}</p>
+          <div style="font-size: 13px; color: var(--gray-600);">{{ t('profile.recoveryStatus') }}：{{ recoveryExists === null ? t('profile.recoveryChecking') : recoveryExists ? t('profile.recoveryGenerated') : t('profile.recoveryMissing') }}</div>
         </div>
 
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--gray-200, #e8e4de);">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 12px;">修改主密码</div>
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 12px;">{{ t('profile.changePassword') }}</div>
           <div class="grid grid-2" style="gap: 16px;">
             <div class="form-group">
-              <label class="form-label" for="pf-old-pw">当前主密码</label>
-              <input class="form-input" id="pf-old-pw" type="password" v-model="oldPassword" placeholder="当前主密码" />
+              <label class="form-label" for="pf-old-pw">{{ t('profile.oldPassword') }}</label>
+              <input class="form-input" id="pf-old-pw" type="password" v-model="oldPassword" :placeholder="t('profile.oldPassword')" />
             </div>
             <div class="form-group">
-              <label class="form-label" for="pf-new-pw">新主密码（至少 8 位）</label>
-              <input class="form-input" id="pf-new-pw" type="password" v-model="newPassword" placeholder="新主密码" />
+              <label class="form-label" for="pf-new-pw">{{ t('recovery.newPasswordLabel') }}</label>
+              <input class="form-input" id="pf-new-pw" type="password" v-model="newPassword" :placeholder="t('profile.newPasswordPlaceholder')" />
             </div>
             <div class="form-group">
-              <label class="form-label" for="pf-new-pw2">确认新主密码</label>
-              <input class="form-input" id="pf-new-pw2" type="password" v-model="newPassword2" placeholder="再次输入新主密码" />
+              <label class="form-label" for="pf-new-pw2">{{ t('recovery.confirmPasswordLabel') }}</label>
+              <input class="form-input" id="pf-new-pw2" type="password" v-model="newPassword2" :placeholder="t('profile.confirmPasswordPlaceholder')" />
             </div>
           </div>
-          <button class="btn btn-secondary btn-sm" :disabled="security.busy" @click="changeMasterPassword">更新主密码（全库重新加密）</button>
+          <button class="btn btn-secondary btn-sm" :disabled="security.busy" @click="changeMasterPassword">{{ t('profile.changePasswordBtn') }}</button>
           <p v-if="changeMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: changeOk ? 'var(--success)' : 'var(--danger)' }">{{ changeMessage }}</p>
         </div>
       </template>
       <template v-else>
-        <p style="font-size: 13px; color: var(--gray-600);">尚未启用加密。设置主密码后，账号、凭据、档案等敏感字段将在写入数据库前自动加密。</p>
+        <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.securityDisabledDesc') }}</p>
         <div class="grid grid-2" style="margin-top: 12px; gap: 16px;">
           <div class="form-group">
-            <label class="form-label" for="pf-master-pw">主密码（至少 8 位）</label>
-            <input class="form-input" id="pf-master-pw" type="password" v-model="masterPassword" placeholder="设置主密码" />
+            <label class="form-label" for="pf-master-pw">{{ t('profile.setPasswordLabel') }}</label>
+            <input class="form-input" id="pf-master-pw" type="password" v-model="masterPassword" :placeholder="t('profile.setPasswordPlaceholder')" />
           </div>
           <div class="form-group">
-            <label class="form-label" for="pf-master-pw2">确认主密码</label>
-            <input class="form-input" id="pf-master-pw2" type="password" v-model="masterPassword2" placeholder="再次输入" />
+            <label class="form-label" for="pf-master-pw2">{{ t('recovery.confirmPasswordLabel') }}</label>
+            <input class="form-input" id="pf-master-pw2" type="password" v-model="masterPassword2" :placeholder="t('profile.confirmPlaceholder')" />
           </div>
         </div>
-        <p class="form-hint">⚠️ 主密码只用于本机解密，遗失后无法找回已加密数据，请妥善保管（建议手写记录并放在安全位置）。</p>
-        <button class="btn btn-primary btn-sm" style="margin-top: 12px;" :disabled="security.busy" @click="enableEncryption">启用加密保护</button>
+        <p class="form-hint">{{ t('profile.passwordWarning') }}</p>
+        <button class="btn btn-primary btn-sm" style="margin-top: 12px;" :disabled="security.busy" @click="enableEncryption">{{ t('profile.enableEncryption') }}</button>
         <p v-if="securityMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: securityOk ? 'var(--success)' : 'var(--danger)' }">{{ securityMessage }}</p>
       </template>
     </div>
 
     <div class="card mt-24" v-if="recoveryCode" style="border-color: var(--warning); border-width: 2px;">
-      <div class="card-title mb-16">🔑 恢复密钥 · 仅显示这一次，请立即抄写</div>
+      <div class="card-title mb-16">{{ t('profile.recoveryOnce') }}</div>
       <p style="font-size: 13px; color: var(--gray-600);">
-        忘记主密码时，凭这串恢复密钥可以重设密码并找回全部数据。<strong>关闭本卡片后将无法再次查看</strong>（改密时会自动轮换生成新的）。
+        {{ t('profile.recoveryOnceHint1') }}<strong>{{ t('profile.recoveryOnceHint2') }}</strong>{{ t('profile.recoveryOnceHint3') }}
       </p>
       <div class="recovery-code-box">{{ recoveryCode }}</div>
       <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center; flex-wrap: wrap;">
-        <button class="btn btn-secondary btn-sm" @click="copyRecoveryCode">复制</button>
+        <button class="btn btn-secondary btn-sm" @click="copyRecoveryCode">{{ t('common.copy') }}</button>
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
           <input type="checkbox" v-model="recoveryAck" style="width: 18px; height: 18px;" />
-          我已将恢复密钥抄写在安全位置（如纸质笔记本）
+          {{ t('profile.recoveryWritten') }}
         </label>
-        <button class="btn btn-primary btn-sm" :disabled="!recoveryAck" @click="recoveryCode = ''">我已保存，关闭</button>
+        <button class="btn btn-primary btn-sm" :disabled="!recoveryAck" @click="recoveryCode = ''">{{ t('recovery.savedClose') }}</button>
       </div>
-      <p class="form-hint">恢复密钥已用你的恢复码加密封存于本机数据库；但它无法从数据库中读出明文，丢失后无法找回。</p>
+      <p class="form-hint">{{ t('profile.recoverySealedHint') }}</p>
     </div>
 
     <div class="card mt-24">
-      <div class="card-title mb-16">🗄 加密备份</div>
-      <p style="font-size: 13px; color: var(--gray-600);">导出备份用于换电脑迁移或留档：备份内容为密文与安全配置，导入后使用同一主密码解锁。</p>
+      <div class="card-title mb-16">{{ t('profile.backupTitle') }}</div>
+      <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.backupDesc') }}</p>
       <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
-        <button class="btn btn-secondary btn-sm" @click="exportBackup">导出加密备份</button>
-        <button class="btn btn-secondary btn-sm" @click="importBackup">导入备份文件</button>
+        <button class="btn btn-secondary btn-sm" @click="exportBackup">{{ t('profile.exportBackup') }}</button>
+        <button class="btn btn-secondary btn-sm" @click="importBackup">{{ t('profile.importBackup') }}</button>
       </div>
       <p v-if="backupMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: backupOk ? 'var(--success)' : 'var(--danger)' }">{{ backupMessage }}</p>
-      <p v-if="!security.hasMasterPassword" class="form-hint">提示：尚未启用主密码时，备份中的敏感字段为明文，建议先启用加密后再导出。</p>
+      <p v-if="!security.hasMasterPassword" class="form-hint">{{ t('profile.backupPlainHint') }}</p>
     </div>
 
     <div class="card mt-24">
-      <div class="card-title mb-16">🛰 云端心跳（可选 · 零内容）</div>
-      <p style="font-size: 13px; color: var(--gray-600);">开启后，应用每 30 分钟向心跳服务器发送一次"我还安好"令牌。<strong>只发送令牌，不发送任何资产、凭据或档案数据。</strong>服务器只在长时间收不到心跳时，按预注册的联系方式发提醒。失联时本地功能不受影响。</p>
+      <div class="card-title mb-16">{{ t('profile.heartbeatTitle') }}</div>
+      <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.heartbeatDesc1') }}<strong>{{ t('profile.heartbeatDesc2') }}</strong>{{ t('profile.heartbeatDesc3') }}</p>
       <template v-if="!isTauri">
-        <p class="form-hint">浏览器预览模式不支持心跳，请在桌面版中使用。</p>
+        <p class="form-hint">{{ t('profile.browserUnsupported') }}</p>
       </template>
       <template v-else>
         <div style="margin-top: 12px; display: grid; gap: 10px; max-width: 520px;">
           <label class="flex items-center gap-8" style="cursor: pointer;">
             <input type="checkbox" v-model="heartbeatEnabled" style="width: 18px; height: 18px;" />
-            <span style="font-weight: 500; font-size: 14px;">启用零内容心跳</span>
+            <span style="font-weight: 500; font-size: 14px;">{{ t('profile.heartbeatEnable') }}</span>
           </label>
           <div class="form-group" style="margin: 0;">
-            <label class="form-label" for="hb-endpoint">服务器地址</label>
-            <input class="form-input" id="hb-endpoint" v-model="heartbeatEndpoint" placeholder="https://你的心跳服务器" />
-            <p class="form-hint">本项目不运营公共心跳服务器，请自建（仓库内 server/heartbeat-server.mjs，单文件、无外部依赖）。</p>
+            <label class="form-label" for="hb-endpoint">{{ t('profile.heartbeatEndpoint') }}</label>
+            <input class="form-input" id="hb-endpoint" v-model="heartbeatEndpoint" :placeholder="t('profile.heartbeatEndpointPlaceholder')" />
+            <p class="form-hint">{{ t('profile.heartbeatSelfHost') }}</p>
           </div>
           <div class="form-group" style="margin: 0;">
-            <label class="form-label" for="hb-token">心跳令牌</label>
-            <input class="form-input" id="hb-token" type="password" v-model="heartbeatToken" :placeholder="heartbeatHasToken ? '已保存（留空则保持不变）' : '与服务端预注册的令牌'" />
+            <label class="form-label" for="hb-token">{{ t('profile.heartbeatToken') }}</label>
+            <input class="form-input" id="hb-token" type="password" v-model="heartbeatToken" :placeholder="heartbeatHasToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')" />
           </div>
           <div>
-            <button class="btn btn-primary btn-sm" :disabled="heartbeatBusy" @click="saveHeartbeatConfig">{{ heartbeatBusy ? '保存中...' : '保存心跳设置' }}</button>
+            <button class="btn btn-primary btn-sm" :disabled="heartbeatBusy" @click="saveHeartbeatConfig">{{ heartbeatBusy ? t('common.saving') : t('profile.saveHeartbeat') }}</button>
           </div>
         </div>
         <p v-if="heartbeatMsg" style="font-size: 12px; color: var(--gray-600); margin-top: 8px;" aria-live="polite">{{ heartbeatMsg }}</p>
         <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
-          <button class="btn btn-secondary btn-sm" @click="sendHeartbeat">发送一次测试心跳</button>
+          <button class="btn btn-secondary btn-sm" @click="sendHeartbeat">{{ t('profile.testHeartbeat') }}</button>
           <span v-if="heartbeatTestMsg" style="font-size: 12px; color: var(--gray-600);" aria-live="polite">{{ heartbeatTestMsg }}</span>
         </div>
         <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--gray-200, #e8e4de);">
           <label class="flex items-center gap-8" style="cursor: pointer;">
             <input type="checkbox" v-model="autostartEnabled" style="width: 18px; height: 18px;" @change="toggleAutostart" />
-            <span style="font-weight: 500; font-size: 14px;">开机自动启动（驻留托盘，保证提醒与心跳持续运行）</span>
+            <span style="font-weight: 500; font-size: 14px;">{{ t('profile.autostart') }}</span>
           </label>
-          <p class="form-hint">关闭窗口时应用会驻留系统托盘继续工作；从托盘菜单可"显示/我还安好/锁定/退出"。</p>
+          <p class="form-hint">{{ t('profile.autostartHint') }}</p>
         </div>
       </template>
     </div>
 
     <div class="card mt-24">
-      <div class="card-title mb-16">📚 政策库更新（离线补丁）</div>
-      <p style="font-size: 13px; color: var(--gray-600);">内置平台政策随版本发布；如果你的平台政策有变动，可导入一份 JSON 补丁覆盖对应条目（同 id 覆盖、新 id 新增）。补丁保存在本地库，重启后仍生效。</p>
+      <div class="card-title mb-16">{{ t('profile.patchTitle') }}</div>
+      <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.patchDesc') }}</p>
       <template v-if="!isTauri">
-        <p class="form-hint">浏览器预览模式不支持导入补丁，请在桌面版中使用。</p>
+        <p class="form-hint">{{ t('profile.browserUnsupported') }}</p>
       </template>
       <template v-else>
-        <p class="form-hint" style="margin-top: 8px;">当前已应用 <strong>{{ patchCount }}</strong> 条本地补丁。</p>
+        <p class="form-hint" style="margin-top: 8px;">{{ t('profile.patchCount') }} <strong>{{ patchCount }}</strong> {{ t('profile.patchCountSuffix') }}。</p>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;">
-          <button class="btn btn-secondary btn-sm" @click="importPatch">导入补丁文件</button>
-          <button class="btn btn-secondary btn-sm" @click="exportPatch">{{ patchCount > 0 ? '导出当前补丁' : '导出空补丁模板' }}</button>
-          <button class="btn btn-secondary btn-sm" :disabled="patchCount === 0" @click="clearPatch">清除全部补丁</button>
+          <button class="btn btn-secondary btn-sm" @click="importPatch">{{ t('profile.importPatch') }}</button>
+          <button class="btn btn-secondary btn-sm" @click="exportPatch">{{ patchCount > 0 ? t('profile.exportPatch') : t('profile.exportPatchTemplate') }}</button>
+          <button class="btn btn-secondary btn-sm" :disabled="patchCount === 0" @click="clearPatch">{{ t('profile.clearPatch') }}</button>
         </div>
         <p v-if="patchMsg" style="font-size: 12px; color: var(--gray-600); margin-top: 8px;" aria-live="polite">{{ patchMsg }}</p>
       </template>
     </div>
 
     <div class="card mt-24" style="text-align: center;">
-      <button class="btn btn-primary btn-lg" @click="saveProfile">💾 保存档案</button>
+      <button class="btn btn-primary btn-lg" @click="saveProfile">{{ t('profile.saveProfile') }}</button>
       <p class="text-muted mt-16" style="font-size: 12px;">
-        {{ security.hasMasterPassword ? '敏感数据已 AES-256-GCM 加密保存在本地，不上传任何服务器' : '数据保存在本机；启用主密码后敏感字段将加密存储' }}
+        {{ security.hasMasterPassword ? t('profile.saveHintEncrypted') : t('profile.saveHintPlain') }}
       </p>
     </div>
   </div>
@@ -219,7 +219,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 
+import { useI18n } from '../i18n';
 import { useDashboardStore } from '../stores/dashboard';
+import LockClosedOutline from '@vicons/ionicons5/es/LockClosedOutline';
 import { useSecurityStore } from '../stores/security';
 import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
@@ -227,6 +229,7 @@ import { toast, confirmDialog } from '../composables/feedback';
 import { invoke, isTauriEnv } from '../api/invoke';
 import type { ApiResponse, UserProfile } from '../types';
 
+const { t } = useI18n();
 const dashboard = useDashboardStore();
 const security = useSecurityStore();
 const platforms = usePlatformsStore();
@@ -264,8 +267,8 @@ const recoveryAck = ref(false);
 
 function copyRecoveryCode() {
   navigator.clipboard.writeText(recoveryCode.value).then(
-    () => { toast('已复制到剪贴板，请粘贴到安全位置保存'); },
-    () => { toast('复制失败，请手动抄写', 'error'); },
+    () => { toast(t('profile.copied')); },
+    () => { toast(t('profile.copyFailed'), 'error'); },
   );
 }
 
@@ -304,13 +307,13 @@ async function saveHeartbeatConfig() {
 }
 
 async function sendHeartbeat() {
-  heartbeatTestMsg.value = '发送中…';
+  heartbeatTestMsg.value = t('profile.sending');
   try {
     const res = await invoke<ApiResponse<{ last_result: string }>>('send_heartbeat_now');
     if (res.success && res.data) {
       heartbeatTestMsg.value = res.data.last_result === 'ok'
-        ? '心跳发送成功（服务器已记录）'
-        : '未发送：请先在上方填写服务器地址与令牌并启用';
+        ? t('profile.heartbeatOk')
+        : t('profile.heartbeatNotSent');
     } else {
       heartbeatTestMsg.value = res.message;
     }
@@ -335,12 +338,12 @@ async function toggleAutostart() {
 async function changeMasterPassword() {
   changeMessage.value = '';
   if (!oldPassword.value || newPassword.value.length < 8) {
-    changeMessage.value = '请填写当前主密码；新主密码至少 8 位';
+    changeMessage.value = t('profile.changeReq');
     changeOk.value = false;
     return;
   }
   if (newPassword.value !== newPassword2.value) {
-    changeMessage.value = '两次输入的新主密码不一致';
+    changeMessage.value = t('profile.passwordMismatch');
     changeOk.value = false;
     return;
   }
@@ -374,7 +377,7 @@ async function exportBackup() {
   try {
     const res = await invoke<ApiResponse<string>>('export_backup');
     backupOk.value = res.success;
-    backupMessage.value = res.success ? `备份已导出：${res.data}` : res.message;
+    backupMessage.value = res.success ? t('profile.backupExported', { path: res.data }) : res.message;
   } catch (e) {
     backupOk.value = false;
     backupMessage.value = String(e);
@@ -385,20 +388,20 @@ async function importBackup() {
   backupMessage.value = '';
   if (!isTauri) {
     backupOk.value = false;
-    backupMessage.value = 'Web 预览模式不支持导入备份，请在桌面版中使用';
+    backupMessage.value = t('profile.webImportUnsupported');
     return;
   }
   const ok = await confirmDialog({
-    title: '导入备份并覆盖当前数据？',
-    message: '当前全部资产、档案与安全配置将被备份文件替换，且不可撤销。',
-    confirmText: '覆盖导入',
+    title: t('profile.importBackupTitle'),
+    message: t('profile.importBackupMessage'),
+    confirmText: t('profile.importBackupConfirm'),
     danger: true,
   });
   if (!ok) return;
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
-    const selected = await open({ multiple: false, filters: [{ name: '归零备份', extensions: ['json'] }] });
+    const selected = await open({ multiple: false, filters: [{ name: t('profile.backupFilterName'), extensions: ['json'] }] });
     if (!selected || typeof selected !== 'string') return;
     const content = await readTextFile(selected);
     const res = await invoke<ApiResponse<string>>('import_backup', { content });
@@ -416,7 +419,7 @@ async function importBackup() {
     }
   } catch (e) {
     backupOk.value = false;
-    backupMessage.value = '导入失败：' + String(e);
+    backupMessage.value = t('profile.importFailed', { e: String(e) });
   }
 }
 
@@ -425,7 +428,7 @@ async function importPatch() {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const { readTextFile } = await import('@tauri-apps/plugin-fs');
-    const selected = await open({ multiple: false, filters: [{ name: '政策库补丁', extensions: ['json'] }] });
+    const selected = await open({ multiple: false, filters: [{ name: t('profile.patchFilterName'), extensions: ['json'] }] });
     if (!selected || typeof selected !== 'string') return;
     const content = await readTextFile(selected);
     const res = await invoke<ApiResponse<string>>('import_platform_patch', { content });
@@ -435,7 +438,7 @@ async function importPatch() {
       await platforms.loadPlatforms();
     }
   } catch (e) {
-    patchMsg.value = '导入失败：' + String(e);
+    patchMsg.value = t('profile.importFailed', { e: String(e) });
   }
 }
 
@@ -446,27 +449,27 @@ async function exportPatch() {
     const res = await invoke<ApiResponse<string>>('export_platform_patch');
     patchMsg.value = res.success ? `${res.message}：${res.data}` : res.message;
   } catch (e) {
-    patchMsg.value = '导出失败：' + String(e);
+    patchMsg.value = t('profile.exportFailed', { e: String(e) });
   }
 }
 
 async function clearPatch() {
   const ok = await confirmDialog({
-    title: '清除全部政策补丁？',
-    message: '将删除所有本地导入的政策补丁，恢复为内置平台库。',
-    confirmText: '清除',
+    title: t('profile.clearPatchTitle'),
+    message: t('profile.clearPatchMessage'),
+    confirmText: t('common.delete'),
     danger: true,
   });
   if (!ok) return;
   try {
     const res = await invoke<ApiResponse<number>>('clear_platform_patch');
-    patchMsg.value = res.success ? `已清除 ${res.data} 条补丁` : res.message;
+    patchMsg.value = res.success ? t('profile.patchCleared', { count: res.data }) : res.message;
     if (res.success) {
       await loadPatchStatus();
       await platforms.loadPlatforms();
     }
   } catch (e) {
-    patchMsg.value = '清除失败：' + String(e);
+    patchMsg.value = t('profile.clearFailed', { e: String(e) });
   }
 }
 
@@ -482,12 +485,12 @@ async function loadPatchStatus() {
 async function enableEncryption() {
   securityMessage.value = '';
   if (masterPassword.value.length < 8) {
-    securityMessage.value = '主密码至少 8 个字符';
+    securityMessage.value = t('profile.passwordTooShort');
     securityOk.value = false;
     return;
   }
   if (masterPassword.value !== masterPassword2.value) {
-    securityMessage.value = '两次输入的主密码不一致';
+    securityMessage.value = t('profile.passwordMismatch');
     securityOk.value = false;
     return;
   }
@@ -497,7 +500,7 @@ async function enableEncryption() {
     securityOk.value = false;
     return;
   }
-  securityMessage.value = '加密已启用，存量数据已加密';
+  securityMessage.value = t('profile.encryptionEnabled');
   securityOk.value = true;
   masterPassword.value = '';
   masterPassword2.value = '';
@@ -521,9 +524,9 @@ const profile = ref<UserProfile>({
 /** DMS 配置的唯一事实源是 dms_config（安心传承页维护），档案页只读展示。 */
 const dmsSummary = computed(() => {
   const st = dashboard.checkInStatus;
-  if (!st) return '读取中…';
-  if (!st.dms_enabled) return '未启用';
-  return `已启用 · 每 ${st.interval_days} 天确认一次`;
+  if (!st) return t('profile.dmsReading');
+  if (!st.dms_enabled) return t('profile.dmsDisabled');
+  return t('profile.dmsSummary', { days: st.interval_days });
 });
 
 onMounted(async () => {
@@ -559,10 +562,10 @@ async function saveProfile() {
     await dashboard.saveUser(profile.value);
     // 不再把档案页里的旧 DMS 值回写 dms_config：那会让用户在「安心传承」
     // 设好的 90 天周期，被一次无关的「保存档案」静默改回 30 天。
-    toast('档案保存成功');
+    toast(t('profile.saveOk'));
   } catch (e) {
     // 保存失败必须给用户明确反馈，不得静默
-    toast('档案保存失败：' + String(e), 'error');
+    toast(t('profile.saveFailed', { e: String(e) }), 'error');
   }
 }
 </script>

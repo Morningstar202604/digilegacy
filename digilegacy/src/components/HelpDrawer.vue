@@ -2,62 +2,62 @@
   <div class="drawer-mask" aria-hidden="true" @click="emit('close')"></div>
   <aside class="help-drawer" role="dialog" aria-modal="true" aria-labelledby="help-title" ref="drawerRef">
     <div class="help-header">
-      <h2 id="help-title" style="font-size: 17px; font-weight: 700; margin: 0;"><span aria-hidden="true">❓</span> 帮助中心</h2>
-      <button class="btn btn-secondary btn-sm" ref="closeBtnRef" @click="emit('close')">关闭</button>
+      <h2 id="help-title" style="font-size: 17px; font-weight: 700; margin: 0;">{{ t('help.title') }}</h2>
+      <button class="btn btn-secondary btn-sm" ref="closeBtnRef" @click="emit('close')">{{ t('common.close') }}</button>
     </div>
 
     <div class="help-body">
       <div class="help-section">
-        <div class="help-section-title">🚀 快速上手</div>
+        <div class="help-section-title">{{ t('help.quickStart') }}</div>
         <ol class="help-list">
-          <li>「资产发现」回答自检问卷，找出你的所有账号，确认后进入「我的资产」</li>
-          <li>在「我的档案」设置主密码（加密生效），填写本人与继承人信息</li>
-          <li>点开每项资产，设置处置意愿；需要时加密保存账号凭据</li>
-          <li>「安心传承」开启定期确认，每隔一段时间点一下「我还安好」</li>
-          <li>「继承报告」导出报告与工具包 ZIP，交给家人保管</li>
+          <li>{{ t('help.quick1') }}</li>
+          <li>{{ t('help.quick2') }}</li>
+          <li>{{ t('help.quick3') }}</li>
+          <li>{{ t('help.quick4') }}</li>
+          <li>{{ t('help.quick5') }}</li>
         </ol>
-        <button class="btn btn-secondary btn-sm" @click="emit('replay-tour')">重新播放新手引导</button>
+        <button class="btn btn-secondary btn-sm" @click="emit('replay-tour')">{{ t('help.replayTour') }}</button>
       </div>
 
       <div class="help-section">
-        <div class="help-section-title">🔐 安全与加密</div>
+        <div class="help-section-title">{{ t('help.securityTitle') }}</div>
         <ul class="help-list">
-          <li>设置主密码后，账号、凭据、档案等敏感字段以 AES-256-GCM 加密存储在本机，开发者无法读取</li>
-          <li>支持手动锁定与闲置 10 分钟自动锁定；复制凭据 30 秒后尝试自动清除剪贴板</li>
-          <li>换电脑用「我的档案 → 加密备份」导出备份，导入后用同一主密码解锁</li>
-          <li>设置主密码时会生成一次性的 24 位恢复密钥（忘记主密码时凭它重设密码找回数据），修改主密码会自动轮换，请同步更新手抄记录</li>
+          <li>{{ t('help.sec1') }}</li>
+          <li>{{ t('help.sec2') }}</li>
+          <li>{{ t('help.sec3') }}</li>
+          <li>{{ t('help.sec4') }}</li>
         </ul>
       </div>
 
       <div class="help-section">
-        <div class="help-section-title">⏰ 安心传承是怎么提醒的</div>
+        <div class="help-section-title">⏰ {{ t('help.dmsTitle') }}</div>
         <ul class="help-list">
-          <li>应用运行期间每 30 分钟自动检查一次：距确认到期 3 天内或已逾期，会弹出系统通知（每天至多一条）</li>
-          <li>逾期后按三级确认链推进：提醒你本人 → 通知紧急联系人 → 向遗产执行人发送数字遗产继承指引（不含任何账号凭据）</li>
-          <li>每条通知都会写入本地发件箱（应用数据目录 `dms_outbox`），另行配置邮件环境变量时可同时发邮件</li>
-          <li>可选开启云端心跳（零内容）：应用每 30 分钟向自托管服务器上报一次令牌，服务器只在长时间收不到时按预注册联系方式提醒，接触不到任何用户数据</li>
-          <li>短信与跨设备推送仍属后续云端计划：心跳服务器参考实现已就绪（server/ 目录）</li>
+          <li>{{ t('help.dms1') }}</li>
+          <li>{{ t('help.dms2') }}</li>
+          <li>{{ t('help.dms3') }}</li>
+          <li>{{ t('help.dms4') }}</li>
+          <li>{{ t('help.dms5') }}</li>
         </ul>
       </div>
 
       <div class="help-section">
-        <div class="help-section-title">🧭 常见问题</div>
+        <div class="help-section-title">{{ t('help.faqTitle') }}</div>
         <ul class="help-list">
-          <li><strong>它会上传我的数据吗？</strong>不会。应用无服务器、无遥测；「打开官网」只是跳转浏览器</li>
-          <li><strong>Web 预览是什么？</strong>开发时在浏览器看界面的演示模式（数据为演示数据，存于浏览器本地）</li>
-          <li><strong>报告里会有密码吗？</strong>不会。凭据不会进入继承报告与工具包</li>
-          <li><strong>资金类平台注意什么？</strong>建议只保存查询/登录信息，不要保存银行卡取款密码（PIN）</li>
+          <li><strong>{{ t('help.faq1q') }}</strong>{{ t('help.faq1a') }}</li>
+          <li><strong>{{ t('help.faq2q') }}</strong>{{ t('help.faq2a') }}</li>
+          <li><strong>{{ t('help.faq3q') }}</strong>{{ t('help.faq3a') }}</li>
+          <li><strong>{{ t('help.faq4q') }}</strong>{{ t('help.faq4a') }}</li>
         </ul>
       </div>
 
       <div class="help-section about-section">
-        <div class="help-section-title">ℹ️ 关于</div>
+        <div class="help-section-title">{{ t('help.aboutTitle') }}</div>
         <p class="about-text">
-          归零 DigiLegacy · 数字遗产管理及继承系统 <span class="about-ver">v{{ appVersion }}</span><br>
-          开源（MIT 许可）· 本地优先 · 无服务器、无遥测<br>
-          你的数据只属于你自己：即使我们（开发者）也无法读取。
+          {{ t('help.aboutName') }} <span class="about-ver">v{{ appVersion }}</span><br>
+          {{ t('help.aboutLine2') }}<br>
+          {{ t('help.aboutLine3') }}
         </p>
-        <p class="about-shortcut">快捷键：Esc 关闭本面板 · 引导中 ← → 切换步骤</p>
+        <p class="about-shortcut">{{ t('help.shortcut') }}</p>
       </div>
     </div>
   </aside>
@@ -65,7 +65,9 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useI18n } from '../i18n';
 
+const { t } = useI18n();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'replay-tour'): void }>();
 
 const appVersion = __APP_VERSION__;
