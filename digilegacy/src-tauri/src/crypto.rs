@@ -64,12 +64,12 @@ pub fn resolve_salt(salt_str: &str) -> Result<(Vec<u8>, u32), String> {
 
 /// 用已派生密钥加密，输出 base64(nonce(12) || ciphertext)
 pub fn encrypt_with_key(plaintext: &str, key: &[u8; 32]) -> Result<String, String> {
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let cipher = Aes256Gcm::new(&Key::<Aes256Gcm>::from(*key));
     let nonce_bytes = generate_nonce();
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from(nonce_bytes);
 
     let ciphertext = cipher
-        .encrypt(nonce, plaintext.as_bytes())
+        .encrypt(&nonce, plaintext.as_bytes())
         .map_err(|e| format!("加密失败: {:?}", e))?;
 
     let mut out = Vec::with_capacity(12 + ciphertext.len());
@@ -89,11 +89,14 @@ pub fn decrypt_with_key(encrypted: &str, key: &[u8; 32]) -> Result<String, Strin
         return Err("数据长度不合法".to_string());
     }
 
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
-    let nonce = Nonce::from_slice(&data[0..12]);
+    let cipher = Aes256Gcm::new(&Key::<Aes256Gcm>::from(*key));
+    let nonce_bytes: [u8; 12] = data[0..12]
+        .try_into()
+        .map_err(|_| "数据长度不合法".to_string())?;
+    let nonce = Nonce::from(nonce_bytes);
 
     let plaintext = cipher
-        .decrypt(nonce, &data[12..])
+        .decrypt(&nonce, &data[12..])
         .map_err(|_| "解密失败，请检查主密码".to_string())?;
 
     String::from_utf8(plaintext).map_err(|_| "解密后数据编码错误".to_string())
