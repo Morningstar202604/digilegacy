@@ -1,6 +1,6 @@
 [package]
 name = "digilegacy"
-version = "0.2.0"
+version = "0.2.1"
 description = "归零 - 数字遗产管理系统"
 authors = ["DigiLegacy Team"]
 edition = "2021"
