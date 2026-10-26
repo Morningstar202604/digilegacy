@@ -66,6 +66,17 @@
       </div>
     </div>
 
+    <!-- 承诺边界：写在最前面，避免用户以为「开了就一定会通知到家人」 -->
+    <div class="card mb-32 dms-limits" role="note">
+      <div class="card-title mb-12">{{ t('dms.limitsTitle') }}</div>
+      <ul class="dms-note-list">
+        <li>{{ t('dms.limits1') }}</li>
+        <li><strong>{{ t('dms.channelLabel') }}：{{ deliveryChannel }}</strong>——{{ t('dms.limits2') }}</li>
+        <li>{{ t('dms.limits3') }}</li>
+        <li>{{ t('dms.limits4') }}</li>
+      </ul>
+    </div>
+
     <!-- 三级确认说明 -->
     <div class="card">
       <div class="card-title mb-16">{{ t('dms.stagesTitle') }}</div>
@@ -138,6 +149,14 @@ const recentCheckIns = computed(() => status.value?.recent_check_ins ?? []);
 const dmsEvaluation = computed(() => dashboard.dmsStatus);
 const dmsHistory = computed(() => dashboard.dmsHistory);
 
+/** 实际投递通道：界面必须告诉用户「家人到底会不会收到邮件」，
+ *  而不是让人以为开了 DMS 就等于通知到手。 */
+const deliveryChannel = computed(() => {
+  // 心跳启用 = 至少有一个「应用关闭后也能被发现失联」的通道
+  if (dashboard.heartbeatConfigured) return t('dms.channelHeartbeat');
+  return t('dms.channelLocal');
+});
+
 const dmsState = computed(() => {
   if (!status.value?.dms_enabled) return 'disabled';
   if ((daysUntilDue.value ?? 999) <= 0) return 'overdue';
@@ -192,7 +211,12 @@ async function saveSettings() {
 }
 
 onMounted(async () => {
-  await Promise.all([dashboard.loadCheckInStatus(), dashboard.evaluateDms(), dashboard.loadDmsHistory()]);
+  await Promise.all([
+    dashboard.loadCheckInStatus(),
+    dashboard.evaluateDms(),
+    dashboard.loadDmsHistory(),
+    dashboard.loadHeartbeatState(),
+  ]);
   if (status.value) {
     settings.value.interval = status.value.interval_days;
     settings.value.enabled = status.value.dms_enabled;
@@ -215,5 +239,7 @@ onMounted(async () => {
 .dms-stage-3 { background: var(--danger-light); }
 .dms-stage-active { outline: 2px solid var(--primary); outline-offset: 2px; }
 .dms-stage-num { font-size: 24px; }
+.dms-limits { background: var(--gray-50); border-color: var(--gray-300); }
+.dms-limits .card-title { color: var(--gray-900); }
 .dms-history-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--gray-600); line-height: 1.7; font-variant-numeric: tabular-nums; }
 </style>

@@ -441,6 +441,16 @@ const zhCN: Record<string, string> = {
 
   // ===== 安心传承 DMS =====
   'dms.subtitle': '确认你还安好。如果超出一段时间未确认，系统将按设定通知你关心的人。',
+  'dms.limitsTitle': '这套机制的实际边界（请先读）',
+  'dms.limits1': '检测只在应用运行时进行（含托盘常驻）。电脑关机、睡眠或应用被彻底退出期间不会检测，也不会补发错过的通知。',
+  'dms.limits2': '邮件投递需要你自己提供 SMTP 服务器（通过环境变量配置），未配置时通知只写入本机发件箱，家人不会收到任何邮件。',
+  'dms.limits3': '本机发件箱是明文 JSONL，包含收件人邮箱/手机号与通知正文；请把整台设备视为敏感载体。',
+  'dms.limits4': '可选「零内容心跳」是唯一能在应用关闭后仍被发现失联的通道，需要你自建服务器并主动开启；默认关闭。',
+  'dms.channelLabel': '当前可用通道',
+  'dms.channelLocal': '仅本地发件箱（家人收不到邮件）',
+  'dms.channelHeartbeat': '零内容心跳（自建服务器）+ 本地发件箱',
+  'dms.channelSmtp': 'SMTP 邮件',
+  'dms.channelUnknown': '未检测到投递通道',
   'dms.checkInTitle': '确认你安好',
   'dms.checking': '确认中...',
   'dms.checkInBtn': '我还安好，确认检查',
@@ -1131,6 +1141,16 @@ const enUS: Record<string, string> = {
 
   // ===== Legacy Care (DMS) =====
   'dms.subtitle': 'Confirm that you are alive. If you miss check-ins for too long, the system notifies the people you care about.',
+  'dms.limitsTitle': 'What this mechanism can and cannot do',
+  'dms.limits1': 'Detection only runs while the app is running (including minimized to the tray). Nothing is evaluated while the machine is off, asleep, or the app is fully quit, and missed rounds are not replayed.',
+  'dms.limits2': 'Email delivery needs an SMTP server you provide via environment variables. Without it, notifications only go to the local outbox — your family receives nothing.',
+  'dms.limits3': 'The local outbox is plaintext JSONL containing recipient emails/phone numbers and message bodies. Treat the whole device as sensitive.',
+  'dms.limits4': 'The optional zero-content heartbeat is the only channel that still detects absence after the app is closed. It requires a server you host and must be enabled explicitly; it is off by default.',
+  'dms.channelLabel': 'Available channel',
+  'dms.channelLocal': 'Local outbox only — your family receives no email',
+  'dms.channelHeartbeat': 'Zero-content heartbeat (self-hosted) + local outbox',
+  'dms.channelSmtp': 'SMTP email',
+  'dms.channelUnknown': 'No delivery channel detected',
   'dms.checkInTitle': 'Confirm you are alive',
   'dms.checking': 'Confirming…',
   'dms.checkInBtn': 'I am alive — check in',

@@ -257,3 +257,41 @@ describe('测试提醒', () => {
     expect(btn.attributes('disabled')).toBeUndefined();
   });
 });
+
+describe('可靠性边界披露', () => {
+  it('页面必须说明「应用关闭时不会检测」与「未配置 SMTP 家人收不到邮件」', async () => {
+    const w = await mountDms(checkInStatus());
+    const text = w.text();
+    expect(text, '必须披露运行期限制').toContain('应用运行时');
+    expect(text, '必须披露关机不检测').toContain('关机');
+    expect(text, '必须披露 SMTP 依赖').toContain('SMTP');
+    expect(text, '必须披露发件箱是明文').toContain('明文');
+    expect(text, '必须披露心跳默认关闭').toContain('默认关闭');
+    expect(w.find('.dms-limits').exists(), '边界说明必须是独立区块').toBe(true);
+  });
+
+  it('未启用心跳时明确显示「家人收不到邮件」', async () => {
+    const w = await mountDms(checkInStatus());
+    expect(w.text()).toContain('家人收不到邮件');
+  });
+
+  it('心跳已启用时显示零内容心跳通道', async () => {
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_check_in_status') return { success: true, message: '', data: checkInStatus() };
+      if (cmd === 'get_dms_status') {
+        return { success: true, message: '', data: { enabled: true, overdue: false, current_stage: 0, days_overdue: 0 } };
+      }
+      if (cmd === 'get_dms_history') return { success: true, message: '', data: [] };
+      if (cmd === 'get_heartbeat_config') {
+        return { success: true, message: '', data: { enabled: true, has_token: true, endpoint: 'https://hb.example.org' } };
+      }
+      return { success: true, message: '', data: null };
+    });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const w = mount(DMSView, { global: { plugins: [pinia] } });
+    for (let i = 0; i < 3; i++) { await flushPromises(); await w.vm.$nextTick(); }
+    expect(w.text()).toContain('零内容心跳');
+    expect(w.text()).not.toContain('家人收不到邮件');
+  });
+});

@@ -124,13 +124,19 @@ fn append_history_from(path: &Path, limit: usize, out: &mut Vec<DmsNotification>
     }
 }
 
-#[allow(dead_code)]
+/// DMS 配置快照。
+///
+/// 注意：`stage3_wait_days` 只作为「三级窗口长度」记录，不参与分级判定——
+/// 三级之后没有下一级，超过 stage1+stage2 即进入并保持 stage 3。
+/// 该字段保留是为了兼容既有数据库与将来的「三级后重发」策略；
+/// 界面不暴露它，避免用户以为调它能让提醒更早/更晚触发。
 #[derive(Debug, Clone)]
 struct DmsConfig {
     enabled: bool,
     interval_days: i64,
     stage1_wait_days: i64,
     stage2_wait_days: i64,
+    #[allow(dead_code)]
     stage3_wait_days: i64,
     last_check_in: Option<String>,
 }

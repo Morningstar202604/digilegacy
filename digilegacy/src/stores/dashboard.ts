@@ -13,6 +13,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   /** @deprecated 仅保留给旧调用点；新代码请用 dmsStatus + dmsHistory。 */
   const dmsEvaluation = ref<DmsStatus | null>(null);
   const user = ref<UserProfile | null>(null);
+  /** 心跳是否已配置（界面据此说明「失联后是否还有人会发现」）。 */
+  const heartbeatConfigured = ref(false);
   const loading = ref(false);
 
   async function loadStats() {
@@ -48,6 +50,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
       }
     } catch (e) {
       console.error('读取 DMS 状态失败:', e);
+    }
+  }
+
+  /** 心跳配置只暴露布尔：令牌永不出后端（见 commands::get_heartbeat_config）。 */
+  async function loadHeartbeatState() {
+    try {
+      const res = await invoke<ApiResponse<{ enabled: boolean; has_token: boolean; endpoint: string }>>(
+        'get_heartbeat_config',
+      );
+      heartbeatConfigured.value = Boolean(res.success && res.data?.enabled && res.data?.endpoint);
+    } catch (e) {
+      console.error('读取心跳状态失败:', e);
     }
   }
 
@@ -134,12 +148,14 @@ export const useDashboardStore = defineStore('dashboard', () => {
     dmsStatus,
     dmsHistory,
     dmsEvaluation,
+    heartbeatConfigured,
     user,
     loading,
     loadStats,
     loadCheckInStatus,
     evaluateDms,
     loadDmsHistory,
+    loadHeartbeatState,
     loadUser,
     checkIn,
     saveUser,
