@@ -3,6 +3,7 @@ mod backup;
 mod commands;
 mod crypto;
 mod db;
+mod family_faq;
 mod fsutil;
 mod heartbeat;
 mod models;

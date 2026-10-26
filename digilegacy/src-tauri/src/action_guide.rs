@@ -7,8 +7,14 @@
 // 两者共享同一份 `InheritanceReport`（含 policies），因此不会各写一份而漂移。
 // 本模块不含任何凭据或密码。
 
+use crate::family_faq::{render_faq_html, FAQ_STYLE};
 use crate::models::{DigitalAsset, InheritanceReport};
 use crate::report::{escape_html, ReportLocale};
+
+/// 转义：FAQ 与执行清单共用同一实现，避免两处各写一份。
+pub fn guide_html(input: &str) -> String {
+    escape_html(input)
+}
 
 const STYLE: &str = r#"
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:820px;margin:0 auto;padding:44px 48px;color:#232019;background:#fff;line-height:1.65}
@@ -216,6 +222,7 @@ pub fn render_action_guide_html(
         format!("<p class=\"meta\">{}</p>", escape_html(recovery_hint))
     };
 
+    let faq_block = format!("<style>{}</style>{}", FAQ_STYLE, render_faq_html(locale));
     format!(
         r#"<!DOCTYPE html>
 <html lang="{lang}"><head><meta charset="UTF-8"><title>{title}</title>
@@ -248,6 +255,11 @@ pub fn render_action_guide_html(
   <p class="meta">{support_1}</p>
   <p class="meta">{support_2}</p>
   <p class="meta">{support_3}</p>
+</div>
+
+<div class="section">
+  <div class="section-title">{faq_title}</div>
+  {faq}
 </div>
 
 <div class="doc-footer">
@@ -292,6 +304,8 @@ pub fn render_action_guide_html(
             "3. 如遇平台拒绝，保留书面材料并咨询律师；部分平台（如微信）明确不支持账号本身继承，仅余额可处理。",
             "3. If a platform refuses, keep the written record and consult a lawyer. Some platforms (e.g. WeChat) do not allow the account itself to be inherited; only balances can be handled.",
         ),
+        faq_title = t("常见问题", "Frequently asked questions"),
+        faq = faq_block,
         footer = t("归零 DigiLegacy · 本地生成", "DigiLegacy · generated locally"),
         printed = t("可打印", "Printable"),
     )
@@ -412,6 +426,19 @@ mod tests {
         let html = render_action_guide_html(&r, ReportLocale::Zh, evil, evil);
         assert!(!html.contains("<script>"), "不得出现未转义脚本");
         assert!(html.contains("&lt;script&gt;"));
+    }
+
+    /// 执行清单必须带家人 FAQ：这是「照着做」的最后一道保险。
+    #[test]
+    fn action_guide_includes_family_faq() {
+        let r = report(
+            vec![asset(1, "inherit", Some("王五"), "a")],
+            vec![policy(1, true)],
+        );
+        let html = render_action_guide_html(&r, ReportLocale::Zh, "x", "y");
+        assert!(html.contains("常见问题"), "必须有 FAQ 区块");
+        assert!(html.contains("账号密码在哪里"), "必须回答最要紧的问题");
+        assert!(html.contains("class=\"faq\""), "FAQ 必须可折叠/可打印");
     }
 
     #[test]
