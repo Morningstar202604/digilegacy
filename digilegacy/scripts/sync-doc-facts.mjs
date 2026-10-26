@@ -30,8 +30,13 @@ const readmePatch = text =>
   text
     .replace(/tests-\d+%20Rust%20%C2%B7%20\d+%20frontend%20%C2%B7%20\d+%20E2E/g,
       `tests-${f.rustTests}%20Rust%20%C2%B7%20${f.frontendCases}%20frontend%20%C2%B7%20${e2e}%20E2E`)
-    .replace(/(\| Rust tests \| \*\*)\d+/g, `$1${f.rustTests}`)
-    .replace(/(\| Rust 测试 \| \*\*)\d+/g, `$1${f.rustTests}`)
+    // Rust 行保留「通过数 + ignored + 声明数」的诚实格式：
+    // 通过数依赖平台（cfg(unix)）与 #[ignore]，无法从源码静态推导，
+    // 因此只回填「声明数」，通过数保持原值。
+    .replace(
+      /((?:Rust tests|Rust 测试)\s*\|\s*\*\*)(\d+)([^\n]*?)(\d+)(\s*(?:declared|声明))/g,
+      (_m, head, passed, mid, _declared, tail) => `${head}${passed}${mid}${f.rustTests}${tail}`,
+    )
     .replace(/(\| Frontend unit tests \| \*\*)\d+/, `$1${f.frontendCases}`)
     .replace(/(\| 前端单元测试 \| \*\*)\d+/, `$1${f.frontendCases}`)
     .replace(/(\| Frontend unit tests \| \*\*\d+ passing\*\* across )\d+( files \|)/, `$1${f.frontendFiles}$2`)

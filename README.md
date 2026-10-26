@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-119%20Rust%20%C2%B7%20352%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-120%20Rust%20%C2%B7%20352%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -79,7 +79,7 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **119 passing** (`cargo test --locked`) |
+| Rust tests | **118 passing**, 1 ignored (`cargo test --locked`; 120 declared incl. 1 Unix-only) |
 | Frontend unit tests | **352 passing** across 31 files |
 | End-to-end tests | **76 passing** in real Chromium |
 | Coverage | **85.4% statements**, 86.9% lines — thresholds enforced in CI |

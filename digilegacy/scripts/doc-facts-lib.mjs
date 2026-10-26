@@ -23,12 +23,15 @@ function walk(dir, out = []) {
 }
 
 function countRustTests() {
+  // 口径：源码里声明的全部 `#[test]` 用例（跨平台声明总数）。
+  // 与「本机实际通过数」不同：带 `#[cfg(unix)]` 的用例在 Windows 不编译，
+  // 带 `#[ignore]` 的默认不执行。文档同时给出声明数与实测跑法，避免夸大。
   const srcDir = path.join(WEB, 'src-tauri', 'src');
   let n = 0;
   for (const file of walk(srcDir)) {
     if (!file.endsWith('.rs')) continue;
     const text = readFileSync(file, 'utf8');
-    n += (text.match(/^\s*#\[test\]/gm) || []).length;
+    n += (text.match(/^\s*#\[test\]\s*$/gm) || []).length;
   }
   return n;
 }

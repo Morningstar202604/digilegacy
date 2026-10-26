@@ -42,12 +42,26 @@ for (const file of ['README.md', 'README.zh-CN.md']) {
     facts_.frontendCases,
     '验证表前端测试数',
   );
-  expectIn(
-    file,
-    /(?:Rust tests|Rust 测试)\s*\|\s*\*\*(\d+)/,
-    facts_.rustTests,
-    '验证表 Rust 测试数',
+  // 验证表如实写「本机通过数 + ignored」，并在括号里注明源码声明总数。
+  // 这里校验「括号里的声明数」等于源码推导值，同时校验正文里的通过数 ≤ 声明数。
+  const rustTable = read(file);
+  const decl = rustTable.match(
+    /(?:Rust tests|Rust 测试)\s*\|\s*\*\*(\d+)[^\n]*?(\d+)\s*(?:declared|声明)/,
   );
+  if (!decl) {
+    if (!/(?:Rust tests|Rust 测试)\s*\|\s*\*\*(\d+)/.test(rustTable)) {
+      problems.push(`${file}: 找不到验证表 Rust 测试数`);
+    }
+  } else {
+    const passed = Number(decl[1]);
+    const declared = Number(decl[2]);
+    if (declared !== facts_.rustTests) {
+      problems.push(`${file}: Rust 源码声明数写作 ${declared}，源码推导为 ${facts_.rustTests}`);
+    }
+    if (passed > declared) {
+      problems.push(`${file}: Rust 通过数 ${passed} 大于声明数 ${declared}`);
+    }
+  }
   if (facts_.e2e > 0) {
     expectIn(file, /tests-\d+%20Rust%20%C2%B7%20\d+%20frontend%20%C2%B7%20(\d+)%20E2E/, facts_.e2e, '徽章 E2E 数');
   }

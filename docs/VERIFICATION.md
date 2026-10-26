@@ -44,10 +44,10 @@
 |---|---|---|
 | CI 假绿灯 | `cargo-audit` 去 `|| true`、钉 0.22.1、打印 `--version` | `ci.yml:154-165`；本地 `cargo audit` 0 漏洞 |
 | 文档数字漂移 | `doc-facts-lib.mjs` 单一推导 + `check-doc-facts.mjs` 门禁 + `sync-doc-facts.mjs` 修正 | `node scripts/check-doc-facts.mjs` exit 0（Rust 119 / 前端 352 / E2E 76 / IPC 46） |
-| 报告抓 DOM | 新增 `report.rs` 后端渲染，单文件与 ZIP 同源；含占位符拒绝导出 | `report.rs` 6 组测试 + `ReportView.test.ts` 2 例 |
+| 报告抓 DOM | 新增 `report.rs` 后端渲染，单文件与 ZIP 同源；含占位符拒绝导出 | `report.rs` 5 组测试 + `ReportView.test.ts` 2 例 + `commands.rs::render_report_response_refuses_placeholder_and_returns_full_document` |
 | 「已解锁」不可信 | `security_status` 用验证器校验密钥；写路径同样拒绝错配密钥 | `commands.rs::security_status_is_false_when_key_does_not_match_verifier` |
 | DMS 边界未披露 | 安心传承页新增边界区块 + 实际通道显示 | `DMSView.test.ts` 3 例 |
-| `db.rs` 3.9k 行 | 拆 `db_platforms.rs` / `db_tests.rs`，生产代码 1882 行 | `cargo test --locked` 117 passed（纯移动） |
+| `db.rs` 3.9k 行 | 拆 `db_platforms.rs` / `db_tests.rs`，生产代码 1882 行 | `cargo test --locked` 117 passed（纯移动；该数字为拆分当时快照，此后新增测试使其增长） |
 | 导入层缺鲁棒性测试 | 513 个确定性畸形输入 | `scenarios.rs::backup_import_survives_500_malformed_inputs` |
 | 死配置 | `stage3_wait_days` 补充说明 | `notify.rs` 注释 |
 | 遗留截图 | 删除根目录 14 张（2.9MB） | `git ls-files screenshots` 为空 |
@@ -63,12 +63,12 @@
 
 | 命令 | 结果 |
 |---|---|
-| `cargo test --locked` | **117 passed, 0 failed, 1 ignored** |
+| `cargo test --locked` | **118 passed, 0 failed, 1 ignored**（源码声明 120，含 1 条 `#[cfg(unix)]` 在 Windows 不编译） |
 | `cargo clippy --all-targets -- -D warnings` | 0 warning |
 | `cargo fmt --check` | PASS |
 | `npx vue-tsc --noEmit` | exit 0 |
 | `npx vitest run` | **352 passed / 31 files** |
-| `node scripts/check-doc-facts.mjs` | exit 0（文档与源码一致） |
+| `node scripts/check-doc-facts.mjs` | exit 0（文档与源码一致；反向验证：手改一个数字后 exit 1） |
 
 ## 2026-10-26 对抗式 debug（第二轮）
 
