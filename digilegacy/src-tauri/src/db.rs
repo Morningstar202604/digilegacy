@@ -1489,7 +1489,23 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
             .map_err(|e| format!("清空记录失败: {}", e))?;
 
         let mut count = 0i64;
-        for a in assets {
+        for (idx, a) in assets.iter().enumerate() {
+            // 备份文件是外部输入：类别/处置/金额必须与命令层同样校验，
+            // 否则一个手改过的 JSON 就能把非法枚举和负金额写进统计与报告。
+            let category = sval(a, "category");
+            validate_category(&category)
+                .map_err(|e| format!("备份第 {} 条资产类别非法: {}", idx + 1, e))?;
+            let disposal = sval(a, "disposal_method");
+            validate_disposal(&disposal)
+                .map_err(|e| format!("备份第 {} 条资产处置非法: {}", idx + 1, e))?;
+            let value = fval(a, "estimated_value");
+            if !value.is_finite() || value < 0.0 || value > 1e12 {
+                return Err(format!(
+                    "备份第 {} 条资产估值非法（要求 0..1e12 的有限数值，实际 {}）",
+                    idx + 1,
+                    value
+                ));
+            }
             conn.execute(
                 "INSERT INTO digital_assets (id, platform_id, account_identifier, account_description, category, estimated_value, value_currency, disposal_method, heir_name, heir_contact, notes, credential_enc, is_confirmed, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
@@ -1498,10 +1514,10 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
                     ival(a, "platform_id"),
                     protect(sval(a, "account_identifier"))?,
                     protect(sval(a, "account_description"))?,
-                    sval(a, "category"),
-                    fval(a, "estimated_value"),
+                    category,
+                    value,
                     { let c = sval(a, "value_currency"); if c.is_empty() { "CNY".to_string() } else { c } },
-                    sval(a, "disposal_method"),
+                    disposal,
                     protect(sval(a, "heir_name"))?,
                     protect(sval(a, "heir_contact"))?,
                     protect(sval(a, "notes"))?,
@@ -2734,6 +2750,106 @@ mod tests {
         );
 
         vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 备份是外部输入：非法类别/处置/负金额必须在事务内被拒绝，且不留半截数据。
+    /// 旧实现直接把 JSON 里的字符串写进资产表，手改过的备份能污染统计与报告。
+    #[test]
+    fn backup_import_rejects_invalid_asset_fields() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("backup_invalid");
+        init_database_at(path.clone()).unwrap();
+
+        let id = add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "keep-me".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(10.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap();
+        assert_eq!(get_all_assets_db().unwrap().len(), 1);
+
+        let base_asset = serde_json::json!({
+            "id": 2,
+            "platform_id": 1,
+            "account_identifier": "bad",
+            "account_description": "",
+            "category": "property",
+            "estimated_value": 1.0,
+            "value_currency": "CNY",
+            "disposal_method": "inherit",
+            "heir_name": "",
+            "heir_contact": "",
+            "notes": "",
+            "credential_enc": "",
+            "is_confirmed": 1,
+            "created_at": "2026-01-01 00:00:00",
+            "updated_at": "2026-01-01 00:00:00"
+        });
+        let mk = |patch: serde_json::Value| {
+            let mut asset = base_asset.clone();
+            if let Some(obj) = patch.as_object() {
+                for (k, v) in obj {
+                    asset[k] = v.clone();
+                }
+            }
+            serde_json::json!({
+                "app": "digilegacy",
+                "version": 3,
+                "tables": {
+                    "digital_assets": [asset],
+                    "user_profile": [],
+                    "check_in_log": [],
+                    "dms_config": null,
+                    "security_config": null
+                }
+            })
+            .to_string()
+        };
+
+        for (label, patch) in [
+            (
+                "非法类别",
+                serde_json::json!({"category": "not_a_category"}),
+            ),
+            (
+                "非法处置",
+                serde_json::json!({"disposal_method": "sell_everything"}),
+            ),
+            ("负金额", serde_json::json!({"estimated_value": -5.0})),
+            ("超大金额", serde_json::json!({"estimated_value": 1e15})),
+        ] {
+            let err = import_backup_json_db(&mk(patch)).unwrap_err();
+            assert!(!err.is_empty(), "{} 必须给出错误信息", label);
+            assert_eq!(
+                get_all_assets_db().unwrap().len(),
+                1,
+                "{} 被拒绝后原数据必须完好",
+                label
+            );
+            assert_eq!(
+                get_asset_by_id_db(id).unwrap().unwrap().account_identifier,
+                "keep-me",
+                "{} 拒绝后不得改动既有资产",
+                label
+            );
+        }
+
+        // 合法备份仍然可以导入
+        import_backup_json_db(&mk(serde_json::json!({}))).unwrap();
+        assert_eq!(
+            get_all_assets_db().unwrap().len(),
+            1,
+            "合法备份应替换为 1 条"
+        );
+
         let _ = std::fs::remove_file(&path);
     }
 

@@ -8,6 +8,8 @@ mod models;
 mod notify;
 mod platform_data;
 mod recovery;
+#[cfg(test)]
+mod scenarios;
 mod vault;
 
 use tauri::{
