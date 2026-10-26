@@ -477,6 +477,14 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       return ok(null, '已在浏览器打开') as T;
     }
 
+    case 'get_heartbeat_config':
+      // 演示环境的心跳状态：始终未配置，界面据此显示「家人收不到邮件」。
+      // 名称与返回结构与桌面版命令一致（enabled / has_token / endpoint）。
+      return ok({ enabled: false, has_token: false, endpoint: '' }) as T;
+
+    case 'set_heartbeat_config':
+      return ok(null, '演示模式不会真的发送心跳') as T;
+
     case 'get_backup_status':
       return ok({ count: 0, latest_name: null, latest_size: null }) as T;
 
