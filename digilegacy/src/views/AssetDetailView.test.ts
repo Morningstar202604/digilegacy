@@ -346,3 +346,39 @@ describe('删除资产', () => {
     expect(mockedInvoke.mock.calls.some(c => c[0] === 'delete_asset')).toBe(true);
   });
 });
+
+describe('占位符防护（数据覆盖风险）', () => {
+  it('未解密字段显示告警，并阻止保存（不得提交占位符覆盖真实数据）', async () => {
+    const w = await mountDetail({
+      a: asset({
+        account_identifier: '【加密数据 · 需解锁】',
+        notes: '【加密数据 · 需解锁】',
+      }),
+    });
+
+    expect(w.text(), '必须显示未解密告警').toContain('部分字段未能解密');
+    expect(w.text()).toContain('账号标识');
+    expect(w.text()).toContain('备注');
+
+    const saveBtn = w.findAll('button').find(b => b.text() === '保存修改')!;
+    await saveBtn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke, '不得调用 update_asset').not.toHaveBeenCalledWith(
+      'update_asset',
+      expect.anything(),
+    );
+    expect(w.text()).toContain('无法保存');
+  });
+
+  it('没有占位符时正常保存（防护不能误伤普通路径）', async () => {
+    const w = await mountDetail({ a: asset({ account_identifier: 'real@example.com' }) });
+    expect(w.text()).not.toContain('部分字段未能解密');
+
+    const saveBtn = w.findAll('button').find(b => b.text() === '保存修改')!;
+    await saveBtn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'update_asset')).toBe(true);
+  });
+});

@@ -468,3 +468,66 @@ describe('恢复密钥状态与开机自启', () => {
     expect(w.text()).toContain('开机自动启动（驻留托盘');
   });
 });
+
+describe('占位符防护（档案数据覆盖风险）', () => {
+  it('未解密档案显示告警并阻止保存', async () => {
+    const w = await mountProfile({
+      get_user_profile: () => ({
+        success: true,
+        message: '',
+        data: {
+          id: 1,
+          full_name: '【加密数据 · 需解锁】',
+          phone: '【加密数据 · 需解锁】',
+          email: '',
+          id_last4: '',
+          emergency_contact_name: '', emergency_contact_phone: '',
+          emergency_contact_relation: '', emergency_contact_email: '',
+          heir_primary_name: '', heir_primary_phone: '',
+          heir_primary_relation: '', heir_primary_email: '',
+          check_in_interval_days: 30, last_check_in: null, dms_enabled: false,
+          created_at: '', updated_at: '',
+        },
+      }),
+    });
+
+    expect(w.text(), '必须显示未解密告警').toContain('部分档案字段未能解密');
+
+    const saveBtn = w.findAll('button').find(b => b.text().includes('保存档案'))!;
+    await saveBtn.trigger('click');
+    await flushPromises();
+
+    expect(mockedInvoke, '不得调用 set_user_profile').not.toHaveBeenCalledWith(
+      'set_user_profile',
+      expect.anything(),
+    );
+    const { toasts } = useFeedback();
+    expect(
+      toasts.some(t => t.message.includes('无法保存')),
+      `应出现阻止保存的 toast，实际: ${JSON.stringify(toasts.map(t => t.message))}`,
+    ).toBe(true);
+  });
+
+  it('正常档案不显示告警且可以保存', async () => {
+    const w = await mountProfile({
+      get_user_profile: () => ({
+        success: true,
+        message: '',
+        data: {
+          id: 1, full_name: '张三', phone: '13800000000', email: 'a@b.com', id_last4: '',
+          emergency_contact_name: '', emergency_contact_phone: '',
+          emergency_contact_relation: '', emergency_contact_email: '',
+          heir_primary_name: '', heir_primary_phone: '',
+          heir_primary_relation: '', heir_primary_email: '',
+          check_in_interval_days: 30, last_check_in: null, dms_enabled: false,
+          created_at: '', updated_at: '',
+        },
+      }),
+    });
+    expect(w.text()).not.toContain('部分档案字段未能解密');
+    const saveBtn = w.findAll('button').find(b => b.text().includes('保存档案'))!;
+    await saveBtn.trigger('click');
+    await flushPromises();
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'set_user_profile')).toBe(true);
+  });
+});

@@ -28,6 +28,11 @@
         <div v-if="platformInfo?.required_documents" class="mt-16"><strong style="font-size: 13px;">{{ t('detail.requiredDocs') }}</strong><span class="text-muted" style="font-size: 13px; margin-left: 8px;">{{ platformInfo.required_documents }}</span></div>
       </div>
 
+      <div v-if="hasPlaceholder" class="card mb-24" role="alert" style="border-color: var(--warning); background: var(--warning-light);">
+        <strong style="font-size: 14px;">{{ t('detail.placeholderTitle') }}</strong>
+        <p style="font-size: 13px; margin-top: 6px;">{{ t('detail.placeholderDesc', { fields: placeholderFields.join('、') }) }}</p>
+      </div>
+
       <div class="card mb-24" style="background: var(--gray-50);">
         <div class="card-title">{{ t('detail.credentialTitle') }}</div>
         <template v-if="security.hasMasterPassword">
@@ -125,6 +130,27 @@ const isFinancialPlatform = computed(() =>
   ['支付金融', '金融证券'].includes(platformInfo.value?.category || '')
 );
 
+const CREDENTIAL_PLACEHOLDER = '【加密数据 · 需解锁】';
+/** 记录加载到的资产里哪些字段是「解密失败占位符」。
+ *  这类字段不能被保存回后端（后端会拒绝），界面必须先说清楚原因。 */
+const placeholderFields = computed(() => {
+  const a = asset.value;
+  if (!a) return [] as string[];
+  const hits: string[] = [];
+  for (const [label, value] of [
+    ['账号标识', a.account_identifier],
+    ['账号描述', a.account_description],
+    ['备注', a.notes],
+    ['继承人姓名', a.heir_name ?? ''],
+    ['继承人联系方式', a.heir_contact ?? ''],
+  ] as const) {
+    if (value === CREDENTIAL_PLACEHOLDER) hits.push(label);
+  }
+  return hits;
+});
+
+const hasPlaceholder = computed(() => placeholderFields.value.length > 0);
+
 async function refreshAsset() {
   if (!asset.value?.id) return;
   const res = await invoke<ApiResponse<DigitalAsset | null>>('get_asset_by_id', { id: asset.value.id });
@@ -213,6 +239,12 @@ async function openOfficial() {
 
 async function handleSave() {
   if (!asset.value?.id || saving.value) return;
+  // 占位符表示这些字段根本没被解密（锁定或密钥不匹配）。
+  // 直接提交会让后端拒绝，或在没有后端防护的旧版本上覆盖真实数据。
+  if (hasPlaceholder.value) {
+    saveError.value = t('detail.placeholderBlocked', { fields: placeholderFields.value.join('、') });
+    return;
+  }
   saving.value = true;
   saveError.value = '';
   try {

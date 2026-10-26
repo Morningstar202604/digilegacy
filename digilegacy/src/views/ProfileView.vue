@@ -3,6 +3,11 @@
     <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 24px;">{{ t('nav.profile') }}</h2>
     <p class="text-muted mb-32" style="font-size: 14px;">{{ t('profile.subtitle') }}</p>
 
+    <div v-if="hasPlaceholder" class="card mb-24" role="alert" style="border-color: var(--warning); background: var(--warning-light);">
+      <strong style="font-size: 14px;">{{ t('profile.placeholderTitle') }}</strong>
+      <p style="font-size: 13px; margin-top: 6px;">{{ t('profile.placeholderDesc', { fields: placeholderFields.join('、') }) }}</p>
+    </div>
+
     <div class="grid grid-2">
       <div class="card">
         <div class="card-title mb-16">{{ t('profile.basicTitle') }}</div>
@@ -581,7 +586,32 @@ onMounted(async () => {
   }
 });
 
+const PROFILE_PLACEHOLDER = '【加密数据 · 需解锁】';
+
+/** 哪些档案字段是「未解密占位符」——这类值不能保存回后端。 */
+const placeholderFields = computed(() => {
+  const p = profile.value;
+  const hits: string[] = [];
+  const pairs: Array<[string, string]> = [
+    ['姓名', p.full_name], ['手机号', p.phone], ['邮箱', p.email],
+    ['紧急联系人姓名', p.emergency_contact_name], ['紧急联系人电话', p.emergency_contact_phone],
+    ['紧急联系人邮箱', p.emergency_contact_email],
+    ['继承人姓名', p.heir_primary_name], ['继承人电话', p.heir_primary_phone],
+    ['继承人邮箱', p.heir_primary_email],
+  ];
+  for (const [label, value] of pairs) {
+    if (value === PROFILE_PLACEHOLDER) hits.push(label);
+  }
+  return hits;
+});
+
+const hasPlaceholder = computed(() => placeholderFields.value.length > 0);
+
 async function saveProfile() {
+  if (hasPlaceholder.value) {
+    toast(t('profile.placeholderBlocked', { fields: placeholderFields.value.join('、') }), 'error');
+    return;
+  }
   try {
     await dashboard.saveUser(profile.value);
     // 不再把档案页里的旧 DMS 值回写 dms_config：那会让用户在「安心传承」

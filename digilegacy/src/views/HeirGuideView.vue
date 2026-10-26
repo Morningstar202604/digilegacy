@@ -78,7 +78,7 @@
               <span class="tag" :class="{
                 'tag-success': platform.inheritable,
                 'tag-danger': !platform.inheritable
-              }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+              }">{{ platform.inheritable ? t('heir.inheritable') : t('heir.hardInherit') }}</span>
             </div>
             <div style="padding: 16px;">
               <div class="grid grid-2" style="gap: 12px; font-size: 13px;">
@@ -129,7 +129,7 @@
               <span class="tag" :class="{
                 'tag-success': platform.inheritable,
                 'tag-danger': !platform.inheritable
-              }">{{ platform.inheritable ? '可继承' : '难继承' }}</span>
+              }">{{ platform.inheritable ? t('heir.inheritable') : t('heir.hardInherit') }}</span>
               <span v-if="platform.monetization_path" class="tag tag-warning">{{ t('heir.hasPath') }}</span>
             </div>
           </div>

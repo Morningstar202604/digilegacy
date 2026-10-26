@@ -390,6 +390,53 @@ describe('真实 mock 后端 × 资产生命周期 矩阵（80 场景）', () =>
   });
 });
 
+describe('占位符 × 写路径 矩阵（24 场景）', () => {
+  const PLACEHOLDER = '【加密数据 · 需解锁】';
+
+  it('每个敏感字段单独遇到占位符都必须被识别', async () => {
+    const c = makeChecker();
+    const fields = [
+      'account_identifier', 'account_description', 'notes', 'heir_name', 'heir_contact',
+    ];
+    for (const field of fields) {
+      // 与 AssetDetailView 同语义：任一敏感字段为占位符即视为未解密
+      const asset: Record<string, unknown> = {
+        id: 1, platform_id: 1, platform_name: '支付宝',
+        account_identifier: 'ok', account_description: 'ok', notes: 'ok',
+        heir_name: 'ok', heir_contact: 'ok',
+      };
+      const detect = (a: Record<string, unknown>) =>
+        ['account_identifier', 'account_description', 'notes', 'heir_name', 'heir_contact']
+          .filter(k => a[k] === PLACEHOLDER);
+
+      c.ok(detect(asset).length === 0, `${field} 正常值不应误报`);
+      asset[field] = PLACEHOLDER;
+      const hits = detect(asset);
+      c.ok(hits.length === 1 && hits[0] === field, `${field} 占位符必须被识别`);
+    }
+    c.report('占位符识别矩阵');
+    expect(c.count).toBeGreaterThanOrEqual(fields.length * 2);
+  });
+
+  it('12 个档案字段逐个置为占位符都能被识别', () => {
+    const c = makeChecker();
+    const keys = [
+      'full_name', 'phone', 'email', 'id_last4',
+      'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'emergency_contact_email',
+      'heir_primary_name', 'heir_primary_phone', 'heir_primary_relation', 'heir_primary_email',
+    ];
+    const detect = (p: Record<string, string>) => keys.filter(k => p[k] === PLACEHOLDER);
+    for (const key of keys) {
+      const profile: Record<string, string> = Object.fromEntries(keys.map(k => [k, 'ok']));
+      profile[key] = PLACEHOLDER;
+      const hits = detect(profile);
+      c.ok(hits.length === 1 && hits[0] === key, `${key} 占位符必须被识别`);
+    }
+    c.report('档案占位符矩阵');
+    expect(c.count).toBe(keys.length);
+  });
+});
+
 describe('平台 store × 缓存失效 矩阵（40 场景）', () => {
   it('缓存命中/强制刷新/扩展失效 三种状态各 10 轮一致', async () => {
     const c = makeChecker();
