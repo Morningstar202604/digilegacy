@@ -179,8 +179,12 @@ test.describe('关键按钮逐个点击', () => {
     await expect(page.getByText(/完成|已保存|成功/).first()).toBeVisible({ timeout: 15000 });
 
     await page.goto('/assets');
-    await page.locator('.asset-row').first().click();
-    await expect(page).toHaveURL(/\/assets\/\d+/);
+    // 列表在 mock 首次访问时会异步落盘重建，等行真正可见再点，
+    // 否则并行跑全量时点击可能落在尚未绑定路由的节点上（偶发 URL 不变）。
+    const firstRow = page.locator('.asset-row').first();
+    await expect(firstRow).toBeVisible({ timeout: 15000 });
+    await firstRow.click();
+    await expect(page).toHaveURL(/\/assets\/\d+/, { timeout: 15000 });
 
     // 凭据输入与保存
     const credInput = page.locator('input[aria-label*="凭据"]');
