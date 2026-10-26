@@ -35,6 +35,17 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Frontend scenario suite** (`src/scenarios.test.ts`): ~300 combinations / **1692 checkpoints** across the asset store, filter/sort/search, money formatting × locale, locked-state write paths, mock lifecycle and platform cache invalidation.
 - **Browser scenario suite** (`e2e/scenarios.spec.ts`): **39 scenarios** — 8 routes × 2 locales × 2 themes, 20 platform-search keywords, 4 filters × 4 sorts, 6 legal categories, heir-guide tabs/difficulty/collapse, DMS idempotence, report actions and per-page language/theme round-trips.
 
+### Adversarial debug (2026-10-26, second pass)
+
+Reproduced and fixed four more defects, each with a regression test:
+
+- **Decrypted placeholders could be written back, destroying the real data.** In a locked vault (or with a mismatched key) reads degrade to `【加密数据 · 需解锁】`; the asset-detail and profile forms submitted that placeholder, and `update_asset_db` / `save_user_profile_db` re-encrypted it as if it were the real value. Saving once permanently overwrote the ciphertext. Writes now reject placeholders before touching the DB, and the UI shows a blocking alert.
+- **Assets could be deleted while locked.** `delete_asset_db` skipped the vault guard, so "locked" protected reads but not destruction.
+- **Policy-patch platforms could not hold assets.** `digital_assets.platform_id` references `platforms`, but patches only wrote `platform_overrides` — selecting a patched platform and saving failed with `FOREIGN KEY constraint failed`. Patches are now mirrored into `platforms`; clearing a patch keeps in-use rows (marked `（补丁已清除）`) instead of failing or cascading deletes; asset lists show the patched name via `COALESCE`.
+- **DMS never fired if the user never checked in.** With `last_check_in IS NULL` the stage stayed 0 forever. Enabling the switch now records an anchor; changing the interval does not reset an existing countdown.
+
+Also fixed: external-link validation accepted `https://trusted.example.com@evil.example.com/` (userinfo spoofing) and control characters; the DMS outbox was written with default permissions; dashboard and report totals summed negative/absurd values while the UI filtered them.
+
 ### Scenario-found defects
 
 - **Backup import accepted invalid asset fields.** A hand-edited backup could write an unknown category, an unknown disposal method, or a negative/absurd value straight into the asset table, poisoning statistics and reports. The import now validates every row inside the transaction and leaves existing data untouched on rejection.
@@ -43,7 +54,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
-- Frontend unit tests grew from 296 to **341**, branch coverage 76.82% → **78.54%**; Rust tests 86 → **103**; E2E 37 → **76**. README badges synced.
+- Frontend unit tests grew from 296 to **347**, branch coverage 76.82% → **78.74%**; Rust tests 86 → **110**; E2E 37 → **76**. README badges synced.
 
 ## [0.2.0] - 2026-10-24
 

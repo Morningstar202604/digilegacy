@@ -81,6 +81,16 @@ E2E does not feed the v8 coverage numbers. The two are complementary: unit cover
 
 `notify::status_snapshot` (`get_dms_status`) only reads `dms_config` and computes the stage — no SMTP, no outbox write. `notify::evaluate_dms` is the dispatching path and is only called by the background loop. The UI must never call the dispatcher: opening a page used to send real mail. `get_dms_history` reads the newest 50 entries from `dms_outbox/*.jsonl`, and `get_check_in_status` returns `recent_check_ins` (latest 5 confirmations) so the check-in log is actually read by the UI, not just written.
 
+## Placeholder is read-only
+
+`vault::decrypt_or_placeholder` degrades undecryptable values to `【加密数据 · 需解锁】` so one bad row cannot fail a whole list. That placeholder is a **display artifact, never data**: `db::reject_placeholder` blocks it in every write path (`update_asset_db`, `save_user_profile_db`), and the asset-detail / profile pages block saving before the IPC call. Without this, a locked read followed by a save re-encrypted the placeholder and destroyed the original ciphertext.
+
+`delete_asset_db` also goes through `ensure_vault_writable`: a locked vault must not permit destruction any more than it permits reading.
+
+## Policy patches and the platform foreign key
+
+`digital_assets.platform_id` references `platforms`. Patches therefore have to be mirrored into `platforms` (`sync_platform_overrides_into_platforms`) or selecting a patched platform fails on insert. Asset queries join `platform_overrides` and select `COALESCE(o.name, p.name)` so the patched name wins. Clearing a patch removes only unused mirror rows; rows still referenced by assets are kept and renamed `（补丁已清除）` so user data is never cascaded away.
+
 ## Backup format
 
 `version: 3` adds `security_config.recovery_seal` to the export so a recovery code survives a machine move. Imports accept v1/v2/v3. A backup **without** `security_config` is treated as plaintext: importing it into an encrypted vault is rejected while locked and field-encrypted while unlocked — plaintext must never land in an `enc:v1:` column.

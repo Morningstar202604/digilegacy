@@ -7,7 +7,7 @@
 | 命令 | 结果 |
 |---|---|
 | `npx vue-tsc --noEmit` | exit 0 |
-| `npm run test:coverage` | **341 tests / 31 files**，statements 85.11%（branches 78.54 / functions 76.68 / lines 86.57，阈值 78/78/71/79） |
+| `npm run test:coverage` | **347 tests / 31 files**，statements 85.40%（branches 78.74 / functions 76.88 / lines 86.88，阈值 78/78/71/79） |
 | `npm run build` | PASS；`dist/assets` 无 `mock-*.js` 分块 |
 | `npx playwright test` | **76 passed**（52.2s，含场景矩阵 39 个） |
 | `cargo test --locked` | **103 passed, 0 failed, 1 ignored** |
@@ -35,6 +35,24 @@
 | 通知历史只看本轮评估结果，刷新即消失 | P2 | `DMSView.test.ts::历史投递持久可见`、`notify.rs::outbox_history_reads_newest_first_and_skips_bad_lines` |
 | 签到日志只写不读，用户无法自查上次确认 | P3 | `DMSView.test.ts::显示最近几次确认记录`、`db.rs::check_in_history_is_newest_first_and_capped` |
 | `get_dms_status` 是界面唯一 DMS 数据源，若混入投递逻辑会重演 P0 | P1 | `commands.rs::get_dms_status_is_read_only_and_reports_stage`（含 dms_config 不被改动） |
+
+## 2026-10-26 对抗式 debug（第二轮）
+
+用「先复现、再修复、留回归」的方式逐条验证，不复述实现。
+
+| 缺陷 | 级别 | 复现证据 | 回归测试 |
+|---|---|---|---|
+| 解密占位符被写回，真实密文被永久覆盖（资产详情 + 我的档案） | **P0** | 用错钥匙读出 `【加密数据 · 需解锁】` 后保存 → 用正确钥匙再读仍是占位符 | `db.rs::asset_placeholder_cannot_be_written_back`、`db.rs::profile_placeholder_cannot_be_written_back`、`AssetDetailView.test.ts`、`ProfileView.test.ts` |
+| 锁定态可删除资产（锁定只防读不防破坏） | **P0** | `delete_asset_db` 在 `vault::clear_key()` 后仍返回 `Ok(())` | `db.rs::delete_asset_rejected_while_locked` |
+| 政策补丁新增平台无法登记资产 | **P1** | `add_asset(platform_id=9001)` → `FOREIGN KEY constraint failed` | `db.rs::patch_only_platform_can_hold_assets` |
+| 补丁平台上有资产时清除补丁直接失败 | **P1** | `clear_platform_overrides_db()` → `FOREIGN KEY constraint failed` | `scenarios.rs::clearing_patch_keeps_assets_on_patch_only_platforms` |
+| 启用 DMS 但从未签到 → 永不触发 | **P1** | `enabled=true, last_check_in=NULL` → `overdue=false, stage=0` 恒成立 | `notify.rs::enabled_dms_anchors_on_first_enable_instead_of_never_firing` |
+| 外部链接 userinfo 欺骗 | **P2** | `https://trusted.example.com@evil.example.com/steal` 通过校验 | `vault.rs::url_validation_rejects_userinfo_and_control_chars` |
+| 发件箱按默认权限落盘（含收件人联系方式） | **P2** | 用 `OpenOptions` 直接创建，无非 Unix 0600 | `fsutil.rs` + `notify.rs` 写入路径 |
+| 仪表板/报告总价值未过滤负值与超大值 | **P2** | `SUM(estimated_value)` 直接累加 | `db.rs::totals_ignore_negative_and_absurd_values` |
+| 继承人向导「可继承/难继承」硬编码中文 | **P3** | 英文界面仍显示中文 | i18n 键已存在，改为 `t()` |
+
+本轮验证：`cargo test --locked` **110 passed / 1 ignored**；`cargo clippy --all-targets -- -D warnings` 0 warning；`cargo fmt --check` PASS；`npx vitest run` **347 passed / 31 files**；`npm run test:coverage` exit 0（statements 85.40 / branches 78.74 / functions 76.88 / lines 86.88）；`npx playwright test` **76 passed**。
 
 ## 2026-10-26 真实使用场景模拟（大规模）
 
