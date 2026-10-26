@@ -494,6 +494,7 @@ fn reject_placeholder(field: &str, value: &str) -> Result<(), String> {
 pub fn add_asset_db(req: &AssetRequest) -> Result<i64, String> {
     validate_category(&req.category)?;
     validate_disposal(&req.disposal_method)?;
+    validate_disposal_heir(&req.disposal_method, req.heir_name.as_deref())?;
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     ensure_vault_writable(conn)?;
@@ -528,6 +529,7 @@ pub fn add_asset_db(req: &AssetRequest) -> Result<i64, String> {
 pub fn update_asset_db(id: i64, req: &AssetRequest) -> Result<(), String> {
     validate_category(&req.category)?;
     validate_disposal(&req.disposal_method)?;
+    validate_disposal_heir(&req.disposal_method, req.heir_name.as_deref())?;
     // 占位符检查必须在任何写操作之前：这是「数据被覆盖」而非「写入失败」的风险。
     reject_placeholder("账号标识", &req.account_identifier)?;
     reject_placeholder("账号描述", &req.account_description)?;
@@ -1965,6 +1967,18 @@ pub fn set_dms_config_db(enabled: bool, interval_days: i64) -> Result<(), String
     Ok(())
 }
 
+/// SMTP 是否已配置到「可以真正发送」的程度（host 与 from 都非空）。
+/// 直接查库：调用方可能已持有连接锁，不能再走 `get_conn()`。
+fn smtp_configured_in(conn: &Connection) -> bool {
+    conn.query_row(
+        "SELECT COALESCE(host,''), COALESCE(from_addr,'') FROM smtp_config WHERE id=1",
+        [],
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+    )
+    .map(|(host, from)| !host.trim().is_empty() && !from.trim().is_empty())
+    .unwrap_or(false)
+}
+
 pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
@@ -1994,13 +2008,10 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
             |row| row.get(0),
         )
         .unwrap_or(0);
-    let confirmed_count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM digital_assets WHERE is_confirmed=1",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or(0);
+    // 注意：这里不再统计 `is_confirmed`。该列在插入/更新时恒写 1，
+    // 从未有真实的「未确认」状态，`unconfirmed_count` 永远为 0——
+    // 一个永远显示「全部已确认」的指标比没有指标更糟，故整列从统计中移除
+    // （列本身保留，避免破坏既有备份与迁移路径）。
     // 只累加非负有限值：数据可能来自手改备份或外部导入，
     // 负估值会把「总价值」算成负数（前端 totalValue 已有同样口径）。
     let total_value: f64 = conn
@@ -2013,6 +2024,27 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
     let disposal_planned: i64 = conn
         .query_row(
             "SELECT COUNT(*) FROM digital_assets WHERE disposal_method != 'no_action'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    // 继承人：只有「选继承却没填名字」才是不合格，其他处置方式不涉及继承人。
+    let heir_assigned: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets
+             WHERE disposal_method != 'inherit'
+                OR (heir_name IS NOT NULL AND TRIM(heir_name) != '')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    // 账号标识：占位符表示未解密，不算已填——否则锁定态下指标会虚高。
+    let identifier_ready: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets
+             WHERE account_identifier IS NOT NULL
+               AND TRIM(account_identifier) != ''
+               AND account_identifier NOT LIKE '%需解锁%'",
             [],
             |row| row.get(0),
         )
@@ -2030,8 +2062,43 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
         .map(|v| v != 0)
         .unwrap_or(false);
 
+    // 触发链可用性：只认真正能送达的通道，不看「开关有没有打开」。
+    // 旧界面把「DMS 已启用」等同于「家人会收到通知」，实际没配 SMTP 时
+    // 通知只进本地发件箱，家人什么都收不到。
+    //
+    // 注意：这里必须直接查库，不能调用 `notify::resolve_smtp_settings()`——
+    // 那个函数内部会 `get_conn()`，而本函数已持有连接锁，二次加锁会死锁
+    // （std Mutex 不可重入，实测整个测试套挂死）。
+    let smtp_ready = smtp_configured_in(conn);
+    let heartbeat_ready = conn
+        .query_row(
+            "SELECT enabled, COALESCE(endpoint,'') FROM heartbeat_config WHERE id=1",
+            [],
+            |r| Ok((r.get::<_, i64>(0)? != 0, r.get::<_, String>(1)?)),
+        )
+        .map(|(enabled, endpoint)| enabled && !endpoint.trim().is_empty())
+        .unwrap_or(false);
+    let trigger_channel = if smtp_ready {
+        "smtp".to_string()
+    } else if heartbeat_ready {
+        "heartbeat".to_string()
+    } else {
+        "none".to_string()
+    };
+    let trigger_ready = dms_enabled && trigger_channel != "none";
+
+    // 四项各 25%。任何一项为 0，整体就不会虚高到「完成」。
+    let ratio = |n: i64| -> i64 {
+        if total > 0 {
+            n * 100 / total
+        } else {
+            0
+        }
+    };
+    let trigger_score = if trigger_ready { 100 } else { 0 };
     let completion = if total > 0 {
-        disposal_planned * 100 / total
+        (ratio(disposal_planned) + ratio(heir_assigned) + ratio(identifier_ready) + trigger_score)
+            / 4
     } else {
         0
     };
@@ -2041,10 +2108,12 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
         property_count,
         personality_count,
         mixed_count,
-        confirmed_count,
-        unconfirmed_count: total - confirmed_count,
-        total_estimated_value: total_value,
         disposal_planned_count: disposal_planned,
+        heir_assigned_count: heir_assigned,
+        identifier_ready_count: identifier_ready,
+        trigger_ready,
+        trigger_channel,
+        total_estimated_value: total_value,
         last_check_in,
         dms_enabled,
         completion_percentage: completion,

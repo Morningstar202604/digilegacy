@@ -18,7 +18,7 @@
       </div>
       <div class="checklist-footer">
         {{ t('discover.checked') }} <strong>{{ checkedCount }} / {{ checklistItems.length }}</strong> {{ t('discover.itemSuffix') }}
-        <button @click="currentStep = 1" class="btn btn-primary" style="margin-left: 16px;">{{ t('discover.continue') }} →</button>
+        <button @click="goToCategoriesFromChecklist" class="btn btn-primary" style="margin-left: 16px;">{{ t('discover.continue') }} →</button>
       </div>
     </div>
 
@@ -26,6 +26,13 @@
     <div class="card mb-32" v-if="currentStep === 1">
       <div class="card-title" style="font-size: 18px;">{{ t('discover.catTitle') }}</div>
       <div class="card-subtitle">{{ t('discover.catSubtitle') }}</div>
+    </div>
+
+    <div class="card mb-16" v-if="currentStep === 1 && prefillCount > 0" role="status">
+      <p style="font-size: 13px; color: var(--gray-600);">
+        {{ t('discover.prefillHint', { count: prefillCount }) }}
+        <button class="btn btn-sm btn-secondary ml-8" @click="clearCategorySelection">{{ t('discover.clearSelection') }}</button>
+      </p>
     </div>
 
     <div class="category-grid" v-if="currentStep === 1">
@@ -234,6 +241,22 @@ const checkedCount = computed(() => {
   return checklistItems.filter(item => checkedItems[item.value]).length;
 });
 
+// 问卷答案 → 资产大类。旧实现只把答案用来显示「已勾选 7/10」，
+// 勾了什么都不影响下一步，问卷纯属装饰。现在把勾选项变成下一步的预选，
+// 用户仍可自由增减——这是「帮你想起」而不是「替你决定」。
+const CHECK_TO_CATEGORIES: Record<string, string[]> = {
+  bank: ['支付金融', '金融证券'],
+  credit_card: ['支付金融', '金融证券'],
+  crypto_wallet: ['支付金融'],
+  social_media: ['社交通讯', '内容创作'],
+  email: ['社交通讯'],
+  gaming: ['游戏'],
+  cloud_storage: ['知识付费', '工具订阅'],
+  domain_website: ['内容创作', '工具订阅'],
+  digital_subscriptions: ['工具订阅', '知识付费'],
+  photos_files: ['知识付费'],
+};
+
 // ── 资产大类定义（静态引导数据）──
 // 数据层实际使用 16 个分类（与 platform_data.rs 一致），向导展示层聚合为 11 个大类，
 // 每个大类映射到一个或多个数据分类，保证勾选的类别能筛出对应平台。
@@ -330,6 +353,29 @@ function goToStep(step: number) {
   currentStep.value = step;
 }
 
+/** 依据问卷答案预选大类（不清空用户已手动选过的项）。 */
+function prefillCategoriesFromChecklist() {
+  const next = new Set(selectedCats.value);
+  for (const item of checklistItems) {
+    if (!checkedItems[item.value]) continue;
+    for (const cat of CHECK_TO_CATEGORIES[item.value] ?? []) next.add(cat);
+  }
+  selectedCats.value = next;
+}
+
+const prefillCount = ref(0);
+
+function goToCategoriesFromChecklist() {
+  prefillCategoriesFromChecklist();
+  prefillCount.value = selectedCats.value.size;
+  currentStep.value = 1;
+}
+
+function clearCategorySelection() {
+  selectedCats.value = new Set();
+  prefillCount.value = 0;
+}
+
 async function saveAllAssets() {
   if (saving.value) return;
   // 过滤掉已登记过的平台，避免重复登记
@@ -338,6 +384,15 @@ async function saveAllAssets() {
     goToStep(4);
     savedCount.value = 0;
     return;
+  }
+  // 批量登记前先整体校验：中途失败会留下「部分已写入」的半个批次，
+  // 用户无法判断哪些成功了。宁可在写入前一次性拦下。
+  for (const platform of pending) {
+    const form = assetForms[platform.id] || { identifier: '', category: 'mixed', value: null, disposal: 'no_action', heirName: '', heirContact: '' };
+    if (form.disposal === 'inherit' && !form.heirName.trim()) {
+      saveError.value = `${platform.name}：${t('detail.heirRequired')}`;
+      return;
+    }
   }
   saving.value = true;
   saveError.value = '';
@@ -377,7 +432,9 @@ onMounted(async () => {
         identifier: '',
         category: p.has_property && p.has_personality ? 'mixed' : (p.has_property ? 'property' : 'personality'),
         value: null,
-        disposal: 'inherit',
+        // 默认「待设定」而不是「指定继承」：默认继承会让新建资产静默算作
+        // 「已规划」，同时因为没填继承人而无法保存——两个问题一起消失。
+        disposal: 'no_action',
         heirName: '',
         heirContact: '',
       };

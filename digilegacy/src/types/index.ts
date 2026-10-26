@@ -103,12 +103,20 @@ export interface DashboardStats {
   property_count: number;
   personality_count: number;
   mixed_count: number;
-  confirmed_count: number;
-  unconfirmed_count: number;
-  total_estimated_value: number;
+  /** 已设定处置方式的资产数 */
   disposal_planned_count: number;
+  /** 处置为「继承」且已填继承人的资产数（其他处置视为满足） */
+  heir_assigned_count: number;
+  /** 账号标识已填且不是解密占位符的资产数 */
+  identifier_ready_count: number;
+  /** 触发链是否可用：DMS 启用且至少有一条可送达通道 */
+  trigger_ready: boolean;
+  /** 实际可用通道：smtp / heartbeat / none */
+  trigger_channel: 'smtp' | 'heartbeat' | 'none';
+  total_estimated_value: number;
   last_check_in: string | null;
   dms_enabled: boolean;
+  /** 四项检查各 25% 的加权结果 */
   completion_percentage: number;
 }
 

@@ -39,7 +39,11 @@ test.describe('资产发现主链路', () => {
     await page.getByRole('button', { name: /继续/ }).click();
 
     // 步骤 1：选资产类别
+    // 问卷会按勾选项预选大类（这是新行为），本用例验证的是手动选择路径，
+    // 先清空预选，保证「选一个类别」的断言稳定。
     await expect(page.getByText('你拥有哪些类型的数字资产')).toBeVisible();
+    const clear = page.getByRole('button', { name: /清空选择/ });
+    if (await clear.isVisible()) await clear.click();
     await page.locator('.category-card').first().click();
     await expect(page.locator('.category-card.selected')).toHaveCount(1);
     await page.getByRole('button', { name: /下一步：勾选平台/ }).click();
@@ -68,6 +72,10 @@ test.describe('资产发现主链路', () => {
     await page.goto('/discover');
     await page.getByRole('button', { name: /继续/ }).click();
 
+    // 问卷预选会让按钮一开始就可用；先清空以验证「真的没选时禁用」
+    const clear = page.getByRole('button', { name: /清空选择/ });
+    if (await clear.isVisible()) await clear.click();
+
     const next = page.getByRole('button', { name: /下一步：勾选平台/ });
     await expect(next).toBeDisabled();
 
@@ -79,6 +87,8 @@ test.describe('资产发现主链路', () => {
     await prepare(page);
     await page.goto('/discover');
     await page.getByRole('button', { name: /继续/ }).click();
+    const clear = page.getByRole('button', { name: /清空选择/ });
+    if (await clear.isVisible()) await clear.click();
     await page.locator('.category-card').first().click();
     await page.getByRole('button', { name: /下一步：勾选平台/ }).click();
 

@@ -304,18 +304,32 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'get_dashboard_stats': {
       const assets = state.assets;
       const planned = assets.filter(x => x.disposal_method !== 'no_action').length;
+      // 与桌面版同一口径：继承必须有继承人，占位符不算已填。
+      const heirAssigned = assets.filter(
+        x => x.disposal_method !== 'inherit' || Boolean(x.heir_name && x.heir_name.trim()),
+      ).length;
+      const identifierReady = assets.filter(
+        x => x.account_identifier && x.account_identifier.trim() && !x.account_identifier.includes('需解锁'),
+      ).length;
+      const triggerReady = state.dms.enabled;
+      const ratio = (n: number) => (assets.length > 0 ? Math.round((n * 100) / assets.length) : 0);
+      const completion = assets.length > 0
+        ? Math.round((ratio(planned) + ratio(heirAssigned) + ratio(identifierReady) + (triggerReady ? 100 : 0)) / 4)
+        : 0;
       const stats: DashboardStats = {
         total_assets: assets.length,
         property_count: assets.filter(x => x.category === 'property').length,
         personality_count: assets.filter(x => x.category === 'personality').length,
         mixed_count: assets.filter(x => x.category === 'mixed').length,
-        confirmed_count: assets.filter(x => x.is_confirmed).length,
-        unconfirmed_count: assets.filter(x => !x.is_confirmed).length,
-        total_estimated_value: assets.reduce((sum, x) => sum + (x.estimated_value || 0), 0),
         disposal_planned_count: planned,
+        heir_assigned_count: heirAssigned,
+        identifier_ready_count: identifierReady,
+        trigger_ready: triggerReady,
+        trigger_channel: triggerReady ? 'heartbeat' : 'none',
+        total_estimated_value: assets.reduce((sum, x) => sum + (x.estimated_value || 0), 0),
         last_check_in: state.dms.lastCheckIn,
         dms_enabled: state.dms.enabled,
-        completion_percentage: assets.length > 0 ? Math.round((planned * 100) / assets.length) : 0,
+        completion_percentage: completion,
       };
       return ok(stats) as T;
     }

@@ -109,3 +109,62 @@ describe('DashboardView', () => {
     expect(w.text()).toContain('平台0');
   });
 });
+
+describe('完成度四维分解（旧口径会虚高）', () => {
+  it('处置已定但继承人未填时，不得显示为完成', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 4,
+        disposal_planned_count: 4,
+        heir_assigned_count: 0,
+        identifier_ready_count: 4,
+        trigger_ready: false,
+        trigger_channel: 'none',
+        dms_enabled: false,
+        completion_percentage: 25,
+        total_estimated_value: 0,
+      },
+    });
+    // 四个检查项必须都渲染出来，用户能看到「卡在哪一步」
+    const items = w.findAll('.check-item');
+    expect(items.length).toBe(4);
+    const done = w.findAll('.check-item.done');
+    expect(done.length, '继承人与触发链都未完成，最多只有两项达标').toBeLessThanOrEqual(2);
+    expect(w.text()).toContain('继承人有名有姓');
+  });
+
+  it('触发链开启但没有可用通道时，明说家人收不到通知', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 1,
+        disposal_planned_count: 1,
+        heir_assigned_count: 1,
+        identifier_ready_count: 1,
+        trigger_ready: false,
+        trigger_channel: 'none',
+        dms_enabled: true,
+        completion_percentage: 75,
+        total_estimated_value: 0,
+      },
+    });
+    expect(w.text(), '必须明确说明没有通道，而不是显示已开启就算完成')
+      .toContain('没有可用通道');
+  });
+
+  it('邮件通道可用时展示邮件', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 1,
+        disposal_planned_count: 1,
+        heir_assigned_count: 1,
+        identifier_ready_count: 1,
+        trigger_ready: true,
+        trigger_channel: 'smtp',
+        dms_enabled: true,
+        completion_percentage: 100,
+        total_estimated_value: 0,
+      },
+    });
+    expect(w.text()).toContain('邮件通道可用');
+  });
+});

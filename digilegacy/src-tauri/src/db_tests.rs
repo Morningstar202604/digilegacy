@@ -786,7 +786,7 @@ fn backup_import_rejects_invalid_asset_fields() {
         category: "property".to_string(),
         estimated_value: Some(10.0),
         disposal_method: "inherit".to_string(),
-        heir_name: None,
+        heir_name: Some("王五".to_string()),
         heir_contact: None,
         notes: String::new(),
     })
@@ -1063,7 +1063,7 @@ fn patch_only_platform_can_hold_assets() {
         category: "property".to_string(),
         estimated_value: Some(1.0),
         disposal_method: "inherit".to_string(),
-        heir_name: None,
+        heir_name: Some("王五".to_string()),
         heir_contact: None,
         notes: String::new(),
     })
@@ -1084,7 +1084,7 @@ fn patch_only_platform_can_hold_assets() {
         category: "property".to_string(),
         estimated_value: Some(1.0),
         disposal_method: "inherit".to_string(),
-        heir_name: None,
+        heir_name: Some("王五".to_string()),
         heir_contact: None,
         notes: String::new(),
     })
@@ -1123,7 +1123,7 @@ fn totals_ignore_negative_and_absurd_values() {
             category: "property".to_string(),
             estimated_value: Some(value),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         })
@@ -1366,7 +1366,7 @@ fn inheritance_report_counts_mixed_separately() {
             category: cat.to_string(),
             estimated_value: Some(val),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         })
@@ -1409,7 +1409,7 @@ fn backup_with_checkin_log_reimports_cleanly() {
         category: "property".to_string(),
         estimated_value: Some(1.0),
         disposal_method: "inherit".to_string(),
-        heir_name: None,
+        heir_name: Some("王五".to_string()),
         heir_contact: None,
         notes: String::new(),
     })
@@ -1475,7 +1475,7 @@ fn assets_by_category_filters_and_sorts() {
             category: cat.to_string(),
             estimated_value: Some(val),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         })
@@ -1606,7 +1606,12 @@ fn dashboard_stats_reflect_real_data() {
             category: cat.to_string(),
             estimated_value: Some(10.0),
             disposal_method: method.to_string(),
-            heir_name: None,
+            // 只有「继承」需要继承人；这一组要覆盖多种处置，按 method 给值。
+            heir_name: if method == "inherit" {
+                Some("王五".to_string())
+            } else {
+                None
+            },
             heir_contact: None,
             notes: String::new(),
         })
@@ -1719,4 +1724,86 @@ fn reset_security_reencrypts_assets_and_profile() {
 
     vault::clear_key();
     let _ = std::fs::remove_file(&path);
+}
+
+/// 「指定继承」必须写明继承人：否则报告里是「继承人：未指定」，家人无法执行。
+/// 前端有同样的拦截，但 IPC 可绕过前端，这条必须在写库前执行。
+#[test]
+fn inherit_disposal_requires_heir_name() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = fresh_db_path("inherit_heir_required");
+    init_database_at(path.clone()).unwrap();
+
+    let base = AssetRequest {
+        platform_id: 1,
+        account_identifier: "acc".to_string(),
+        account_description: String::new(),
+        category: "property".to_string(),
+        estimated_value: Some(1.0),
+        disposal_method: "inherit".to_string(),
+        heir_name: None,
+        heir_contact: None,
+        notes: String::new(),
+    };
+    let err = add_asset_db(&base).unwrap_err();
+    assert!(err.contains("继承人"), "实际错误: {}", err);
+
+    // 空字符串同样拒绝（前端可能提交空串）
+    let mut blank = base.clone();
+    blank.heir_name = Some("   ".to_string());
+    assert!(add_asset_db(&blank).is_err(), "空白继承人必须拒绝");
+
+    // 其他处置方式不要求继承人
+    let mut liquidate = base.clone();
+    liquidate.disposal_method = "liquidate".to_string();
+    assert!(add_asset_db(&liquidate).is_ok(), "变现分配不要求继承人");
+
+    // 填了继承人就能写入
+    let mut ok = base;
+    ok.heir_name = Some("王五".to_string());
+    assert!(add_asset_db(&ok).is_ok());
+}
+
+/// 完成度必须四项分解：只设了处置方式不能算「完成」。
+#[test]
+fn dashboard_completion_counts_four_dimensions() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = fresh_db_path("completion_four");
+    init_database_at(path.clone()).unwrap();
+
+    // 两条资产：一条只设处置（无继承人），一条什么都不填
+    let mut a = AssetRequest {
+        platform_id: 1,
+        account_identifier: "acc-1".to_string(),
+        account_description: String::new(),
+        category: "property".to_string(),
+        estimated_value: Some(1.0),
+        disposal_method: "liquidate".to_string(),
+        heir_name: None,
+        heir_contact: None,
+        notes: String::new(),
+    };
+    add_asset_db(&a).unwrap();
+    a.account_identifier = String::new();
+    a.disposal_method = "no_action".to_string();
+    add_asset_db(&a).unwrap();
+
+    let stats = get_dashboard_stats_db().unwrap();
+    assert_eq!(stats.total_assets, 2);
+    assert_eq!(stats.disposal_planned_count, 1);
+    assert_eq!(stats.heir_assigned_count, 2, "非继承处置视为已满足继承人项");
+    assert_eq!(stats.identifier_ready_count, 1);
+    assert!(!stats.trigger_ready, "未启用 DMS 时触发链不可能就绪");
+    assert!(
+        stats.completion_percentage < 100,
+        "只设了处置方式不得算完成，实际 {}",
+        stats.completion_percentage
+    );
+    assert!(
+        stats.completion_percentage > 0,
+        "已有部分达标时不应为 0，实际 {}",
+        stats.completion_percentage
+    );
 }

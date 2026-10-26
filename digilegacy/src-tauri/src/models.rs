@@ -70,6 +70,21 @@ pub fn validate_disposal(method: &str) -> Result<String, String> {
     }
 }
 
+/// 处置意愿的完整性校验：选「继承」必须写明由谁继承。
+///
+/// 只选了「指定继承」却没填继承人，报告里就会出现一条「继承人：未指定」，
+/// 家人拿到后无从执行。前端负责即时提示，后端负责兜底——
+/// 前端校验可以被绕过（IPC 直调），这条必须在写库前执行。
+pub fn validate_disposal_heir(method: &str, heir_name: Option<&str>) -> Result<(), String> {
+    if method == "inherit" {
+        let name = heir_name.unwrap_or("").trim();
+        if name.is_empty() {
+            return Err("处置方式为「指定继承」时必须填写继承人姓名".to_string());
+        }
+    }
+    Ok(())
+}
+
 // ──────────────────────────────────────────────
 // 数据传输对象（DTO）
 // ──────────────────────────────────────────────
@@ -215,18 +230,29 @@ pub struct InheritanceReport {
 }
 
 /// 仪表板统计
+///
+/// `completion_percentage` 是四项检查各占 25% 的结果，而不是「处置方式不是待设定」。
+/// 旧口径下「选了继承但没填继承人」也算 100%，是典型的自欺指标。
 #[derive(Debug, Serialize)]
 pub struct DashboardStats {
     pub total_assets: i64,
     pub property_count: i64,
     pub personality_count: i64,
     pub mixed_count: i64,
-    pub confirmed_count: i64,
-    pub unconfirmed_count: i64,
-    pub total_estimated_value: f64,
+    /// 已设定处置方式（`disposal_method != 'no_action'`）的资产数。
     pub disposal_planned_count: i64,
+    /// 处置方式是「继承」且填了继承人姓名的资产数（其他处置视为已满足）。
+    pub heir_assigned_count: i64,
+    /// 账号标识已填（非空且不是解密占位符）的资产数。
+    pub identifier_ready_count: i64,
+    /// 触发链是否可用：DMS 已启用，且存在至少一条真正能送达的通道。
+    pub trigger_ready: bool,
+    /// 当前可用的投递通道描述（`smtp` / `heartbeat` / `none`），供界面如实展示。
+    pub trigger_channel: String,
+    pub total_estimated_value: f64,
     pub last_check_in: Option<String>,
     pub dms_enabled: bool,
+    /// 四项检查各 25% 的加权结果。
     pub completion_percentage: i64,
 }
 

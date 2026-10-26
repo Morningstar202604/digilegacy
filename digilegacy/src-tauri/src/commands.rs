@@ -1175,7 +1175,7 @@ mod tests {
             category: "property".to_string(),
             estimated_value: Some(1.0),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         };
@@ -1237,7 +1237,7 @@ mod tests {
             category: "property".to_string(),
             estimated_value: Some(9.0),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         };
@@ -1461,7 +1461,7 @@ mod tests {
             category: "property".to_string(),
             estimated_value: Some(1.0),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         })
@@ -1603,7 +1603,7 @@ mod tests {
             category: "property".to_string(),
             estimated_value: Some(1.0),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         };
@@ -1650,7 +1650,7 @@ mod tests {
             category: "property".to_string(),
             estimated_value: Some(1.0),
             disposal_method: "inherit".to_string(),
-            heir_name: None,
+            heir_name: Some("王五".to_string()),
             heir_contact: None,
             notes: String::new(),
         })
@@ -1660,8 +1660,20 @@ mod tests {
             set_disposal_wish("not_a_method".to_string(), id, None, None, String::new()).unwrap();
         assert!(!r.success, "非法处置枚举必须被拒绝");
 
-        let r =
-            set_disposal_wish("inherit".to_string(), id, None, None, "y".repeat(8_001)).unwrap();
+        // 「继承」不填继承人必须被拒绝——这条是新增的完整性校验。
+        // 注意：db 层返回 Err，命令层原样向上传递（不是 ApiResponse::fail）。
+        let err = set_disposal_wish("inherit".to_string(), id, None, None, String::new())
+            .expect_err("继承未填继承人必须被拒绝");
+        assert!(err.contains("继承人"), "实际错误: {}", err);
+
+        let r = set_disposal_wish(
+            "inherit".to_string(),
+            id,
+            Some("王五".to_string()),
+            None,
+            "y".repeat(8_001),
+        )
+        .unwrap();
         assert!(!r.success, "超长备注必须被拒绝");
 
         let r = set_disposal_wish(

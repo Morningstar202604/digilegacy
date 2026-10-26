@@ -78,6 +78,8 @@ test.describe('资产发现：平台搜索 20 个关键词（20 场景）', () =
     await boot(page);
     await page.goto('/discover');
     await page.getByRole('button', { name: /继续/ }).click();
+    const clear = page.getByRole('button', { name: /清空选择/ });
+    if (await clear.isVisible()) await clear.click();
     await page.locator('.category-card').first().click();
     await page.getByRole('button', { name: /下一步：勾选平台/ }).click();
     await expect(page.locator('.platform-card').first()).toBeVisible();

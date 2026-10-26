@@ -77,6 +77,13 @@ async function toStep1(w: Awaited<ReturnType<typeof mountDiscover>>) {
   if (btn) await btn.trigger('click');
   await flushPromises();
   await w.vm.$nextTick();
+  // 问卷会按勾选项预选大类；这批用例验证的是「手动选择」路径，
+  // 先清空预选再开始，避免把预选结果当成用户操作。
+  const clear = w.findAll('button').find(b => b.text().includes('清空选择'));
+  if (clear) {
+    await clear.trigger('click');
+    await flushPromises();
+  }
 }
 
 /** 从 step1 推进到 step2（平台勾选）。 */
@@ -239,6 +246,8 @@ describe('保存资产', () => {
     for (let i = 0; i < 3; i++) { await flushPromises(); await w.vm.$nextTick(); }
 
     await w.findAll('button').find(b => b.text().includes('继续'))!.trigger('click');
+    await flushPromises();
+    await w.findAll('button').find(b => b.text().includes('清空选择'))!.trigger('click');
     await w.findAll('.category-card')[0].trigger('click');
     await flushPromises();
     await w.findAll('button').find(b => b.text().includes('下一步：勾选平台'))!.trigger('click');
@@ -286,6 +295,8 @@ describe('保存资产', () => {
     for (let i = 0; i < 3; i++) { await flushPromises(); await w.vm.$nextTick(); }
 
     await w.findAll('button').find(b => b.text().includes('继续'))!.trigger('click');
+    await flushPromises();
+    await w.findAll('button').find(b => b.text().includes('清空选择'))!.trigger('click');
     await w.findAll('.category-card')[0].trigger('click');
     await flushPromises();
     await w.findAll('button').find(b => b.text().includes('下一步：勾选平台'))!.trigger('click');

@@ -245,6 +245,12 @@ async function handleSave() {
     saveError.value = t('detail.placeholderBlocked', { fields: placeholderFields.value.join('、') });
     return;
   }
+  // 「指定继承」却没写继承人：报告里会出现「继承人：未指定」，家人无从执行。
+  // 后端也有同样的兜底校验（IPC 可绕过前端）。
+  if (asset.value.disposal_method === 'inherit' && !(asset.value.heir_name || '').trim()) {
+    saveError.value = t('detail.heirRequired');
+    return;
+  }
   saving.value = true;
   saveError.value = '';
   try {

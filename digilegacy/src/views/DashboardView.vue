@@ -52,7 +52,7 @@
       </div>
     </div>
 
-    <!-- 完成度 -->
+    <!-- 完成度：四项分别可解释，不再是一个「处置方式不是待设定」的虚高百分比 -->
     <div class="card mb-32">
       <div class="card-header">
         <div>
@@ -65,6 +65,24 @@
       </div>
       <div class="progress-bar" style="height: 12px;">
         <div class="progress-fill blue" :style="{ width: (stats?.completion_percentage ?? 0) + '%' }"></div>
+      </div>
+      <div class="checklist-grid">
+        <div class="check-item" :class="{ done: isDone(stats?.disposal_planned_count) }">
+          <span class="check-mark" aria-hidden="true">{{ isDone(stats?.disposal_planned_count) ? '✓' : '·' }}</span>
+          <span>{{ t('dashboard.checkDisposal', { done: stats?.disposal_planned_count ?? 0, total: stats?.total_assets ?? 0 }) }}</span>
+        </div>
+        <div class="check-item" :class="{ done: isDone(stats?.heir_assigned_count) }">
+          <span class="check-mark" aria-hidden="true">{{ isDone(stats?.heir_assigned_count) ? '✓' : '·' }}</span>
+          <span>{{ t('dashboard.checkHeir', { done: stats?.heir_assigned_count ?? 0, total: stats?.total_assets ?? 0 }) }}</span>
+        </div>
+        <div class="check-item" :class="{ done: isDone(stats?.identifier_ready_count) }">
+          <span class="check-mark" aria-hidden="true">{{ isDone(stats?.identifier_ready_count) ? '✓' : '·' }}</span>
+          <span>{{ t('dashboard.checkIdentifier', { done: stats?.identifier_ready_count ?? 0, total: stats?.total_assets ?? 0 }) }}</span>
+        </div>
+        <div class="check-item" :class="{ done: stats?.trigger_ready }">
+          <span class="check-mark" aria-hidden="true">{{ stats?.trigger_ready ? '✓' : '·' }}</span>
+          <span>{{ triggerText }}</span>
+        </div>
       </div>
       <p class="text-muted mt-16" style="font-size: 13px;">
         {{ t('dashboard.progressDetail', { planned: stats?.disposal_planned_count ?? 0, total: stats?.total_assets ?? 0 }) }}
@@ -154,6 +172,21 @@ const stats = computed(() => dashboard.stats);
 const displayName = computed(() => dashboard.user?.full_name || t('dashboard.welcomeDefault'));
 const recentAssets = computed(() => assetsStore.assets.slice(0, 5));
 
+/** 某项是否已全部达标（0 资产时不算完成，避免空库显示 4 个勾）。 */
+function isDone(count: number | undefined): boolean {
+  const total = stats.value?.total_assets ?? 0;
+  return total > 0 && (count ?? 0) >= total;
+}
+
+/** 触发链文案必须说出「靠什么通道」，不能只说「已开启」。 */
+const triggerText = computed(() => {
+  const ch = stats.value?.trigger_channel ?? 'none';
+  if (!stats.value?.dms_enabled) return t('dashboard.checkTriggerOff');
+  if (ch === 'smtp') return t('dashboard.checkTriggerSmtp');
+  if (ch === 'heartbeat') return t('dashboard.checkTriggerHeartbeat');
+  return t('dashboard.checkTriggerNoChannel');
+});
+
 onMounted(async () => {
   await Promise.all([dashboard.refreshAll(), assetsStore.loadAssets()]);
 });
@@ -171,4 +204,26 @@ onMounted(async () => {
 .stat-green { background: var(--success-light); }
 .stat-purple { background: var(--secondary-light); }
 .stat-yellow { background: var(--warning-light); }
+.checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.check-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--gray-200, #e8e4de);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--gray-600);
+}
+.check-item.done {
+  border-color: var(--success);
+  background: var(--success-light);
+  color: var(--gray-800, #3a352d);
+}
+.check-mark { font-weight: 700; min-width: 12px; }
 </style>
