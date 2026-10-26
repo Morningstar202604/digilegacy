@@ -7,7 +7,7 @@ DigiLegacy is a single-process Tauri 2 desktop application. There is no backend 
 │ WebView (Vue 3 + TypeScript + Pinia)                         │
 │   views/ ── stores/ ── api/invoke.ts ──┐                     │
 └───────────────────────────────────────┼──────────────────────┘
-                                        │ Tauri IPC (45 commands)
+                                        │ Tauri IPC (46 commands)
 ┌───────────────────────────────────────▼──────────────────────┐
 │ Rust core (src-tauri/src)                                    │
 │   commands.rs   thin command layer, input caps, envelopes    │
@@ -80,6 +80,23 @@ E2E does not feed the v8 coverage numbers. The two are complementary: unit cover
 ## DMS: read vs. dispatch
 
 `notify::status_snapshot` (`get_dms_status`) only reads `dms_config` and computes the stage — no SMTP, no outbox write. `notify::evaluate_dms` is the dispatching path and is only called by the background loop. The UI must never call the dispatcher: opening a page used to send real mail. `get_dms_history` reads the newest 50 entries from `dms_outbox/*.jsonl`, and `get_check_in_status` returns `recent_check_ins` (latest 5 confirmations) so the check-in log is actually read by the UI, not just written.
+
+## Report rendering
+
+`report.rs::render_report_html` is the only place report HTML is produced. Both the single-file export and the ZIP toolkit call it through the `render_report` command, so the preview, the exported file and the toolkit cannot drift. Every user-controlled value passes through `escape_html`; print styles live in the module. `contains_placeholder` refuses to render when any sensitive field is still undecrypted — exporting a report that says "locked" would mislead the heir.
+
+Why not scrape the DOM (the old approach): the page shows placeholders while locked, carries Naive UI's injected styles, and required the ZIP path to duplicate the wrapper markup — which is how the toolkit once shipped a bare fragment.
+
+## Module layout
+
+| File | Responsibility |
+|---|---|
+| `db.rs` | connection lifecycle, schema, migrations, assets, profile, security, backup, DMS, report queries |
+| `db_platforms.rs` | policy-patch import/export/clear, `platforms` mirroring for the asset foreign key |
+| `db_tests.rs` | the db regression suite (split out so production code stays readable) |
+| `report.rs` | report HTML rendering (escaping, print styles, placeholder refusal) |
+| `fsutil.rs` | owner-only file writes/appends |
+| `notify.rs` | DMS staging, outbox, SMTP; read-only status snapshot |
 
 ## Placeholder is read-only
 

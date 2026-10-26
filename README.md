@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-110%20Rust%20%C2%B7%20347%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-119%20Rust%20%C2%B7%20352%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -34,7 +34,7 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | | |
 |---|---|
-| **152** platforms in the built-in inheritance policy database, 16 categories | **45** IPC commands across a Rust core and a Vue frontend |
+| **152** platforms in the built-in inheritance policy database, 16 categories | **46** IPC commands across a Rust core and a Vue frontend |
 | **AES-256-GCM** field-level encryption, PBKDF2-SHA256 at 600k iterations | **0** servers, **0** telemetry, **0** cloud calls |
 
 ## A guided tour
@@ -79,8 +79,8 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **110 passing** (`cargo test --locked`) |
-| Frontend unit tests | **347 passing** across 30 files |
+| Rust tests | **119 passing** (`cargo test --locked`) |
+| Frontend unit tests | **352 passing** across 31 files |
 | End-to-end tests | **76 passing** in real Chromium |
 | Coverage | **85.4% statements**, 86.9% lines — thresholds enforced in CI |
 | Type safety | `vue-tsc --noEmit` clean, Rust `clippy -D warnings` clean |
@@ -117,6 +117,8 @@ npm run tauri:build    # installers
 ## Honest limits
 
 Local encryption protects data at rest — it cannot stop malware running as you, or someone who knows your master password. Reports and toolkits are plain files: treat them like paper. The desktop UI ships in Simplified Chinese and English (switch in the header); the website, docs and demo are bilingual as well.
+
+**The dead man's switch is best-effort, and the app says so.** It only evaluates while the app is running; nothing is checked while the machine is off, asleep or the app is quit, and missed rounds are not replayed. Email needs an SMTP server you configure yourself — without it notifications only reach the local (plaintext) outbox and your family receives nothing. The optional zero-content heartbeat is the only channel that still works after the app is closed, and it is off by default.
 
 ## Go deeper
 

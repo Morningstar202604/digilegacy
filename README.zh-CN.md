@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT 许可">
-  <img src="https://img.shields.io/badge/tests-110%20Rust%20%C2%B7%20347%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="测试">
+  <img src="https://img.shields.io/badge/tests-119%20Rust%20%C2%B7%20352%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="测试">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="无服务器">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="无遥测">
@@ -34,7 +34,7 @@
 
 | | |
 |---|---|
-| 内置 **152** 个平台、**16** 个分类的继承政策库 | **45** 个 IPC 命令，Rust 内核 + Vue 前端 |
+| 内置 **152** 个平台、**16** 个分类的继承政策库 | **46** 个 IPC 命令，Rust 内核 + Vue 前端 |
 | **AES-256-GCM** 字段级加密，PBKDF2-SHA256 60 万次迭代 | **0** 服务器、**0** 遥测、**0** 云端调用 |
 
 ## 走一遍界面
@@ -79,8 +79,8 @@
 
 | 检查项 | 结果 |
 |---|---|
-| Rust 测试 | **110 通过**（`cargo test --locked`） |
-| 前端单元测试 | **347 通过**，30 个文件 |
+| Rust 测试 | **119 通过**（`cargo test --locked`） |
+| 前端单元测试 | **352 通过**，31 个文件 |
 | 端到端测试 | **76 通过**，真实 Chromium |
 | 覆盖率 | **85.4% 语句**、86.9% 行，阈值写进 CI |
 | 类型安全 | `vue-tsc --noEmit` 无错误，Rust `clippy -D warnings` 无警告 |
@@ -117,6 +117,8 @@ npm run tauri:build    # 产出安装包
 ## 诚实的边界
 
 本地加密保护的是静态数据——它挡不住以你的身份运行的恶意软件，也挡不住知道主密码的人。报告与工具包是明文文件，请像对待纸质文件一样对待它。桌面界面提供简体中文与英文（标题栏切换）；官网、文档与演示同样为双语。
+
+**「安心传承」是尽力而为，应用里也这么写。** 它只在应用运行时检测；电脑关机、睡眠或应用被彻底退出期间不检查，也不会补发错过的轮次。邮件需要你自己配置 SMTP 服务器——没配时通知只进本地（明文的）发件箱，家人什么都收不到。可选的「零内容心跳」是唯一在应用关闭后仍然有效的通道，默认关闭。
 
 ## 深入了解
 

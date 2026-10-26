@@ -35,6 +35,20 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Frontend scenario suite** (`src/scenarios.test.ts`): ~300 combinations / **1692 checkpoints** across the asset store, filter/sort/search, money formatting × locale, locked-state write paths, mock lifecycle and platform cache invalidation.
 - **Browser scenario suite** (`e2e/scenarios.spec.ts`): **39 scenarios** — 8 routes × 2 locales × 2 themes, 20 platform-search keywords, 4 filters × 4 sorts, 6 legal categories, heir-guide tabs/difficulty/collapse, DMS idempotence, report actions and per-page language/theme round-trips.
 
+### Hardening follow-up (2026-10-26, third pass)
+
+Acting on the review findings:
+
+- **CI no longer allows a false green.** `cargo install cargo-audit --locked --quiet || true` swallowed install failures and then audited with whatever old binary was on the runner. The step now pins `0.22.1`, drops `|| true`, and prints `cargo audit --version` as evidence.
+- **Documented numbers are now machine-checked.** `scripts/doc-facts-lib.mjs` re-derives Rust/frontend/E2E test counts, IPC command count, table count and platform count from source; `check-doc-facts.mjs` fails CI when README, the bilingual website or `ARCHITECTURE.md` disagree, and `sync-doc-facts.mjs` fixes them locally. The derivation lives in one place because the previous duplication had E2E at 76 in one script and 38 in the other.
+- **Reports are rendered by Rust, not scraped from the DOM.** `report.rs` is the single renderer used by both the file export and the ZIP toolkit: every user-controlled value is HTML-escaped, print styles live in one place, and a report containing undecrypted placeholders is refused instead of exported.
+- **"Unlocked" is now a verified state.** `security_status` checks the in-memory key against the stored verifier; a key that does not match reports as locked, and write paths refuse it. Previously a half-finished recovery could leave a mismatched key while the UI still claimed to be unlocked — the entry point for the placeholder write-back bug.
+- **DMS reliability limits are stated in the product.** The Legacy Care page carries a dedicated block: detection only runs while the app runs, SMTP is user-supplied, the outbox is plaintext, and the optional heartbeat is the only channel that survives app exit. It also shows which channel is actually available, saying plainly that family receives no email when none is configured.
+- **`db.rs` split by domain.** 3875 → 1882 production lines plus `db_platforms.rs` (policy patches) and `db_tests.rs` (1726 lines of tests). Pure move; the 117-test suite is the regression net.
+- **Import robustness.** A deterministic 513-input fuzz-style test (random byte strings, type confusion, extreme ids, negative/absurd values, truncation) asserts no panic, no partial writes, non-empty errors. It immediately found that a non-array `user_profile`/`check_in_log` was silently treated as an empty array — the import "succeeded" and wiped the profile. Non-arrays are now rejected.
+- **Dead config documented.** `stage3_wait_days` does not participate in stage computation; the field now says so explicitly instead of being an unexplained `allow(dead_code)`.
+- **Removed 14 unreferenced screenshots** (2.9 MB) left over from v0.1.
+
 ### Adversarial debug (2026-10-26, second pass)
 
 Reproduced and fixed four more defects, each with a regression test:
@@ -54,7 +68,7 @@ Also fixed: external-link validation accepted `https://trusted.example.com@evil.
 
 ### Changed
 
-- Frontend unit tests grew from 296 to **347**, branch coverage 76.82% → **78.74%**; Rust tests 86 → **110**; E2E 37 → **76**. README badges synced.
+- Frontend unit tests grew from 296 to **349**, branch coverage 76.82% → **78.74%**; Rust tests 86 → **118**; E2E 37 → **76**. README badges synced.
 
 ## [0.2.0] - 2026-10-24
 

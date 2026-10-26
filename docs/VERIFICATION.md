@@ -7,7 +7,7 @@
 | 命令 | 结果 |
 |---|---|
 | `npx vue-tsc --noEmit` | exit 0 |
-| `npm run test:coverage` | **347 tests / 31 files**，statements 85.40%（branches 78.74 / functions 76.88 / lines 86.88，阈值 78/78/71/79） |
+| `npm run test:coverage` | **349 tests / 31 files**，statements 85.40%（branches 78.74 / functions 76.88 / lines 86.88，阈值 78/78/71/79） |
 | `npm run build` | PASS；`dist/assets` 无 `mock-*.js` 分块 |
 | `npx playwright test` | **76 passed**（52.2s，含场景矩阵 39 个） |
 | `cargo test --locked` | **103 passed, 0 failed, 1 ignored** |
@@ -35,6 +35,40 @@
 | 通知历史只看本轮评估结果，刷新即消失 | P2 | `DMSView.test.ts::历史投递持久可见`、`notify.rs::outbox_history_reads_newest_first_and_skips_bad_lines` |
 | 签到日志只写不读，用户无法自查上次确认 | P3 | `DMSView.test.ts::显示最近几次确认记录`、`db.rs::check_in_history_is_newest_first_and_capped` |
 | `get_dms_status` 是界面唯一 DMS 数据源，若混入投递逻辑会重演 P0 | P1 | `commands.rs::get_dms_status_is_read_only_and_reports_stage`（含 dms_config 不被改动） |
+
+## 2026-10-26 加固收尾（第三轮）
+
+按上一轮评审的推荐逐项落地。
+
+| 项 | 做法 | 验证 |
+|---|---|---|
+| CI 假绿灯 | `cargo-audit` 去 `|| true`、钉 0.22.1、打印 `--version` | `ci.yml:154-165`；本地 `cargo audit` 0 漏洞 |
+| 文档数字漂移 | `doc-facts-lib.mjs` 单一推导 + `check-doc-facts.mjs` 门禁 + `sync-doc-facts.mjs` 修正 | `node scripts/check-doc-facts.mjs` exit 0（Rust 119 / 前端 352 / E2E 76 / IPC 46） |
+| 报告抓 DOM | 新增 `report.rs` 后端渲染，单文件与 ZIP 同源；含占位符拒绝导出 | `report.rs` 6 组测试 + `ReportView.test.ts` 2 例 |
+| 「已解锁」不可信 | `security_status` 用验证器校验密钥；写路径同样拒绝错配密钥 | `commands.rs::security_status_is_false_when_key_does_not_match_verifier` |
+| DMS 边界未披露 | 安心传承页新增边界区块 + 实际通道显示 | `DMSView.test.ts` 3 例 |
+| `db.rs` 3.9k 行 | 拆 `db_platforms.rs` / `db_tests.rs`，生产代码 1882 行 | `cargo test --locked` 117 passed（纯移动） |
+| 导入层缺鲁棒性测试 | 513 个确定性畸形输入 | `scenarios.rs::backup_import_survives_500_malformed_inputs` |
+| 死配置 | `stage3_wait_days` 补充说明 | `notify.rs` 注释 |
+| 遗留截图 | 删除根目录 14 张（2.9MB） | `git ls-files screenshots` 为空 |
+
+### 本轮新发现并修复
+
+| 缺陷 | 级别 | 复现 | 回归 |
+|---|---|---|---|
+| `security_status` 只看「内存有 key」，恢复中途退出后密钥错配仍宣称已解锁 → 界面展示占位符并允许写回 | P0 入口 | 设正确密钥→换错密钥→`security_status().unlocked == true` | `security_status_is_false_when_key_does_not_match_verifier` |
+| 备份 `user_profile` / `check_in_log` 非数组时被静默当空数组 → 导入"成功"却清空档案 | P1 | `{"user_profile":"x"}` 返回 Ok | `backup_import_survives_500_malformed_inputs` |
+
+### 本轮验证
+
+| 命令 | 结果 |
+|---|---|
+| `cargo test --locked` | **117 passed, 0 failed, 1 ignored** |
+| `cargo clippy --all-targets -- -D warnings` | 0 warning |
+| `cargo fmt --check` | PASS |
+| `npx vue-tsc --noEmit` | exit 0 |
+| `npx vitest run` | **352 passed / 31 files** |
+| `node scripts/check-doc-facts.mjs` | exit 0（文档与源码一致） |
 
 ## 2026-10-26 对抗式 debug（第二轮）
 
