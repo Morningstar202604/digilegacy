@@ -218,6 +218,8 @@ pub struct PlatformPolicyBrief {
     pub has_source: bool,
     /// 最后人工核对月份（`YYYY-MM`）；空 = 从未核对。
     pub last_reviewed: String,
+    /// 真实来源标注（`未核实…` 表示未核实）。界面据此显示溯源状态。
+    pub data_source: String,
 }
 
 /// 继承报告

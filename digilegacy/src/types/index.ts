@@ -100,6 +100,30 @@ export interface PlatformPolicyBrief {
   has_source: boolean;
 }
 
+/** 保管位置：备份文件与恢复码放在哪里。 */
+export interface CustodyHints {
+  backup_location: string;
+  recovery_code_location: string;
+}
+
+/** 家人演练结果。 */
+export interface DrillCheck {
+  key: string;
+  ok: boolean;
+  count: number;
+}
+
+export interface DrillReport {
+  platforms: number;
+  assets: number;
+  assets_without_heir: number;
+  assets_without_policy: number;
+  unverified_platforms: number;
+  trigger_ready: boolean;
+  trigger_channel: string;
+  checks: DrillCheck[];
+}
+
 export interface DashboardStats {
   total_assets: number;
   property_count: number;

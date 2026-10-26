@@ -225,6 +225,19 @@ fn copy_for(locale: ReportLocale) -> &'static Copy {
     }
 }
 
+/// 拒绝把「解密占位符」当成用户输入保存。
+///
+/// 与 `db::reject_placeholder` 同语义，但供不经过 db 模块的字段（保管位置）使用。
+pub fn reject_placeholder_value(field: &str, value: &str) -> Result<(), String> {
+    if value == PLACEHOLDER {
+        return Err(format!(
+            "{}当前处于加密锁定状态，无法保存。请先解锁后重试（本次未写入任何数据）",
+            field
+        ));
+    }
+    Ok(())
+}
+
 /// HTML 转义：报告里所有来自数据库/用户输入的文本都必须经过它。
 pub fn escape_html(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
@@ -324,7 +337,7 @@ fn asset_row(asset: &DigitalAsset, locale: ReportLocale) -> String {
 }
 
 /// 平台办理指引卡片：家人拿到后照着做的那一页。
-fn policy_card(p: &PlatformPolicyBrief, locale: ReportLocale) -> String {
+pub(crate) fn policy_card(p: &PlatformPolicyBrief, locale: ReportLocale) -> String {
     let c = copy_for(locale);
     let dash = |v: &str| -> String {
         if v.trim().is_empty() {
@@ -735,6 +748,7 @@ mod tests {
             tags: "需公证,高价值".to_string(),
             has_source: false,
             last_reviewed: String::new(),
+            data_source: String::new(),
         };
         over(&mut p);
         p

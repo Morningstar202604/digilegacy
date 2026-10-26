@@ -170,7 +170,34 @@
     <div class="mt-24 text-center" v-if="report">
       <button class="btn btn-primary btn-lg" @click="exportReport"><DownloadOutline /> {{ t('report.exportReport') }}</button>
       <button class="btn btn-secondary btn-lg ml-12" @click="exportZip"><ArchiveOutline /> {{ t('report.exportZip') }}</button>
+      <button class="btn btn-secondary btn-lg ml-12" @click="exportActionGuide"><ListOutline /> {{ t('report.exportActionGuide') }}</button>
       <button class="btn btn-secondary btn-lg ml-12" @click="handlePrint"><PrintOutline /> {{ t('report.print') }}</button>
+    </div>
+
+    <!-- 家人演练：只用元数据检查「家人拿到后会卡在哪」，不读取任何凭据 -->
+    <div class="card mt-24">
+      <div class="card-title mb-8">{{ t('drill.title') }}</div>
+      <p class="text-muted" style="font-size: 13px;">{{ t('drill.desc') }}</p>
+      <div style="margin-top: 12px;">
+        <button class="btn btn-secondary btn-sm" :disabled="drillBusy" @click="runDrill">
+          {{ drillBusy ? t('drill.running') : t('drill.run') }}
+        </button>
+      </div>
+      <div v-if="drill" style="margin-top: 14px;">
+        <p style="font-size: 13px; color: var(--gray-600);" aria-live="polite">
+          {{ t('drill.summary', { platforms: drill.platforms, assets: drill.assets }) }}
+        </p>
+        <ul class="drill-list">
+          <li v-for="c in drill.checks" :key="c.key" :class="{ ok: c.ok }">
+            <span aria-hidden="true">{{ c.ok ? '✓' : '✗' }}</span>
+            {{ drillCheckText(c) }}
+          </li>
+        </ul>
+        <p v-if="drill.checks.every(c => c.ok)" class="tag-success" style="font-size: 13px; margin-top: 8px;">
+          {{ t('drill.allGood') }}
+        </p>
+      </div>
+      <p v-if="drillError" role="alert" style="font-size: 13px; color: var(--danger-strong); margin-top: 8px;">{{ drillError }}</p>
     </div>
   </div>
 </template>
@@ -184,8 +211,9 @@ import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
 import ArchiveOutline from '@vicons/ionicons5/es/ArchiveOutline';
 import DownloadOutline from '@vicons/ionicons5/es/DownloadOutline';
 import PrintOutline from '@vicons/ionicons5/es/PrintOutline';
+import ListOutline from '@vicons/ionicons5/es/ListOutline';
 import { toast } from '../composables/feedback';
-import type { ApiResponse, DigitalAsset, PlatformPolicyBrief } from '../types';
+import type { ApiResponse, DigitalAsset, DrillReport, PlatformPolicyBrief } from '../types';
 
 interface InheritanceReportData {
   user: {
@@ -207,6 +235,9 @@ const { t, locale } = useI18n();
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
 const exportError = ref('');
+const drill = ref<DrillReport | null>(null);
+const drillBusy = ref(false);
+const drillError = ref('');
 const loadError = ref('');
 const loading = ref(true);
 /** 浏览器预览模式没有 `reveal_exported_file`，按钮不该出现。 */
@@ -245,6 +276,58 @@ async function fetchStandaloneHtml(): Promise<string> {
     throw new Error(res.message || t('report.exportFailed'));
   }
   return res.data;
+}
+
+/** 生成并保存家人执行清单（自包含 HTML，按平台分组）。 */
+async function exportActionGuide() {
+  exportError.value = '';
+  exportPath.value = '';
+  try {
+    const res = await invoke<ApiResponse<string>>('render_action_guide', { locale: locale.value });
+    if (!res.success || !res.data) {
+      exportError.value = res.message || t('report.actionGuideFailed');
+      return;
+    }
+    const saved = await invoke<ApiResponse<string>>('export_report_to_file', { content: res.data });
+    if (saved.success && saved.data) {
+      exportPath.value = saved.data;
+      toast(t('report.actionGuideSaved'));
+    } else {
+      exportError.value = saved.message || t('report.actionGuideFailed');
+    }
+  } catch (e) {
+    exportError.value = t('report.actionGuideFailed') + '：' + String(e);
+  }
+}
+
+/** 家人演练：报告「家人会在哪一步卡住」，不读取凭据。 */
+async function runDrill() {
+  drillBusy.value = true;
+  drillError.value = '';
+  try {
+    const res = await invoke<ApiResponse<DrillReport>>('run_family_drill');
+    if (res.success && res.data) drill.value = res.data;
+    else drillError.value = res.message;
+  } catch (e) {
+    drillError.value = String(e);
+  } finally {
+    drillBusy.value = false;
+  }
+}
+
+function drillCheckText(c: { key: string; ok: boolean; count: number }): string {
+  switch (c.key) {
+    case 'heir':
+      return c.ok ? t('drill.heirOk') : t('drill.heirFail', { count: c.count });
+    case 'policy':
+      return c.ok ? t('drill.policyOk') : t('drill.policyFail', { count: c.count });
+    case 'verified':
+      return c.ok ? t('drill.verifiedOk') : t('drill.verifiedFail', { count: c.count });
+    case 'trigger':
+      return c.ok ? t('drill.triggerOk') : t('drill.triggerFail');
+    default:
+      return c.key;
+  }
 }
 
 /** 在系统文件管理器中定位刚导出的文件（仅桌面端）。 */
@@ -373,6 +456,16 @@ onMounted(async () => {
 <style scoped>
 /* 报告页：屏幕预览用「文档纸面」观感，打印时去装饰。
    这些类此前完全没有样式（scoped 段只有 4 行），导致页眉/标题挤在一起。 */
+.drill-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--danger-strong);
+}
+.drill-list li { margin: 4px 0; }
+.drill-list li.ok { color: var(--success-strong, #2f7a4f); }
+
 .report-page {
   max-width: 800px;
   margin: 0 auto;

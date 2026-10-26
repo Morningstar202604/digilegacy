@@ -1,3 +1,4 @@
+mod action_guide;
 mod backup;
 mod commands;
 mod crypto;
@@ -11,6 +12,7 @@ mod recovery;
 mod report;
 #[cfg(test)]
 mod scenarios;
+mod toolkit;
 mod vault;
 
 use tauri::{
@@ -153,6 +155,10 @@ pub fn run() {
             commands::export_report_to_file,
             commands::export_zip_to_file,
             commands::reveal_exported_file,
+            commands::get_custody_hints,
+            commands::set_custody_hints,
+            commands::render_action_guide,
+            commands::run_family_drill,
             commands::update_check_in,
             commands::get_check_in_status,
             commands::get_dms_status,

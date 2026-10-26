@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-130%20Rust%20%C2%B7%20364%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-138%20Rust%20%C2%B7%20370%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -34,7 +34,7 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | | |
 |---|---|
-| **152** platforms in the built-in inheritance policy database, 16 categories | **50** IPC commands across a Rust core and a Vue frontend |
+| **152** platforms in the built-in inheritance policy database, 16 categories | **54** IPC commands across a Rust core and a Vue frontend |
 | **AES-256-GCM** field-level encryption, PBKDF2-SHA256 at 600k iterations | **0** servers, **0** telemetry, **0** cloud calls |
 
 ## A guided tour
@@ -79,8 +79,8 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **118 passing**, 1 ignored (`cargo test --locked`; 130 declared incl. 1 Unix-only) |
-| Frontend unit tests | **364 passing** across 31 files |
+| Rust tests | **118 passing**, 1 ignored (`cargo test --locked`; 138 declared incl. 1 Unix-only) |
+| Frontend unit tests | **370 passing** across 31 files |
 | End-to-end tests | **76 passing** in real Chromium |
 | Coverage | **85.4% statements**, 86.9% lines — thresholds enforced in CI |
 | Type safety | `vue-tsc --noEmit` clean, Rust `clippy -D warnings` clean |

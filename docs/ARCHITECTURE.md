@@ -7,7 +7,7 @@ DigiLegacy is a single-process Tauri 2 desktop application. There is no backend 
 │ WebView (Vue 3 + TypeScript + Pinia)                         │
 │   views/ ── stores/ ── api/invoke.ts ──┐                     │
 └───────────────────────────────────────┼──────────────────────┘
-                                        │ Tauri IPC (50 commands)
+                                        │ Tauri IPC (54 commands)
 ┌───────────────────────────────────────▼──────────────────────┐
 │ Rust core (src-tauri/src)                                    │
 │   commands.rs   thin command layer, input caps, envelopes    │

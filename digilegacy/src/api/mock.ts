@@ -23,6 +23,7 @@ interface MockState {
   masterPassword: string | null;
   credentials: Record<string, string>;
   nextAssetId: number;
+  custody?: { backup_location: string; recovery_code_location: string };
 }
 
 const seedPlatforms = platformsSeed as unknown as Array<Record<string, unknown>>;
@@ -100,6 +101,7 @@ function defaultState(): MockState {
     masterPassword: null,
     credentials: {},
     nextAssetId: id,
+    custody: { backup_location: '', recovery_code_location: '' },
   };
 }
 
@@ -536,6 +538,53 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     case 'set_smtp_config':
       return ok(null, '演示模式不会真的保存 SMTP 配置') as T;
+
+    case 'get_custody_hints':
+      return ok({ backup_location: '', recovery_code_location: '' }) as T;
+
+    case 'set_custody_hints': {
+      const hints = (a['hints'] || {}) as { backup_location?: string; recovery_code_location?: string };
+      state.custody = {
+        backup_location: String(hints.backup_location ?? ''),
+        recovery_code_location: String(hints.recovery_code_location ?? ''),
+      };
+      saveState(state);
+      return ok(null, '保管位置已保存（预览模式）') as T;
+    }
+
+    case 'render_action_guide': {
+      const r = (await mockInvoke('get_inheritance_report')) as { data?: { assets?: unknown[] } };
+      const count = r.data?.assets?.length ?? 0;
+      const loc = String(a['locale'] ?? 'zh-CN');
+      const title = loc.startsWith('en') ? 'Digital Legacy Action Guide' : '数字遗产执行清单';
+      return ok(
+        `<!DOCTYPE html><html lang="${loc.startsWith('en') ? 'en' : 'zh-CN'}"><head><meta charset="UTF-8"><title>${title}</title>` +
+        `<style>@media print{body{padding:0}}</style></head><body><div class="doc-title">${title}</div>` +
+        `<p>演示清单：共 ${count} 条资产。</p></body></html>`,
+        '执行清单已生成',
+      ) as T;
+    }
+
+    case 'run_family_drill': {
+      const assets = state.assets;
+      const noHeir = assets.filter(x => x.disposal_method === 'inherit' && !(x.heir_name || '').trim()).length;
+      const checks = [
+        { key: 'heir', ok: noHeir === 0, count: noHeir },
+        { key: 'policy', ok: true, count: 0 },
+        { key: 'verified', ok: false, count: assets.length },
+        { key: 'trigger', ok: state.dms.enabled, count: state.dms.enabled ? 0 : 1 },
+      ];
+      return ok({
+        platforms: new Set(assets.map(x => x.platform_id)).size,
+        assets: assets.length,
+        assets_without_heir: noHeir,
+        assets_without_policy: 0,
+        unverified_platforms: assets.length,
+        trigger_ready: state.dms.enabled,
+        trigger_channel: state.dms.enabled ? 'heartbeat' : 'none',
+        checks,
+      }) as T;
+    }
 
     case 'send_test_email':
       return fail<null>('演示模式没有 SMTP 服务器，无法发送测试邮件') as T;

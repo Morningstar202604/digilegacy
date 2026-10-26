@@ -159,6 +159,31 @@
     </div>
 
     <div class="card mt-24">
+      <div class="card-title mb-16">{{ t('profile.custodyTitle') }}</div>
+      <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.custodyDesc') }}</p>
+      <template v-if="!isTauri">
+        <p class="form-hint">{{ t('profile.browserUnsupported') }}</p>
+      </template>
+      <template v-else>
+        <div style="margin-top: 12px; display: grid; gap: 10px; max-width: 640px;">
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="custody-backup">{{ t('profile.custodyBackup') }}</label>
+            <input class="form-input" id="custody-backup" v-model="custody.backup_location" :placeholder="t('profile.custodyBackupPlaceholder')" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="custody-recovery">{{ t('profile.custodyRecovery') }}</label>
+            <input class="form-input" id="custody-recovery" v-model="custody.recovery_code_location" :placeholder="t('profile.custodyRecoveryPlaceholder')" />
+          </div>
+        </div>
+        <p class="form-hint">{{ t('profile.custodyHint') }}</p>
+        <div style="margin-top: 12px;">
+          <button class="btn btn-primary btn-sm" :disabled="custodyBusy" @click="saveCustody">{{ custodyBusy ? t('common.saving') : t('profile.custodySave') }}</button>
+        </div>
+        <p v-if="custodyMsg" style="font-size: 12px; margin-top: 8px;" :style="{ color: custodyOk ? 'var(--success)' : 'var(--danger)' }" role="alert" aria-live="polite">{{ custodyMsg }}</p>
+      </template>
+    </div>
+
+    <div class="card mt-24">
       <div class="card-title mb-16">{{ t('profile.smtpTitle') }}</div>
       <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.smtpDesc') }}</p>
       <template v-if="!isTauri">
@@ -281,7 +306,7 @@ import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
 import { toast, confirmDialog } from '../composables/feedback';
 import { invoke, isTauriEnv } from '../api/invoke';
-import type { ApiResponse, UserProfile } from '../types';
+import type { ApiResponse, CustodyHints, UserProfile } from '../types';
 
 const { t } = useI18n();
 const dashboard = useDashboardStore();
@@ -325,6 +350,12 @@ const smtp = ref<SmtpForm>({
 });
 const smtpPassword = ref('');
 const smtpTestTo = ref('');
+/** 保管位置：备份文件与恢复码放在哪。 */
+const custody = ref<CustodyHints>({ backup_location: '', recovery_code_location: '' });
+const custodyMsg = ref('');
+const custodyOk = ref(false);
+const custodyBusy = ref(false);
+
 const smtpMsg = ref('');
 const smtpOk = ref(false);
 const smtpBusy = ref(false);
@@ -385,6 +416,31 @@ async function loadHeartbeatConfig() {
   }
 }
 
+async function loadCustody() {
+  if (!isTauri) return;
+  try {
+    const res = await invoke<ApiResponse<CustodyHints>>('get_custody_hints');
+    if (res.success && res.data) custody.value = res.data;
+  } catch (e) {
+    custodyMsg.value = String(e);
+  }
+}
+
+async function saveCustody() {
+  custodyBusy.value = true;
+  custodyMsg.value = '';
+  try {
+    const res = await invoke<ApiResponse<null>>('set_custody_hints', { hints: custody.value });
+    custodyOk.value = res.success;
+    custodyMsg.value = res.message;
+  } catch (e) {
+    custodyOk.value = false;
+    custodyMsg.value = String(e);
+  } finally {
+    custodyBusy.value = false;
+  }
+}
+
 async function loadSmtpConfig() {
   if (!isTauri) return;
   try {
@@ -415,6 +471,7 @@ async function saveSmtp() {
     if (res.success) {
       smtpPassword.value = '';
       await loadSmtpConfig();
+    await loadCustody();
     }
   } catch (e) {
     smtpOk.value = false;

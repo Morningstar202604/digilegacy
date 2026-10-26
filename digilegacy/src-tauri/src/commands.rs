@@ -491,6 +491,62 @@ pub fn reveal_exported_file(
     Ok(ApiResponse::ok_with_msg((), "已定位文件"))
 }
 
+// ========== 保管位置（家人能否真正拿到凭据） ==========
+
+#[command]
+pub fn get_custody_hints() -> Result<ApiResponse<db::CustodyHints>, String> {
+    db::get_custody_hints_db().map(ApiResponse::ok)
+}
+
+#[command]
+pub fn set_custody_hints(hints: db::CustodyHints) -> Result<ApiResponse<()>, String> {
+    for (name, v) in [
+        ("备份位置", hints.backup_location.as_str()),
+        ("恢复码位置", hints.recovery_code_location.as_str()),
+    ] {
+        if v.chars().count() > 500 {
+            return Ok(ApiResponse::fail(&format!("{}过长（上限 500 字符）", name)));
+        }
+        if let Err(e) = crate::report::reject_placeholder_value(name, v) {
+            return Ok(ApiResponse::fail(&e));
+        }
+    }
+    match db::set_custody_hints_db(&hints) {
+        Ok(()) => Ok(ApiResponse::ok_with_msg((), "保管位置已保存")),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+// ========== 家人执行包 / 演练 ==========
+
+/// 生成家人执行清单（自包含 HTML，可打印，按平台分组）。
+#[command]
+pub fn render_action_guide(locale: Option<String>) -> Result<ApiResponse<String>, String> {
+    let report = db::get_inheritance_report_db()?;
+    let hints = db::get_custody_hints_db()?;
+    match crate::toolkit::build_action_guide(
+        &report,
+        crate::report::ReportLocale::parse(locale.as_deref().unwrap_or("zh-CN")),
+        &hints.backup_location,
+        &hints.recovery_code_location,
+    ) {
+        Ok(guide) => Ok(ApiResponse::ok_with_msg(guide.html, "执行清单已生成")),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+/// 家人演练：只用元数据检查「家人拿到后会卡在哪」，不读取任何凭据。
+#[command]
+pub fn run_family_drill() -> Result<ApiResponse<crate::toolkit::DrillReport>, String> {
+    let report = db::get_inheritance_report_db()?;
+    let stats = db::get_dashboard_stats_db()?;
+    Ok(ApiResponse::ok(crate::toolkit::evaluate_drill(
+        &report,
+        stats.trigger_ready,
+        &stats.trigger_channel,
+    )))
+}
+
 // ========== 检查记录 / Dead Man's Switch ==========
 
 #[command]

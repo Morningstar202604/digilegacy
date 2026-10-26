@@ -621,3 +621,33 @@ describe('备份导入模式（覆盖是不可逆操作）', () => {
     expect((call![1] as Record<string, unknown>).mode).toBe('replace');
   });
 });
+
+describe('保管位置（家人能否找到凭据的前提）', () => {
+  it('保存时把两项一起提交', async () => {
+    const w = await mountProfile({
+      get_custody_hints: () => ({ success: true, message: '', data: { backup_location: '', recovery_code_location: '' } }),
+      set_custody_hints: () => ({ success: true, message: '保管位置已保存', data: null }),
+    });
+    await w.find('#custody-backup').setValue('家中保险柜');
+    await w.find('#custody-recovery').setValue('笔记本第3页');
+    const btn = w.findAll('button').find(b => b.text().includes('保存保管位置'))!;
+    expect(btn, '保管位置入口必须存在').toBeTruthy();
+    await btn.trigger('click');
+    await flushPromises();
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'set_custody_hints');
+    expect(call).toBeTruthy();
+    expect((call![1] as { hints: Record<string, string> }).hints.backup_location).toBe('家中保险柜');
+    expect((call![1] as { hints: Record<string, string> }).hints.recovery_code_location).toBe('笔记本第3页');
+  });
+
+  it('保存失败时必须显示原因', async () => {
+    const w = await mountProfile({
+      get_custody_hints: () => ({ success: true, message: '', data: { backup_location: '', recovery_code_location: '' } }),
+      set_custody_hints: () => ({ success: false, message: '主密码已设置但处于锁定状态，请先解锁后再保存', data: null }),
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('保存保管位置'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('请先解锁');
+  });
+});

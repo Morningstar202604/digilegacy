@@ -271,3 +271,88 @@ describe('报告 HTML 改由后端渲染', () => {
     ).toBe(false);
   });
 });
+
+describe('家人执行清单导出', () => {
+  it('导出必须调用后端渲染并按平台生成清单', async () => {
+    const w = await mountReport({
+      render_action_guide: { success: true, message: 'ok', data: '<!DOCTYPE html><html><body>guide</body></html>' },
+      export_report_to_file: { success: true, message: 'ok', data: 'C:/app/guide.html' },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('导出家人执行清单'))!;
+    expect(btn, '执行清单入口必须存在').toBeTruthy();
+    await btn.trigger('click');
+    await flushPromises();
+
+    const cmds = mockedInvoke.mock.calls.map(c => c[0]);
+    expect(cmds).toContain('render_action_guide');
+    expect(cmds).toContain('export_report_to_file');
+    // 必须带 locale：否则英文用户拿到中文清单
+    const guideCall = mockedInvoke.mock.calls.find(c => c[0] === 'render_action_guide');
+    expect((guideCall![1] as Record<string, unknown>).locale).toBeTruthy();
+  });
+
+  it('后端拒绝生成时显示原因且不写文件', async () => {
+    const w = await mountReport({
+      render_action_guide: { success: false, message: '报告中存在未解密字段，请先解锁后重新生成（本次未生成任何文件）', data: null },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('导出家人执行清单'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('未解密');
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'export_report_to_file')).toBe(false);
+  });
+});
+
+describe('家人演练', () => {
+  it('演练结果列出未通过项，并说明卡在哪', async () => {
+    const w = await mountReport({
+      run_family_drill: {
+        success: true,
+        message: '',
+        data: {
+          platforms: 2, assets: 3,
+          assets_without_heir: 1, assets_without_policy: 0, unverified_platforms: 1,
+          trigger_ready: false, trigger_channel: 'none',
+          checks: [
+            { key: 'heir', ok: false, count: 1 },
+            { key: 'policy', ok: true, count: 0 },
+            { key: 'verified', ok: false, count: 1 },
+            { key: 'trigger', ok: false, count: 1 },
+          ],
+        },
+      },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('开始演练'))!;
+    expect(btn, '演练入口必须存在').toBeTruthy();
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('家人将看到 2 个平台');
+    expect(w.text()).toContain('没有写继承人');
+    expect(w.text()).toContain('不会收到任何提醒');
+  });
+
+  it('全部通过时给出明确结论，而不是仅不显示错误', async () => {
+    const w = await mountReport({
+      run_family_drill: {
+        success: true,
+        message: '',
+        data: {
+          platforms: 1, assets: 1,
+          assets_without_heir: 0, assets_without_policy: 0, unverified_platforms: 0,
+          trigger_ready: true, trigger_channel: 'smtp',
+          checks: [
+            { key: 'heir', ok: true, count: 0 },
+            { key: 'policy', ok: true, count: 0 },
+            { key: 'verified', ok: true, count: 0 },
+            { key: 'trigger', ok: true, count: 0 },
+          ],
+        },
+      },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('开始演练'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('演练通过');
+  });
+});

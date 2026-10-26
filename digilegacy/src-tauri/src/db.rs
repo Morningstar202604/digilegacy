@@ -162,6 +162,16 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
         -- SMTP 配置：此前只能通过环境变量设置，普通用户根本配不起来，
         -- 结果「安心传承」的通知永远只落本地发件箱，家人一封邮件也收不到。
         -- 密码走 vault 字段级加密（与凭据同一条路径），不明文落库。
+        -- 保管位置：备份文件放在哪、恢复码抄在哪。
+        -- 这两个信息决定了「家人能不能真正拿到凭据」，此前完全没有字段可填。
+        -- 属于敏感元数据（泄露即等于指出攻击目标），因此同样走字段级加密。
+        CREATE TABLE IF NOT EXISTS custody_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            backup_location_enc TEXT DEFAULT '',
+            recovery_code_location_enc TEXT DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS smtp_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             host TEXT DEFAULT '',
@@ -412,9 +422,10 @@ pub fn get_policy_briefs_db(platform_ids: &[i64]) -> Result<Vec<PlatformPolicyBr
                 risk_warnings: meta.map(|m| m.risk_warnings.clone()).unwrap_or_default(),
                 tags: meta.map(|m| m.tags.clone()).unwrap_or_default(),
                 has_source: meta
-                    .map(|m| !m.data_source.trim().is_empty())
+                    .map(|m| !m.data_source.trim().is_empty() && !m.data_source.contains("未核实"))
                     .unwrap_or(false),
                 last_reviewed: meta.map(|m| m.last_reviewed.clone()).unwrap_or_default(),
+                data_source: meta.map(|m| m.data_source.clone()).unwrap_or_default(),
             }
         })
         .collect();
@@ -428,6 +439,11 @@ pub fn get_policy_briefs_db(platform_ids: &[i64]) -> Result<Vec<PlatformPolicyBr
 /// 此时 vault::encrypt_if_needed 会静默明文直通，用户以为已加密实则明文落库——
 /// 这是历史缺陷，必须在此处拦截。尚未启用加密（无 security_config）时放行：
 /// 存量明文模式由 encrypt_existing_data_db 在启用加密后统一收编。
+/// 供其他 db 子模块复用的写入门禁（锁定态一律拒绝）。
+pub(crate) fn ensure_vault_writable_pub(conn: &Connection) -> Result<(), String> {
+    ensure_vault_writable(conn)
+}
+
 fn ensure_vault_writable(conn: &Connection) -> Result<(), String> {
     let configured: i64 = conn
         .query_row("SELECT COUNT(*) FROM security_config WHERE id=1", [], |r| {
@@ -2195,3 +2211,7 @@ mod tests;
 #[path = "db_platforms.rs"]
 mod platforms;
 pub use platforms::*;
+
+#[path = "db_custody.rs"]
+mod custody;
+pub use custody::*;
