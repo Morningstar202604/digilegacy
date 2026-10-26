@@ -123,6 +123,7 @@ npm run tauri:build    # 产出安装包
 ## 深入了解
 
 - **架构与加密数据流** — [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **路线图**（定位复核、缺口清单、优先级与验收标准）— [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - **验证证据**（命令、数字、已知缺口）— [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
 - **横向对比、安全说明、常见问题** — [官网](https://badhope.github.io/digilegacy/zh/#compare) · [English](https://badhope.github.io/digilegacy/#compare)
 - **参与贡献** — [`CONTRIBUTING.md`](CONTRIBUTING.md) · **安全策略** — [`SECURITY.md`](SECURITY.md)
