@@ -144,10 +144,12 @@
               </div>
             </div>
 
-            <!-- 继承申请表链接 -->
+            <!-- 继承申请表链接：经 open_external 走系统浏览器，与资产详情同一白名单校验。
+                 WebView 内直接 target=_blank 会拿到一个空白新窗口，且绕过 http/https 校验。 -->
             <div v-if="platform.inheritance_form_url" class="mb-12 p-12" style="background: var(--primary-light); border-radius: 8px;">
               <strong style="font-size: 13px;">{{ t('heir.officialForm') }}：</strong>
-              <a :href="platform.inheritance_form_url" target="_blank" style="margin-left: 8px; color: var(--primary); font-size: 13px; text-decoration: underline;">{{ platform.inheritance_form_url }}</a>
+              <button class="btn btn-sm btn-secondary ml-8" @click="openForm(platform.inheritance_form_url)">{{ t('heir.openForm') }}</button>
+              <div class="text-muted" style="font-size: 11px; margin-top: 6px; word-break: break-all;">{{ platform.inheritance_form_url }}</div>
             </div>
 
             <!-- 风险提示 -->
@@ -238,14 +240,26 @@ import { ref, computed, reactive, onMounted, watch } from 'vue';
 import WarningOutline from '@vicons/ionicons5/es/WarningOutline';
 import { useI18n } from '../i18n';
 import { usePlatformsStore } from '../stores/platforms';
+import { toast } from '../composables/feedback';
+import { invoke } from '../api/invoke';
 import CollapseGroup from '../components/CollapseGroup.vue';
-import type { PlatformExtended } from '../types';
+import type { ApiResponse, PlatformExtended } from '../types';
 
 const { t } = useI18n();
 const platforms = usePlatformsStore();
 const activeTab = ref<'guide' | 'monetization'>('guide');
 const difficultyFilter = ref('all');
 const categoryFilter = ref('all');
+
+/** 平台申请表外链：与资产详情一致，统一经 Rust 侧 http/https 白名单后再交给系统浏览器。 */
+async function openForm(url: string) {
+  try {
+    const res = await invoke<ApiResponse<null>>('open_external', { url });
+    if (!res.success) toast(res.message, 'error');
+  } catch (e) {
+    toast(t('heir.openFormFailed', { e: String(e) }), 'error');
+  }
+}
 
 const filteredPlatforms = computed(() => {
   if (difficultyFilter.value === 'all') return platforms.platforms;

@@ -200,3 +200,33 @@ describe('报告加载失败', () => {
     expect(w.text()).toContain('数据已加密，请先解锁');
   });
 });
+
+describe('工具包内容完整性', () => {
+  it('ZIP 里的报告必须是独立 HTML（含 DOCTYPE 与打印样式），不是页内片段', async () => {
+    const w = await mountReport();
+    const btn = w.findAll('button').find(b => b.text().includes('导出继承工具包'))!;
+    await btn.trigger('click');
+
+    const deadline = Date.now() + 8000;
+    let zipCall: unknown[] | undefined;
+    while (Date.now() < deadline) {
+      await flushPromises();
+      await w.vm.$nextTick();
+      zipCall = (invoke as unknown as Mock).mock.calls.find(c => c[0] === 'export_zip_to_file');
+      if (zipCall) break;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    expect(zipCall, 'ZIP 导出必须调用后端').toBeTruthy();
+
+    // 解码 base64 后解压，逐条校验文件内容
+    const JSZip = (await import('jszip')).default;
+    const base64 = String((zipCall![1] as { content: string }).content);
+    const zip = await JSZip.loadAsync(base64, { base64: true });
+    const htmlFile = zip.file('01-继承报告.html');
+    expect(htmlFile, '工具包必须包含报告 HTML').toBeTruthy();
+    const html = await htmlFile!.async('string');
+    expect(html.startsWith('<!DOCTYPE html>'), '报告必须是完整文档').toBe(true);
+    expect(html).toContain('@media print');
+    expect(html).toContain('report-page');
+  });
+});

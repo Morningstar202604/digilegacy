@@ -45,7 +45,7 @@
          @keydown.enter="$router.push(`/assets/${asset.id}`)">
       <div style="display: flex; justify-content: space-between; align-items: flex-start;">
         <div style="display: flex; gap: 16px;">
-          <div class="asset-icon">{{ platformIcon(asset.platform_name) }}</div>
+          <div class="asset-icon"><PlatformIcon :name="asset.platform_name" :size="24" /></div>
           <div>
             <strong style="font-size: 16px;">{{ asset.platform_name }}</strong>
             <p class="text-muted" style="font-size: 13px; margin-top: 2px;">{{ asset.account_identifier }}</p>
@@ -101,7 +101,8 @@ import { useI18n } from '../i18n';
 import SearchOutline from '@vicons/ionicons5/es/SearchOutline';
 import LockClosedOutline from '@vicons/ionicons5/es/LockClosedOutline';
 import { useAssetsStore } from '../stores/assets';
-import { formatMoney, categoryLabel, disposalLabel, platformIcon } from '../utils/format';
+import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import EmptyState from '../components/EmptyState.vue';
 
 const { t } = useI18n();

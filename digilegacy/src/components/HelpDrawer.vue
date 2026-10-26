@@ -30,7 +30,7 @@
       </div>
 
       <div class="help-section">
-        <div class="help-section-title">⏰ {{ t('help.dmsTitle') }}</div>
+        <div class="help-section-title">{{ t('help.dmsTitle') }}</div>
         <ul class="help-list">
           <li>{{ t('help.dms1') }}</li>
           <li>{{ t('help.dms2') }}</li>

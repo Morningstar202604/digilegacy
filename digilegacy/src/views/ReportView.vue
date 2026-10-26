@@ -201,10 +201,10 @@ async function loadReport() {
   }
 }
 
-async function exportReport() {
-  if (!report.value) return;
+/** 生成可脱离应用打开的独立 HTML 文档（单文件导出与 ZIP 工具包共用）。 */
+function buildStandaloneHtml(): string {
   const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
-  const fullHtml = `<!DOCTYPE html><html lang="${locale.value}"><head><meta charset="UTF-8"><title>${t('report.title')}</title><style>
+  return `<!DOCTYPE html><html lang="${locale.value}"><head><meta charset="UTF-8"><title>${t('report.title')}</title><style>
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:0 auto;padding:44px 48px;color:#232019;background:#fff}
 h1,h2,h3{margin:0}
 table{width:100%;border-collapse:collapse;font-size:14px}
@@ -227,6 +227,11 @@ th{background:#f6f3ee;color:#6b6157;font-weight:600;font-size:13px;border-bottom
 @page{margin:18mm 16mm}
 @media print{body{padding:0}.report-page{max-width:none}.report-section{break-inside:avoid}}
 </style></head><body>${htmlContent}</body></html>`;
+}
+
+async function exportReport() {
+  if (!report.value) return;
+  const fullHtml = buildStandaloneHtml();
   exportError.value = '';
   exportPath.value = '';
   try {
@@ -263,8 +268,9 @@ async function buildAndSaveZip() {
   const j = new (await import('jszip').then(m => m.default || m));
   // @ts-ignore - 避免类型推断问题
   const zip: any = j;
-  // 添加报告 HTML
-  const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
+  // 添加报告 HTML：必须与单文件导出一致（独立 <!DOCTYPE html> + 打印样式）。
+  // 旧实现只把页内片段塞进 ZIP，家人打开工具包里的 HTML 会缺样式、像坏文件。
+  const htmlContent = buildStandaloneHtml();
   zip.file('01-继承报告.html', htmlContent);
   // 添加资产清单 JSON
   zip.file('02-资产清单.json', JSON.stringify(report.value.assets, null, 2));

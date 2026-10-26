@@ -240,24 +240,23 @@ const checkedCount = computed(() => {
 interface AssetCategory {
   key: string;
   nameKey: string;
-  icon: string;
   descKey: string;
   cats: string[];
 }
 
 const assetCategories: AssetCategory[] = [
-  { key: '支付金融', nameKey: 'discover.cat.支付金融.name', icon: '💰', descKey: 'discover.cat.支付金融.desc', cats: ['支付金融'] },
-  { key: '社交通讯', nameKey: 'discover.cat.社交通讯.name', icon: '💬', descKey: 'discover.cat.社交通讯.desc', cats: ['社交通讯'] },
-  { key: '游戏', nameKey: 'discover.cat.游戏.name', icon: '🎮', descKey: 'discover.cat.游戏.desc', cats: ['游戏'] },
-  { key: '金融证券', nameKey: 'discover.cat.金融证券.name', icon: '📈', descKey: 'discover.cat.金融证券.desc', cats: ['金融证券'] },
-  { key: '知识付费', nameKey: 'discover.cat.知识付费.name', icon: '📚', descKey: 'discover.cat.知识付费.desc', cats: ['知识付费', '音视频', '存储云服务'] },
-  { key: '工具订阅', nameKey: 'discover.cat.工具订阅.name', icon: '🔧', descKey: 'discover.cat.工具订阅.desc', cats: ['工具订阅'] },
-  { key: '电商', nameKey: 'discover.cat.电商.name', icon: '🛒', descKey: 'discover.cat.电商.desc', cats: ['电商'] },
-  { key: '内容创作', nameKey: 'discover.cat.内容创作.name', icon: '✍️', descKey: 'discover.cat.内容创作.desc', cats: ['内容创作'] },
-  { key: '出行住宿', nameKey: 'discover.cat.出行住宿.name', icon: '✈️', descKey: 'discover.cat.出行住宿.desc', cats: ['出行住宿'] },
-  { key: '生活工具', nameKey: 'discover.cat.生活工具.name', icon: '🏠', descKey: 'discover.cat.生活工具.desc', cats: ['生活工具', '生活服务'] },
-  { key: '政务服务', nameKey: 'discover.cat.政务服务.name', icon: '🏛️', descKey: 'discover.cat.政务服务.desc', cats: ['政务服务'] },
-  { key: '学习与考试', nameKey: 'discover.cat.学习与考试.name', icon: '🎓', descKey: 'discover.cat.学习与考试.desc', cats: ['学习与考试'] },
+  { key: '支付金融', nameKey: 'discover.cat.支付金融.name', descKey: 'discover.cat.支付金融.desc', cats: ['支付金融'] },
+  { key: '社交通讯', nameKey: 'discover.cat.社交通讯.name', descKey: 'discover.cat.社交通讯.desc', cats: ['社交通讯'] },
+  { key: '游戏', nameKey: 'discover.cat.游戏.name', descKey: 'discover.cat.游戏.desc', cats: ['游戏'] },
+  { key: '金融证券', nameKey: 'discover.cat.金融证券.name', descKey: 'discover.cat.金融证券.desc', cats: ['金融证券'] },
+  { key: '知识付费', nameKey: 'discover.cat.知识付费.name', descKey: 'discover.cat.知识付费.desc', cats: ['知识付费', '音视频', '存储云服务'] },
+  { key: '工具订阅', nameKey: 'discover.cat.工具订阅.name', descKey: 'discover.cat.工具订阅.desc', cats: ['工具订阅'] },
+  { key: '电商', nameKey: 'discover.cat.电商.name', descKey: 'discover.cat.电商.desc', cats: ['电商'] },
+  { key: '内容创作', nameKey: 'discover.cat.内容创作.name', descKey: 'discover.cat.内容创作.desc', cats: ['内容创作'] },
+  { key: '出行住宿', nameKey: 'discover.cat.出行住宿.name', descKey: 'discover.cat.出行住宿.desc', cats: ['出行住宿'] },
+  { key: '生活工具', nameKey: 'discover.cat.生活工具.name', descKey: 'discover.cat.生活工具.desc', cats: ['生活工具', '生活服务'] },
+  { key: '政务服务', nameKey: 'discover.cat.政务服务.name', descKey: 'discover.cat.政务服务.desc', cats: ['政务服务'] },
+  { key: '学习与考试', nameKey: 'discover.cat.学习与考试.name', descKey: 'discover.cat.学习与考试.desc', cats: ['学习与考试'] },
 ];
 
 const selectedCats = ref<Set<string>>(new Set());

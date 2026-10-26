@@ -165,6 +165,34 @@ describe('备份导出', () => {
 
     expect(w.text()).toContain('写入备份失败');
   });
+
+  it('自动备份状态可见：显示快照数量、最新文件名与大小', async () => {
+    const w = await mountProfile({
+      get_backup_status: () => ({
+        success: true,
+        message: '',
+        data: { count: 3, latest_name: 'digilegacy-20261026.json', latest_size: 4096 },
+      }),
+    });
+    expect(w.text()).toContain('自动备份');
+    expect(w.text()).toContain('3');
+    expect(w.text()).toContain('digilegacy-20261026.json');
+    expect(w.text()).toContain('4 KB');
+  });
+
+  it('没有快照时说明「尚无快照」而不是空白', async () => {
+    const w = await mountProfile({
+      get_backup_status: () => ({ success: true, message: '', data: { count: 0, latest_name: null, latest_size: null } }),
+    });
+    expect(w.text()).toContain('尚无快照');
+  });
+
+  it('自动备份状态读取失败也必须有可见说明', async () => {
+    const w = await mountProfile({
+      get_backup_status: () => { throw new Error('IPC 断开'); },
+    });
+    expect(w.text()).toContain('自动备份状态读取失败');
+  });
 });
 
 describe('心跳配置', () => {

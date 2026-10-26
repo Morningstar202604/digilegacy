@@ -18,7 +18,7 @@
 
     <div v-if="asset" class="card">
       <div class="flex items-center gap-12 mb-24">
-        <div style="width: 56px; height: 56px; border-radius: 14px; background: var(--primary-light); display: flex; align-items: center; justify-content: center; font-size: 28px;">{{ platformIcon(asset.platform_name) }}</div>
+        <div style="width: 56px; height: 56px; border-radius: 14px; background: var(--primary-light); display: flex; align-items: center; justify-content: center; font-size: 28px;"><PlatformIcon :name="asset.platform_name" :size="28" /></div>
         <div><h2 style="font-size: 20px; font-weight: 700;">{{ asset.platform_name }}</h2><p class="text-muted" style="font-size: 14px;">{{ asset.account_identifier }}</p></div>
       </div>
 
@@ -95,7 +95,7 @@ import WarningOutline from '@vicons/ionicons5/es/WarningOutline';
 import { useAssetsStore } from '../stores/assets';
 import { usePlatformsStore } from '../stores/platforms';
 import { useSecurityStore } from '../stores/security';
-import { platformIcon } from '../utils/format';
+import PlatformIcon from '../components/PlatformIcon.vue';
 import { confirmDialog } from '../composables/feedback';
 import type { ApiResponse, DigitalAsset } from '../types';
 

@@ -1,8 +1,6 @@
 import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
 import { t } from './i18n';
 
-const APP_NAME = '归零 DigiLegacy';
-
 const router = createRouter({
   // 桌面版用 history 模式（Tauri 内部协议会回退到 index.html）；
   // 在线演示站点是纯静态托管，缺少服务端 rewrite，必须用 hash 模式，

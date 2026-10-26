@@ -61,7 +61,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title mb-16">⏰ Dead Man's Switch</div>
+        <div class="card-title mb-16">Dead Man's Switch</div>
         <p style="font-size: 13px; color: var(--gray-600);">
           {{ t('profile.dmsNote') }}
         </p>
@@ -148,6 +148,7 @@
       </div>
       <p v-if="backupMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: backupOk ? 'var(--success)' : 'var(--danger)' }">{{ backupMessage }}</p>
       <p v-if="!security.hasMasterPassword" class="form-hint">{{ t('profile.backupPlainHint') }}</p>
+      <p class="form-hint" style="margin-top: 10px;" aria-live="polite">{{ autoBackupSummary }}</p>
     </div>
 
     <div class="card mt-24">
@@ -261,6 +262,28 @@ const heartbeatBusy = ref(false);
 const patchCount = ref(0);
 const patchMsg = ref('');
 const autostartEnabled = ref(false);
+const autoBackupSummary = ref('');
+
+/** 自动备份是静默功能：不显示状态时用户无法判断它是否真的在跑。 */
+async function loadAutoBackupStatus() {
+  try {
+    const res = await invoke<ApiResponse<{ count: number; latest_name: string | null; latest_size: number | null }>>('get_backup_status');
+    if (!res.success || !res.data) {
+      autoBackupSummary.value = t('profile.autoBackupEmpty');
+      return;
+    }
+    const { count, latest_name, latest_size } = res.data;
+    autoBackupSummary.value = count > 0 && latest_name
+      ? t('profile.autoBackupStatus', {
+          count,
+          name: latest_name,
+          size: Math.max(1, Math.round((latest_size ?? 0) / 1024)),
+        })
+      : t('profile.autoBackupEmpty');
+  } catch (e) {
+    autoBackupSummary.value = t('profile.autoBackupFailed', { e: String(e) });
+  }
+}
 
 const recoveryCode = ref('');
 const recoveryAck = ref(false);
@@ -414,7 +437,7 @@ async function importBackup() {
         security.refresh(),
         dashboard.refreshAll(),
         assets.loadAssets(),
-        platforms.loadPlatforms(true),
+        platforms.refreshPlatforms(),
       ]);
     }
   } catch (e) {
@@ -435,7 +458,7 @@ async function importPatch() {
     patchMsg.value = res.success ? `${res.message}：${res.data}` : res.message;
     if (res.success) {
       await loadPatchStatus();
-      await platforms.loadPlatforms();
+      await platforms.refreshPlatforms();
     }
   } catch (e) {
     patchMsg.value = t('profile.importFailed', { e: String(e) });
@@ -466,7 +489,7 @@ async function clearPatch() {
     patchMsg.value = res.success ? t('profile.patchCleared', { count: res.data }) : res.message;
     if (res.success) {
       await loadPatchStatus();
-      await platforms.loadPlatforms();
+      await platforms.refreshPlatforms();
     }
   } catch (e) {
     patchMsg.value = t('profile.clearFailed', { e: String(e) });
@@ -548,6 +571,7 @@ onMounted(async () => {
     }
     await loadHeartbeatConfig();
     await loadPatchStatus();
+    await loadAutoBackupStatus();
     try {
       const { isEnabled } = await import('@tauri-apps/plugin-autostart');
       autostartEnabled.value = await isEnabled();
