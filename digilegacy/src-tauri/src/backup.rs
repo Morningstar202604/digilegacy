@@ -43,7 +43,8 @@ pub fn run_daily_backup(app_data_dir: &Path, json: &str) -> Result<Option<PathBu
 
     // 先写临时文件再原子改名：避免写入中断留下半个损坏的备份
     let tmp = dir.join(format!(".digilegacy-{}.json.tmp", stamp));
-    fs::write(&tmp, json).map_err(|e| format!("写入备份失败: {}", e))?;
+    crate::fsutil::write_private(&tmp, json.as_bytes())
+        .map_err(|e| format!("写入备份失败: {}", e))?;
     fs::rename(&tmp, &target).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         format!("保存备份失败: {}", e)
@@ -81,8 +82,7 @@ fn prune(dir: &Path) {
     }
 }
 
-/// 列出已有快照（仅测试使用；界面暂未展示备份列表）。
-#[cfg(test)]
+/// 列出已有快照（供测试与「备份状态」界面使用）。
 pub fn list_backups(app_data_dir: &Path) -> Vec<PathBuf> {
     let dir = backup_dir(app_data_dir);
     let Ok(entries) = fs::read_dir(&dir) else {
@@ -95,6 +95,14 @@ pub fn list_backups(app_data_dir: &Path) -> Vec<PathBuf> {
         .collect();
     files.sort();
     files
+}
+
+/// 最近一次自动备份的文件名与大小（界面展示用；无快照返回 None）。
+pub fn latest_backup_summary(app_data_dir: &Path) -> Option<(String, u64)> {
+    let latest = list_backups(app_data_dir).pop()?;
+    let name = latest.file_name()?.to_string_lossy().to_string();
+    let size = fs::metadata(&latest).ok()?.len();
+    Some((name, size))
 }
 
 #[cfg(test)]
@@ -197,6 +205,18 @@ mod tests {
             .collect();
         assert!(leftovers.is_empty(), "不应残留临时文件");
 
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn latest_summary_reports_newest_file_and_size() {
+        let base = temp_dir("latest");
+        run_daily_backup(&base, "{}").unwrap();
+        let (name, size) = latest_backup_summary(&base).expect("应有最近备份");
+        assert!(name.starts_with("digilegacy-"));
+        assert!(name.ends_with(".json"));
+        assert_eq!(size, 2);
+        assert!(latest_backup_summary(&temp_dir("latest_empty")).is_none());
         let _ = fs::remove_dir_all(&base);
     }
 }

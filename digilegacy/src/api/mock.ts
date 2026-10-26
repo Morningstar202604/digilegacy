@@ -327,6 +327,12 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'evaluate_dms':
       return ok({ enabled: state.dms.enabled, overdue: false, current_stage: 0, days_overdue: 0, notifications: [] }) as T;
 
+    case 'get_dms_status':
+      return ok({ enabled: state.dms.enabled, overdue: false, current_stage: 0, days_overdue: 0 }) as T;
+
+    case 'get_dms_history':
+      return ok([]) as T;
+
     case 'export_report_to_file': {
       download('继承报告.html', new Blob([String(a['content'] ?? '')], { type: 'text/html;charset=utf-8' }));
       return ok('（浏览器预览）已下载 继承报告.html', '报告已导出') as T;
@@ -404,7 +410,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'export_backup': {
       const backup = {
         app: 'digilegacy',
-        version: 2,
+        version: 3,
         created_at: now(),
         tables: {
           digital_assets: state.assets,
@@ -423,7 +429,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'import_backup': {
       try {
         const parsed = JSON.parse(String(a['content'] ?? ''));
-        if (parsed.app !== 'digilegacy' || ![1, 2].includes(parsed.version)) return fail<null>('不是有效的归零备份文件') as T;
+        if (parsed.app !== 'digilegacy' || ![1, 2, 3].includes(parsed.version)) return fail<null>('不是有效的归零备份文件') as T;
         const tables = parsed.tables || {};
         state.assets = (tables.digital_assets || []).map((x: DigitalAsset) => withPlatformName(x));
         state.profile = (tables.user_profile || [])[0] || null;
@@ -445,6 +451,9 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       window.open(url, '_blank', 'noopener');
       return ok(null, '已在浏览器打开') as T;
     }
+
+    case 'get_backup_status':
+      return ok({ count: 0, latest_name: null, latest_size: null }) as T;
 
     case 'get_recovery_seal_exists':
       return ok(state.masterPassword !== null) as T;

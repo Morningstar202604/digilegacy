@@ -8,14 +8,15 @@
 //!   DMS_SMTP_ALLOW_INSECURE=1                      允许无 STARTTLS 的明文中继（默认拒绝）
 
 use std::fs;
+use std::path::Path;
 
 use chrono::{Local, NaiveDateTime};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
 use crate::db;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DmsNotification {
     pub stage: i64,
     pub recipient: String,
@@ -26,12 +27,101 @@ pub struct DmsNotification {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct DmsStatus {
+    pub enabled: bool,
+    pub overdue: bool,
+    pub current_stage: i64,
+    pub days_overdue: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct DmsEvaluation {
     pub enabled: bool,
     pub overdue: bool,
     pub current_stage: i64,
     pub days_overdue: i64,
     pub notifications: Vec<DmsNotification>,
+}
+
+/// 只读状态快照：不发邮件、不写发件箱。
+/// 界面展示与后台投递必须分开——旧实现让前端直接调用 `evaluate_dms`，
+/// 打开仪表板就等于执行一轮通知投递（可能真的发出 SMTP 邮件）。
+pub fn status_snapshot() -> Result<DmsStatus, String> {
+    let cfg = read_config()?;
+    if !cfg.enabled {
+        return Ok(DmsStatus {
+            enabled: false,
+            overdue: false,
+            current_stage: 0,
+            days_overdue: 0,
+        });
+    }
+    let (overdue_days, current_stage) = stage_snapshot(&cfg);
+    Ok(DmsStatus {
+        enabled: true,
+        overdue: current_stage > 0,
+        current_stage,
+        days_overdue: overdue_days,
+    })
+}
+
+fn stage_snapshot(cfg: &DmsConfig) -> (i64, i64) {
+    match &cfg.last_check_in {
+        Some(last) => match days_since_last_check_in(last) {
+            Some(days) => {
+                let overdue = (days - cfg.interval_days).max(0);
+                (overdue, compute_stage(overdue, cfg))
+            }
+            None => (0, 0),
+        },
+        None => (0, 0),
+    }
+}
+
+/// 读取本地发件箱历史（按日期倒序，最多 `limit` 条）。
+/// 界面的「通知记录」此前只显示当前这一轮评估的返回值，历史投递完全不可见。
+pub fn outbox_history(
+    app_handle: &AppHandle,
+    limit: usize,
+) -> Result<Vec<DmsNotification>, String> {
+    let dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取应用数据目录失败: {}", e))?
+        .join("dms_outbox");
+    let mut files: Vec<std::path::PathBuf> = match fs::read_dir(&dir) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("jsonl"))
+            .collect(),
+        Err(_) => return Ok(Vec::new()),
+    };
+    files.sort();
+    files.reverse();
+
+    let mut out = Vec::new();
+    for file in files {
+        if out.len() >= limit {
+            break;
+        }
+        append_history_from(&file, limit, &mut out);
+    }
+    Ok(out)
+}
+
+fn append_history_from(path: &Path, limit: usize, out: &mut Vec<DmsNotification>) {
+    let Ok(content) = fs::read_to_string(path) else {
+        return;
+    };
+    for line in content.lines().rev() {
+        if out.len() >= limit {
+            return;
+        }
+        if let Ok(entry) = serde_json::from_str::<DmsNotification>(line) {
+            out.push(entry);
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -266,7 +356,8 @@ fn build_smtp_netrc(host: &str) -> Result<Option<std::path::PathBuf>, String> {
             .map(|d| d.as_nanos())
             .unwrap_or(0)
     ));
-    std::fs::write(&path, netrc_entry(host, &user, &pass))
+    // 该文件含明文 SMTP 密码：必须以仅本人可读的权限创建。
+    crate::fsutil::write_private(&path, netrc_entry(host, &user, &pass).as_bytes())
         .map_err(|e| format!("写入 SMTP 凭据文件失败: {}", e))?;
     Ok(Some(path))
 }
@@ -420,6 +511,8 @@ fn dispatch(
     })
 }
 
+/// 执行一轮通知投递并返回本轮结果。**只有后台循环应调用它**：
+/// 它有副作用（写发件箱、发 SMTP）。界面读取状态请用 `get_dms_status`。
 #[tauri::command]
 pub fn evaluate_dms(app_handle: AppHandle) -> Result<DmsEvaluation, String> {
     let cfg = read_config()?;
@@ -434,16 +527,7 @@ pub fn evaluate_dms(app_handle: AppHandle) -> Result<DmsEvaluation, String> {
         });
     }
 
-    let (overdue_days, current_stage) = match &cfg.last_check_in {
-        Some(last) => match days_since_last_check_in(last) {
-            Some(days) => {
-                let overdue = days - cfg.interval_days;
-                (overdue.max(0), compute_stage(overdue, &cfg))
-            }
-            None => (0, 0),
-        },
-        None => (0, 0),
-    };
+    let (overdue_days, current_stage) = stage_snapshot(&cfg);
 
     let overdue = current_stage > 0;
     let user = db::get_user_profile_db()?.unwrap_or_default();
@@ -738,5 +822,71 @@ mod tests {
         assert!(!already_notified(&missing, 2, "heir@example.com"));
 
         let _ = fs::remove_file(&path);
+    }
+
+    /// 只读状态快照必须与投递共用同一套分级，但绝不产生副作用。
+    #[test]
+    fn stage_snapshot_matches_compute_stage() {
+        let cfg = DmsConfig {
+            enabled: true,
+            interval_days: 30,
+            stage1_wait_days: 3,
+            stage2_wait_days: 7,
+            stage3_wait_days: 14,
+            last_check_in: Some(
+                (Local::now() - chrono::Duration::days(60))
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            ),
+        };
+        let (overdue, stage) = stage_snapshot(&cfg);
+        assert_eq!(overdue, 30);
+        assert_eq!(stage, 3);
+        assert_eq!(stage, compute_stage(overdue, &cfg));
+    }
+
+    /// 发件箱历史：按日期倒序聚合，坏行跳过而不是整体失败。
+    #[test]
+    fn outbox_history_reads_newest_first_and_skips_bad_lines() {
+        let dir = std::env::temp_dir().join(format!("digilegacy_hist_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let old = dir.join("2026-01-01.jsonl");
+        let new = dir.join("2026-01-02.jsonl");
+        append_outbox(
+            &old,
+            &DmsNotification {
+                stage: 1,
+                recipient: "a@x.com".to_string(),
+                subject: "old".to_string(),
+                body: "b".to_string(),
+                sent_at: "2026-01-01 00:00:00".to_string(),
+                channel: "local_outbox".to_string(),
+            },
+        )
+        .unwrap();
+        append_outbox(
+            &new,
+            &DmsNotification {
+                stage: 3,
+                recipient: "b@x.com".to_string(),
+                subject: "new".to_string(),
+                body: "b".to_string(),
+                sent_at: "2026-01-02 00:00:00".to_string(),
+                channel: "smtp".to_string(),
+            },
+        )
+        .unwrap();
+        fs::write(new.with_file_name("2026-01-03.jsonl"), "{not json}\n").unwrap();
+
+        let mut out = Vec::new();
+        for file in [&new, &old] {
+            append_history_from(file, 10, &mut out);
+        }
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].stage, 3, "最新的文件先读");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

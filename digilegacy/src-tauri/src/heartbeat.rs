@@ -74,7 +74,13 @@ fn post_heartbeat(endpoint: &str, token: &str) -> Result<(), String> {
     if endpoint.trim().is_empty() {
         return Err("未配置心跳服务器地址".to_string());
     }
-    let url = format!("{}/heartbeat", endpoint.trim_end_matches('/'));
+    // 环境变量路径绕过了命令层校验，这里必须再挡一次：
+    // file:// / gopher:// 之类会被 curl 按协议解释，等于把本地文件或任意协议暴露给配置值。
+    let ep = endpoint.trim();
+    if !(ep.starts_with("http://") || ep.starts_with("https://")) {
+        return Err("心跳地址必须以 http:// 或 https:// 开头".to_string());
+    }
+    let url = format!("{}/heartbeat", ep.trim_end_matches('/'));
     let body = format!(
         "{{\"token\":\"{}\"}}",
         token.replace('\\', "\\\\").replace('"', "\\\"")
@@ -236,6 +242,15 @@ mod tests {
     fn post_heartbeat_rejects_blank_endpoint() {
         assert!(post_heartbeat("", "tok").is_err());
         assert!(post_heartbeat("   ", "tok").is_err());
+    }
+
+    /// 非 http(s) 协议必须在发出请求前拒绝：环境变量可绕过命令层校验。
+    #[test]
+    fn post_heartbeat_rejects_non_http_schemes() {
+        for bad in ["file:///etc/passwd", "ftp://example.com", "gopher://x"] {
+            let err = post_heartbeat(bad, "tok").unwrap_err();
+            assert!(err.contains("http"), "{} 应被拒绝，实际: {}", bad, err);
+        }
     }
 
     /// 配置持久化：写入后能原样读回，且 upsert 不会产生多行。

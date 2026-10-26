@@ -41,13 +41,17 @@ function checkInStatus(over: Record<string, unknown> = {}) {
 
 async function mountDms(status: Record<string, unknown> | null, opts: {
   configureFails?: boolean;
+  history?: Array<Record<string, unknown>>;
 } = {}) {
   mockedInvoke.mockImplementation(async (cmd: string) => {
     if (cmd === 'get_check_in_status') {
       return { success: true, message: '', data: status };
     }
-    if (cmd === 'evaluate_dms') {
-      return { success: true, message: '', data: { enabled: true, overdue: false, current_stage: 0, days_overdue: 0, notifications: [] } };
+    if (cmd === 'get_dms_status') {
+      return { success: true, message: '', data: { enabled: true, overdue: false, current_stage: 0, days_overdue: 0 } };
+    }
+    if (cmd === 'get_dms_history') {
+      return { success: true, message: '', data: opts.history ?? [] };
     }
     if (cmd === 'set_dead_mans_switch') {
       if (opts.configureFails) return { success: false, message: '锁定状态', data: null };
@@ -123,6 +127,37 @@ describe('DMS 状态推导（四态 + 边界）', () => {
   it('status 为 null 时不崩溃', async () => {
     const w = await mountDms(null);
     expect(w.text()).toContain('Dead Man');
+  });
+});
+
+describe('通知记录', () => {
+  it('历史投递持久可见（不是只看本轮评估结果）', async () => {
+    const w = await mountDms(checkInStatus(), {
+      history: [
+        {
+          stage: 3,
+          recipient: 'heir@example.com',
+          subject: '继承指引',
+          body: '',
+          sent_at: '2026-01-02 00:00:00',
+          channel: 'local_outbox',
+        },
+      ],
+    });
+    expect(w.text()).toContain('继承指引');
+    expect(w.text()).toContain('heir@example.com');
+  });
+
+  it('没有历史时不渲染空的「通知记录」卡片', async () => {
+    const w = await mountDms(checkInStatus());
+    expect(w.text()).not.toContain('通知记录');
+  });
+
+  it('打开页面只读状态，绝不触发投递命令', async () => {
+    await mountDms(checkInStatus());
+    const cmds = mockedInvoke.mock.calls.map(c => c[0]);
+    expect(cmds).toContain('get_dms_status');
+    expect(cmds).not.toContain('evaluate_dms');
   });
 });
 

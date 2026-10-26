@@ -28,7 +28,10 @@ export const usePlatformsStore = defineStore('platforms', () => {
     }
   }
 
-  async function loadPlatformsExtended() {
+  async function loadPlatformsExtended(force = false) {
+    // 扩展列表同样带缓存：导入政策补丁后旧列表会让「继承人向导」继续显示
+    // 补丁前的政策，界面与现实不一致。凡是数据变更入口都必须 force。
+    if (platformsExtended.value.length > 0 && !force) return;
     try {
       const res = await invoke<ApiResponse<PlatformExtended[]>>('get_all_platforms_extended');
       if (res.success && res.data) {
@@ -37,6 +40,13 @@ export const usePlatformsStore = defineStore('platforms', () => {
     } catch (e) {
       console.error('加载扩展平台数据失败:', e);
     }
+  }
+
+  /** 政策库/备份变更后统一失效：一次调用清掉两份缓存并重取。 */
+  async function refreshPlatforms() {
+    loaded.value = false;
+    platformsExtended.value = [];
+    await loadPlatforms(true);
   }
 
   function getExtendedById(id: number): PlatformExtended | undefined {
@@ -63,5 +73,5 @@ export const usePlatformsStore = defineStore('platforms', () => {
     selectedIds.value.clear();
   }
 
-  return { platforms, platformsExtended, loading, selectedIds, loaded, loadPlatforms, loadPlatformsExtended, toggle, isSelected, getById, getExtendedById, clearSelection };
+  return { platforms, platformsExtended, loading, selectedIds, loaded, loadPlatforms, loadPlatformsExtended, refreshPlatforms, toggle, isSelected, getById, getExtendedById, clearSelection };
 });

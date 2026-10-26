@@ -2,6 +2,7 @@ mod backup;
 mod commands;
 mod crypto;
 mod db;
+mod fsutil;
 mod heartbeat;
 mod models;
 mod notify;
@@ -149,6 +150,8 @@ pub fn run() {
             commands::export_zip_to_file,
             commands::update_check_in,
             commands::get_check_in_status,
+            commands::get_dms_status,
+            commands::get_dms_history,
             commands::set_dead_mans_switch,
             commands::get_dashboard_stats,
             commands::security_status,
@@ -164,6 +167,7 @@ pub fn run() {
             commands::start_recovery,
             commands::complete_recovery,
             commands::get_recovery_seal_exists,
+            commands::get_backup_status,
             commands::get_heartbeat_status,
             commands::get_heartbeat_config,
             commands::set_heartbeat_config,

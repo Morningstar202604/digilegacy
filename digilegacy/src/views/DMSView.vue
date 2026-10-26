@@ -1,6 +1,6 @@
 <template>
   <div class="dms fade-in">
-    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">⏰ {{ t('nav.dms') }} · Dead Man's Switch</h2>
+    <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">{{ t('nav.dms') }} · Dead Man's Switch</h2>
     <p class="text-muted mb-32" style="font-size: 14px;">{{ t('dms.subtitle') }}</p>
 
     <!-- 状态卡片 -->
@@ -19,7 +19,7 @@
       <div class="card">
         <div class="card-title mb-16">{{ t('dms.checkInTitle') }}</div>
         <button class="btn btn-success btn-lg" @click="handleCheckIn" :disabled="checking">
-          {{ checking ? t('dms.checking') : '✓ ' + t('dms.checkInBtn') }}
+          {{ checking ? t('dms.checking') : t('dms.checkInBtn') }}
         </button>
         <div v-if="lastCheckIn" class="mt-16 text-muted" style="font-size: 13px;">{{ t('dms.lastCheckIn') }}：{{ lastCheckIn }}</div>
       </div>
@@ -78,10 +78,11 @@
       </div>
     </div>
 
-    <!-- 通知记录 -->
-    <div class="card" v-if="dmsEvaluation && dmsEvaluation.notifications.length > 0">
+    <!-- 通知记录：读本地发件箱历史，而不是「本轮评估结果」。
+         旧实现只显示当前这一轮，页面刷新即清空，用户无法确认过去是否真的发出过通知。 -->
+    <div class="card" v-if="dmsHistory.length > 0">
       <div class="card-title mb-16">{{ t('dms.logTitle') }}</div>
-      <div v-for="(n, i) in dmsEvaluation.notifications" :key="i" class="card mb-16" style="padding: 12px 16px;">
+      <div v-for="(n, i) in dmsHistory" :key="i" class="card mb-16" style="padding: 12px 16px;">
         <div class="flex items-center gap-12">
           <span class="tag" :class="n.stage >= 3 ? 'tag-danger' : n.stage >= 2 ? 'tag-warning' : 'tag-property'">{{ t('dms.stageTag', { stage: n.stage }) }}</span>
           <div style="flex: 1;">
@@ -126,7 +127,8 @@ async function handleTestNotify() {
 const status = computed(() => dashboard.checkInStatus);
 const lastCheckIn = computed(() => status.value?.last_check_in);
 const daysUntilDue = computed(() => status.value?.days_until_due);
-const dmsEvaluation = computed(() => dashboard.dmsEvaluation);
+const dmsEvaluation = computed(() => dashboard.dmsStatus);
+const dmsHistory = computed(() => dashboard.dmsHistory);
 
 const dmsState = computed(() => {
   if (!status.value?.dms_enabled) return 'disabled';
@@ -182,7 +184,7 @@ async function saveSettings() {
 }
 
 onMounted(async () => {
-  await Promise.all([dashboard.loadCheckInStatus(), dashboard.evaluateDms()]);
+  await Promise.all([dashboard.loadCheckInStatus(), dashboard.evaluateDms(), dashboard.loadDmsHistory()]);
   if (status.value) {
     settings.value.interval = status.value.interval_days;
     settings.value.enabled = status.value.dms_enabled;

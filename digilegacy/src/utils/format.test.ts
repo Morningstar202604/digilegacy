@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { categoryIcon, categoryLabel, disposalLabel, formatMoney, platformIcon } from './format';
+import { afterEach, describe, expect, it } from 'vitest';
+import { categoryLabel, disposalLabel, formatMoney } from './format';
+import { setLocale } from '../i18n';
 
 // 该模块是三视图共享的单一事实来源，测试同时充当文案漂移回归网
 // （曾因各视图持本地副本导致 no_action 在「待定/待设定」间漂移）。
+
+afterEach(() => setLocale('zh-CN'));
 
 describe('formatMoney', () => {
   it('空值与 0 显示「0」', () => {
@@ -17,6 +20,14 @@ describe('formatMoney', () => {
   it('万以上缩写为 x.x万', () => {
     expect(formatMoney(10000)).toBe('1.0万');
     expect(formatMoney(123456)).toBe('12.3万');
+  });
+
+  it('英文界面按 k/M/B 缩写，不再出现「万」', () => {
+    setLocale('en-US');
+    expect(formatMoney(999)).toBe('999');
+    expect(formatMoney(123456)).toBe('123.5k');
+    expect(formatMoney(2_500_000)).toBe('2.5M');
+    expect(formatMoney(3_000_000_000)).toBe('3.0B');
   });
 });
 
@@ -48,23 +59,5 @@ describe('disposalLabel', () => {
 
   it('未知值原样返回', () => {
     expect(disposalLabel('custom_x')).toBe('custom_x');
-  });
-});
-
-describe('platformIcon / categoryIcon', () => {
-  it('已知平台命中图标', () => {
-    expect(platformIcon('支付宝')).toBe('💳');
-    expect(platformIcon('微信')).toBe('💬');
-    expect(platformIcon('原神')).toBe('⚔️');
-  });
-
-  it('未知平台回退通用图标', () => {
-    expect(platformIcon('某小众平台')).toBe('📱');
-  });
-
-  it('数据分类图标命中与回退', () => {
-    expect(categoryIcon('支付金融')).toBe('💳');
-    expect(categoryIcon('游戏')).toBe('🎮');
-    expect(categoryIcon('不存在分类')).toBe('📱');
   });
 });

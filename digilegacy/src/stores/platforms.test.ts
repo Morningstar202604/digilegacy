@@ -82,6 +82,37 @@ describe('加载', () => {
     expect(s.platformsExtended).toHaveLength(1);
     expect(s.getExtendedById(2)?.name_en).toBe('WeChat');
   });
+
+  it('扩展列表也有缓存，force 才重取', async () => {
+    const s = usePlatformsStore();
+    mockedInvoke.mockResolvedValue({
+      success: true, message: '', data: [{ ...platform(2, '微信'), name_en: 'WeChat' }],
+    });
+    await s.loadPlatformsExtended();
+    await s.loadPlatformsExtended();
+    expect(mockedInvoke).toHaveBeenCalledTimes(1);
+
+    await s.loadPlatformsExtended(true);
+    expect(mockedInvoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshPlatforms 清掉扩展缓存并重取（导入补丁后不显示旧政策）', async () => {
+    const s = usePlatformsStore();
+    mockedInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'get_all_platforms') {
+        return { success: true, message: '', data: [platform(1, '支付宝')] };
+      }
+      return { success: true, message: '', data: [{ ...platform(1, '支付宝'), name_en: 'Alipay' }] };
+    });
+    await s.loadPlatforms();
+    await s.loadPlatformsExtended();
+    expect(s.platformsExtended).toHaveLength(1);
+
+    await s.refreshPlatforms();
+
+    expect(s.platformsExtended).toHaveLength(0);
+    expect(mockedInvoke.mock.calls.filter(c => c[0] === 'get_all_platforms')).toHaveLength(2);
+  });
 });
 
 describe('选择集', () => {

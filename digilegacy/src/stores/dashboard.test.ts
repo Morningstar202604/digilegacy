@@ -78,6 +78,26 @@ describe('只读加载：失败不覆盖既有数据', () => {
 
     expect(s.dmsEvaluation).toEqual({ enabled: true, current_stage: 1 });
   });
+
+  it('evaluateDms 走只读命令，不调用有副作用的 evaluate_dms', async () => {
+    const s = useDashboardStore();
+    mockedInvoke.mockResolvedValueOnce(ok({ enabled: true, current_stage: 2 }));
+
+    await s.evaluateDms();
+
+    expect(mockedInvoke).toHaveBeenCalledWith('get_dms_status');
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'evaluate_dms')).toBe(false);
+    expect(s.dmsStatus).toEqual({ enabled: true, current_stage: 2 });
+  });
+
+  it('loadDmsHistory 写入历史列表', async () => {
+    const s = useDashboardStore();
+    mockedInvoke.mockResolvedValueOnce(ok([{ stage: 1, recipient: 'a@x.com' }]));
+
+    await s.loadDmsHistory();
+
+    expect(s.dmsHistory).toHaveLength(1);
+  });
 });
 
 describe('签到', () => {
@@ -97,7 +117,7 @@ describe('签到', () => {
     // 必须点名三个具体的刷新命令：只断言调用次数的话，
     // 把 evaluateDms 换成 loadUser 也照样通过（变异实测存活）。
     const cmds = mockedInvoke.mock.calls.map(c => c[0]);
-    expect(cmds).toEqual(['update_check_in', 'get_dashboard_stats', 'get_check_in_status', 'evaluate_dms']);
+    expect(cmds).toEqual(['update_check_in', 'get_dashboard_stats', 'get_check_in_status', 'get_dms_status']);
   });
 
   it('失败时向上抛错（不静默吞掉签到失败）', async () => {

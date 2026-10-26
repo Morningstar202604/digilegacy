@@ -26,6 +26,11 @@ function detectInitialLocale(): Locale {
 export function setLocale(next: Locale) {
   locale.value = next;
   localStorage.setItem(LS_KEY, next);
+  // 同步文档语言：读屏、拼写检查与字体回退都依赖 <html lang>，
+  // 只切文案不切 lang 会让英文界面仍按中文朗读/断词。
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('lang', next);
+  }
 }
 
 export function toggleLocale() {
@@ -110,7 +115,7 @@ const zhCN: Record<string, string> = {
   'app.checkInDaysPlain': '{days}天后检查',
   'app.themeToLight': '切换到浅色模式',
   'app.themeToDark': '切换到深色模式',
-  'app.noEncryption': '⚠️ 未启用加密 · 点此设置主密码',
+  'app.noEncryption': '未启用加密 · 点此设置主密码',
   'app.encryptedLocal': '数据本地加密存储 · 已启用主密码',
   'app.demoBannerZh': '在线演示：所有数据只存在你的浏览器本地，用于体验界面与流程。请勿填写真实账号与密码。真实使用请下载桌面版（数据加密存于本机）。',
   'app.demoBannerEn': 'Live demo: data stays in your browser only. Do not enter real credentials — download the desktop app for real use.',
@@ -144,8 +149,8 @@ const zhCN: Record<string, string> = {
   // ===== 仪表板 =====
   'dashboard.hello': '你好，{name}',
   'dashboard.subtitle': '数字遗产管理不仅是财产问题，更是对家人的关爱与责任。\n你的数字人生，值得一个有归处的终点。',
-  'dashboard.startDiscover': '🔍 开始发现资产',
-  'dashboard.viewReport': '📄 查看继承报告',
+  'dashboard.startDiscover': '开始发现资产',
+  'dashboard.viewReport': '查看继承报告',
   'dashboard.totalAssets': '已知数字资产',
   'dashboard.totalValue': '预估财产价值',
   'dashboard.plannedCount': '已设定处置',
@@ -202,7 +207,7 @@ const zhCN: Record<string, string> = {
   'assets.all': '全部',
   'assets.showing': '显示 {shown} / {total} 项',
   'assets.viewDetail': '查看资产 {name} 详情',
-  'assets.hasCredential': '🔐 已存凭据',
+  'assets.hasCredential': '已存凭据',
   'assets.estimatedValueLabel': '预估价值',
   'assets.noMatchTitle': '没有匹配的资产',
   'assets.noMatchDesc': '试试更短的关键词，或切换类别 / 排序条件。',
@@ -344,6 +349,8 @@ const zhCN: Record<string, string> = {
   'heir.noGuide': '暂无详细指引',
   'heir.monetizationNote': '以上为平台官方公开的法定继承/过户渠道，凭死亡证明与继承公证书办理；本工具不参与、不协助任何账号买卖或第三方交易。',
   'heir.officialForm': '官方继承申请表',
+  'heir.openForm': '在浏览器中打开申请表',
+  'heir.openFormFailed': '打开申请表失败：{e}',
   'heir.riskTitle': '风险提示',
   'heir.legalTemplates': '关联法律文书模板',
   'heir.emptyExt': '暂无该分类下的变现/过户路径数据',
@@ -464,7 +471,7 @@ const zhCN: Record<string, string> = {
   'dms.stage2Desc': '写信通知紧急联系人确认你的状态（优先发至其邮箱；邮件 / 本地发件箱）',
   'dms.stage3Title': '第三阶段（再14天后）',
   'dms.stage3Desc': '向遗产执行人发送数字遗产继承指引邮件（不含任何账号凭据；邮件 / 本地发件箱）',
-  'dms.logTitle': '通知记录（今日）',
+  'dms.logTitle': '通知记录（最近 50 条）',
   'dms.stageTag': '阶段 {stage}',
   'dms.recipient': '收件人',
   'dms.channel': '渠道',
@@ -532,7 +539,7 @@ const zhCN: Record<string, string> = {
   'profile.setPasswordLabel': '主密码（至少 8 位）',
   'profile.setPasswordPlaceholder': '设置主密码',
   'profile.confirmPlaceholder': '再次输入',
-  'profile.passwordWarning': '⚠️ 主密码只用于本机解密，遗失后无法找回已加密数据，请妥善保管（建议手写记录并放在安全位置）。',
+  'profile.passwordWarning': '主密码只用于本机解密，遗失后无法找回已加密数据，请妥善保管（建议手写记录并放在安全位置）。',
   'profile.enableEncryption': '启用加密保护',
   'profile.recoveryOnce': '恢复密钥 · 仅显示这一次，请立即抄写',
   'profile.recoveryOnceHint1': '忘记主密码时，凭这串恢复密钥可以重设密码并找回全部数据。',
@@ -544,6 +551,9 @@ const zhCN: Record<string, string> = {
   'profile.backupDesc': '导出备份用于换电脑迁移或留档：备份内容为密文与安全配置，导入后使用同一主密码解锁。',
   'profile.exportBackup': '导出加密备份',
   'profile.importBackup': '导入备份文件',
+  'profile.autoBackupStatus': '自动备份：最近 {count} 份快照，最新 {name}（{size} KB）',
+  'profile.autoBackupEmpty': '自动备份：尚无快照（应用每次启动会检查当日快照）',
+  'profile.autoBackupFailed': '自动备份状态读取失败：{e}',
   'profile.backupPlainHint': '提示：尚未启用主密码时，备份中的敏感字段为明文，建议先启用加密后再导出。',
   'profile.heartbeatTitle': '云端心跳（可选 · 零内容）',
   'profile.heartbeatDesc1': '开启后，应用每 30 分钟向心跳服务器发送一次"我还安好"令牌。',
@@ -792,11 +802,8 @@ const enUS: Record<string, string> = {
   'app.checkInDaysPlain': 'Check-in in {days}d',
   'app.themeToLight': 'Switch to light mode',
   'app.themeToDark': 'Switch to dark mode',
-  'app.noEncryption': '⚠️ No encryption enabled · set a master password',
+  'app.noEncryption': 'No encryption enabled · set a master password',
   'app.encryptedLocal': 'Encrypted locally · master password set',
-  'app.demoBanner': 'Live demo: all data stays in your browser only. ',
-  'app.demoBannerStrong': 'Do not enter real credentials',
-  'app.demoBannerTail': '. Download the desktop app for real, encrypted use.',
   'app.demoBannerZh': '演示：数据仅存于浏览器本地，请勿填写真实账号与密码；真实使用请下载桌面版。',
   'app.demoBannerEn': 'Live demo: data stays in your browser only. Do not enter real credentials — download the desktop app for real use.',
 
@@ -827,8 +834,8 @@ const enUS: Record<string, string> = {
 
   'dashboard.hello': 'Hello, {name}',
   'dashboard.subtitle': 'Digital legacy planning is not just about property — it is care for your family.\nYour digital life deserves a place to rest.',
-  'dashboard.startDiscover': '🔍 Start discovering assets',
-  'dashboard.viewReport': '📄 View inheritance report',
+  'dashboard.startDiscover': 'Start discovering assets',
+  'dashboard.viewReport': 'View inheritance report',
   'dashboard.totalAssets': 'Known assets',
   'dashboard.totalValue': 'Estimated value',
   'dashboard.plannedCount': 'Disposal planned',
@@ -883,7 +890,7 @@ const enUS: Record<string, string> = {
   'assets.all': 'All',
   'assets.showing': 'Showing {shown} / {total}',
   'assets.viewDetail': 'View asset {name} details',
-  'assets.hasCredential': '🔐 Credentials saved',
+  'assets.hasCredential': 'Credentials saved',
   'assets.estimatedValueLabel': 'Estimated value',
   'assets.noMatchTitle': 'No matching assets',
   'assets.noMatchDesc': 'Try a shorter keyword, or switch category / sort.',
@@ -1025,6 +1032,8 @@ const enUS: Record<string, string> = {
   'heir.noGuide': 'No detailed guide yet',
   'heir.monetizationNote': 'These are the platform\'s officially published legal inheritance/transfer channels, handled with a death certificate and inheritance notarization; this tool does not participate in or assist any account trading or third-party transactions.',
   'heir.officialForm': 'Official inheritance application form',
+  'heir.openForm': 'Open the form in your browser',
+  'heir.openFormFailed': 'Could not open the form: {e}',
   'heir.riskTitle': 'Risk warning',
   'heir.legalTemplates': 'Related legal document templates',
   'heir.emptyExt': 'No monetization / transfer data for this category yet',
@@ -1145,7 +1154,7 @@ const enUS: Record<string, string> = {
   'dms.stage2Desc': 'Emails the emergency contact to confirm your status (prefers their email; email / local outbox)',
   'dms.stage3Title': 'Stage 3 (14 days later)',
   'dms.stage3Desc': 'Sends the digital-legacy inheritance guide to the executor (no credentials; email / local outbox)',
-  'dms.logTitle': 'Notification log (today)',
+  'dms.logTitle': 'Notification log (latest 50)',
   'dms.stageTag': 'Stage {stage}',
   'dms.recipient': 'Recipient',
   'dms.channel': 'Channel',
@@ -1213,7 +1222,7 @@ const enUS: Record<string, string> = {
   'profile.setPasswordLabel': 'Master password (min. 8 characters)',
   'profile.setPasswordPlaceholder': 'Set master password',
   'profile.confirmPlaceholder': 'Enter again',
-  'profile.passwordWarning': '⚠️ The master password only decrypts on this device; if lost, encrypted data cannot be recovered. Keep it safe (write it down and store it securely).',
+  'profile.passwordWarning': 'The master password only decrypts on this device; if lost, encrypted data cannot be recovered. Keep it safe (write it down and store it securely).',
   'profile.enableEncryption': 'Enable encryption',
   'profile.recoveryOnce': 'Recovery key · shown once — write it down now',
   'profile.recoveryOnceHint1': 'With this recovery key you can reset the master password and recover all data. ',
@@ -1225,6 +1234,9 @@ const enUS: Record<string, string> = {
   'profile.backupDesc': 'Export a backup to migrate to another machine or archive: the backup holds ciphertext and security config; import it and unlock with the same master password.',
   'profile.exportBackup': 'Export encrypted backup',
   'profile.importBackup': 'Import backup file',
+  'profile.autoBackupStatus': 'Auto backup: {count} snapshots, latest {name} ({size} KB)',
+  'profile.autoBackupEmpty': 'Auto backup: no snapshot yet (checked at every launch)',
+  'profile.autoBackupFailed': 'Could not read auto backup status: {e}',
   'profile.backupPlainHint': 'Note: without a master password, sensitive fields in the backup are plaintext — enable encryption before exporting.',
   'profile.heartbeatTitle': 'Cloud heartbeat (optional · zero content)',
   'profile.heartbeatDesc1': 'When enabled, the app sends an "I am alive" token to your heartbeat server every 30 minutes. ',

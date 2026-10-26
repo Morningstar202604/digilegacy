@@ -203,12 +203,31 @@ pub fn get_assets_by_category(category: String) -> Result<ApiResponse<Vec<Digita
 
 #[command]
 pub fn set_disposal_wish(
+    mut disposal_method: String,
     asset_id: i64,
-    disposal_method: String,
     heir_name: Option<String>,
     heir_contact: Option<String>,
-    notes: String,
+    mut notes: String,
 ) -> Result<ApiResponse<()>, String> {
+    // 此命令绕过 add/update_asset 的校验直接写库，必须自带同样的边界，
+    // 否则它是唯一一条能把任意长度文本与非法枚举写进资产表的入口。
+    if let Err(e) = crate::models::validate_disposal(&disposal_method) {
+        return Ok(ApiResponse::fail(&e));
+    }
+    for (name, value) in [
+        ("备注", Some(notes.as_str())),
+        ("继承人姓名", heir_name.as_deref()),
+        ("继承人联系方式", heir_contact.as_deref()),
+    ] {
+        if let Some(v) = value {
+            if v.chars().count() > 8_000 {
+                return Ok(ApiResponse::fail(&format!(
+                    "{}过长（上限 8000 字符）",
+                    name
+                )));
+            }
+        }
+    }
     let asset = db::get_asset_by_id_db(asset_id)?.ok_or("资产不存在")?;
 
     let req = AssetRequest {
@@ -217,10 +236,10 @@ pub fn set_disposal_wish(
         account_description: asset.account_description,
         category: asset.category,
         estimated_value: asset.estimated_value,
-        disposal_method,
+        disposal_method: std::mem::take(&mut disposal_method),
         heir_name,
         heir_contact,
-        notes,
+        notes: std::mem::take(&mut notes),
     };
 
     db::update_asset_db(asset_id, &req)?;
@@ -267,23 +286,48 @@ pub fn get_inheritance_report() -> Result<ApiResponse<InheritanceReport>, String
     db::get_inheritance_report_db().map(ApiResponse::ok)
 }
 
+// ========== 继承报告 / 工具包 ==========
+
+/// 报告 HTML 的 IPC 入口上限（20MB）。
+/// 单独抽成纯函数，才能不依赖 Tauri AppHandle 直接回归测试边界。
+pub(crate) fn validate_report_html(content: &str) -> Result<(), String> {
+    if content.len() > 20 * 1024 * 1024 {
+        return Err("报告内容过大（上限 20MB）".to_string());
+    }
+    Ok(())
+}
+
+/// 备份 JSON 的 IPC 入口上限（8MB，与政策补丁同量级）。
+pub(crate) fn validate_backup_content(content: &str) -> Result<(), String> {
+    if content.len() > 8 * 1024 * 1024 {
+        return Err("备份文件过大（上限 8MB）".to_string());
+    }
+    Ok(())
+}
+
 #[command]
 pub fn export_report_to_file(
     app_handle: AppHandle,
     content: String,
 ) -> Result<ApiResponse<String>, String> {
+    if let Err(e) = validate_report_html(&content) {
+        return Ok(ApiResponse::fail(&e));
+    }
+
     let app_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| format!("获取目录失败: {}", e))?;
 
-    std::fs::create_dir_all(&app_dir).map_err(|e| format!("创建目录失败: {}", e))?;
+    let dir = app_dir.join("报告");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败: {}", e))?;
 
-    let file_path = app_dir.join(format!(
+    let file_path = dir.join(format!(
         "归零继承报告_{}.html",
         chrono::Local::now().format("%Y%m%d_%H%M%S")
     ));
-    std::fs::write(&file_path, content).map_err(|e| format!("写入文件失败: {}", e))?;
+    crate::fsutil::write_private(&file_path, content.as_bytes())
+        .map_err(|e| format!("写入文件失败: {}", e))?;
 
     Ok(ApiResponse::ok_with_msg(
         file_path.to_string_lossy().to_string(),
@@ -341,6 +385,20 @@ pub fn update_check_in() -> Result<ApiResponse<String>, String> {
 #[command]
 pub fn get_check_in_status() -> Result<ApiResponse<CheckInStatus>, String> {
     db::get_check_in_status_db().map(ApiResponse::ok)
+}
+
+/// 只读的 DMS 状态：供界面渲染，不触发投递。
+#[command]
+pub fn get_dms_status() -> Result<ApiResponse<crate::notify::DmsStatus>, String> {
+    crate::notify::status_snapshot().map(ApiResponse::ok)
+}
+
+/// 本地发件箱历史（最近 50 条），让用户能看到「过去真的发过什么」。
+#[command]
+pub fn get_dms_history(
+    app_handle: AppHandle,
+) -> Result<ApiResponse<Vec<crate::notify::DmsNotification>>, String> {
+    crate::notify::outbox_history(&app_handle, 50).map(ApiResponse::ok)
 }
 
 #[command]
@@ -522,7 +580,8 @@ pub fn export_backup(app_handle: AppHandle) -> Result<ApiResponse<String>, Strin
         chrono::Local::now().format("%Y%m%d_%H%M%S")
     );
     let path = dir.join(name);
-    std::fs::write(&path, json).map_err(|e| format!("写入备份失败: {}", e))?;
+    crate::fsutil::write_private(&path, json.as_bytes())
+        .map_err(|e| format!("写入备份失败: {}", e))?;
     Ok(ApiResponse::ok_with_msg(
         path.to_string_lossy().to_string(),
         "备份已导出（含密文与安全配置，可与其他设备互导）",
@@ -531,6 +590,9 @@ pub fn export_backup(app_handle: AppHandle) -> Result<ApiResponse<String>, Strin
 
 #[command]
 pub fn import_backup(content: String) -> Result<ApiResponse<String>, String> {
+    if let Err(e) = validate_backup_content(&content) {
+        return Ok(ApiResponse::fail(&e));
+    }
     match db::import_backup_json_db(&content) {
         Ok(n) => Ok(ApiResponse::ok_with_msg(
             format!("已恢复 {} 条资产，请用该备份对应的主密码重新解锁", n),
@@ -543,6 +605,23 @@ pub fn import_backup(content: String) -> Result<ApiResponse<String>, String> {
 #[command]
 pub fn get_recovery_seal_exists() -> Result<ApiResponse<bool>, String> {
     Ok(ApiResponse::ok(!db::get_recovery_seal_db()?.is_empty()))
+}
+
+/// 自动备份状态：让用户知道「每日快照」是否真的在跑。
+/// 旧界面只有手动导出按钮，自动备份存在但完全不可见。
+#[command]
+pub fn get_backup_status(app_handle: AppHandle) -> Result<ApiResponse<serde_json::Value>, String> {
+    let dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取目录失败: {}", e))?;
+    let summary = crate::backup::latest_backup_summary(&dir);
+    let count = crate::backup::list_backups(&dir).len();
+    Ok(ApiResponse::ok(serde_json::json!({
+        "count": count,
+        "latest_name": summary.as_ref().map(|(n, _)| n.clone()),
+        "latest_size": summary.map(|(_, s)| s),
+    })))
 }
 
 /// 恢复流程第一步：用恢复码解出主密钥（不设新密码），返回临时解锁态
@@ -1151,6 +1230,71 @@ mod tests {
         // 合法请求仍应成功（防止校验过严把正常路径也拦掉）
         let r = add_asset(mk()).unwrap();
         assert!(r.success, "合法请求必须通过: {}", r.message);
+    }
+
+    /// set_disposal_wish 是唯一绕过 add/update_asset 校验的写入口：
+    /// 非法枚举与超长备注都必须在这里被拦下。
+    #[test]
+    fn disposal_wish_validates_enum_and_size() {
+        let _g = crate::vault::test_lock();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_wish_{}.db", std::process::id())),
+        )
+        .unwrap();
+        let id = crate::db::add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "acc".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap();
+
+        let r =
+            set_disposal_wish("not_a_method".to_string(), id, None, None, String::new()).unwrap();
+        assert!(!r.success, "非法处置枚举必须被拒绝");
+
+        let r =
+            set_disposal_wish("inherit".to_string(), id, None, None, "y".repeat(8_001)).unwrap();
+        assert!(!r.success, "超长备注必须被拒绝");
+
+        let r = set_disposal_wish(
+            "memorialize".to_string(),
+            id,
+            None,
+            None,
+            "保留纪念".to_string(),
+        )
+        .unwrap();
+        assert!(r.success, "合法处置必须通过: {}", r.message);
+
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("digilegacy_cmd_wish_{}.db", std::process::id())),
+        );
+    }
+
+    /// 报告/备份入参必须有限额：一次失控 IPC 能写满磁盘（还会被每日备份放大）。
+    /// 边界抽成纯函数后可以脱离 Tauri AppHandle 直接验证。
+    #[test]
+    fn export_commands_reject_oversized_payloads() {
+        assert!(validate_report_html("<!DOCTYPE html>").is_ok());
+        assert!(validate_backup_content("{\"app\":\"digilegacy\"}").is_ok());
+
+        let oversized_report = "x".repeat(20 * 1024 * 1024 + 1);
+        let err = validate_report_html(&oversized_report).unwrap_err();
+        assert!(err.contains("20MB"), "报告上限必须点名具体额度: {}", err);
+
+        let oversized_backup = "x".repeat(8 * 1024 * 1024 + 1);
+        let err = validate_backup_content(&oversized_backup).unwrap_err();
+        assert!(err.contains("8MB"), "备份上限必须点名具体额度: {}", err);
+
+        // 恰好等于上限必须放行（不能用 >= 把合法边界也拦掉）
+        let exact_report = "x".repeat(20 * 1024 * 1024);
+        assert!(validate_report_html(&exact_report).is_ok());
     }
 
     /// DMS 间隔必须有界：0/负数会立刻触发三级通知，超大值等于永不提醒。

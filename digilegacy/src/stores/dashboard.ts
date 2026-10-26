@@ -3,12 +3,15 @@ import { ref } from 'vue';
 import { invoke } from '../api/invoke';
 import { t } from '../i18n';
 
-import type { DashboardStats, CheckInStatus, UserProfile, ApiResponse, DmsEvaluation } from '../types';
+import type { DashboardStats, CheckInStatus, UserProfile, ApiResponse, DmsStatus, DmsNotification } from '../types';
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const stats = ref<DashboardStats | null>(null);
   const checkInStatus = ref<CheckInStatus | null>(null);
-  const dmsEvaluation = ref<DmsEvaluation | null>(null);
+  const dmsStatus = ref<DmsStatus | null>(null);
+  const dmsHistory = ref<DmsNotification[]>([]);
+  /** @deprecated 仅保留给旧调用点；新代码请用 dmsStatus + dmsHistory。 */
+  const dmsEvaluation = ref<DmsStatus | null>(null);
   const user = ref<UserProfile | null>(null);
   const loading = ref(false);
 
@@ -34,14 +37,28 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
+  /** 只读状态：打开界面**不得**触发 SMTP 投递（后端 evaluate_dms 有副作用）。 */
   async function evaluateDms() {
     try {
-      const res = await invoke<ApiResponse<DmsEvaluation>>('evaluate_dms');
+      const res = await invoke<ApiResponse<DmsStatus>>('get_dms_status');
       if (res.success) {
-        dmsEvaluation.value = res.data || null;
+        const data = res.data || null;
+        dmsStatus.value = data;
+        dmsEvaluation.value = data;
       }
     } catch (e) {
-      console.error('评估 DMS 状态失败:', e);
+      console.error('读取 DMS 状态失败:', e);
+    }
+  }
+
+  async function loadDmsHistory() {
+    try {
+      const res = await invoke<ApiResponse<DmsNotification[]>>('get_dms_history');
+      if (res.success && res.data) {
+        dmsHistory.value = res.data;
+      }
+    } catch (e) {
+      console.error('读取通知历史失败:', e);
     }
   }
 
@@ -114,12 +131,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
   return {
     stats,
     checkInStatus,
+    dmsStatus,
+    dmsHistory,
     dmsEvaluation,
     user,
     loading,
     loadStats,
     loadCheckInStatus,
     evaluateDms,
+    loadDmsHistory,
     loadUser,
     checkIn,
     saveUser,

@@ -128,4 +128,12 @@ export interface DmsEvaluation {
   notifications: DmsNotification[];
 }
 
+/** 只读 DMS 状态：界面渲染用，不触发投递。 */
+export interface DmsStatus {
+  enabled: boolean;
+  overdue: boolean;
+  current_stage: number;
+  days_overdue: number;
+}
+
 

@@ -1330,12 +1330,15 @@ pub fn export_backup_json_db() -> Result<String, String> {
 
     let security: Option<Value> = conn
         .query_row(
-            "SELECT kdf_salt, verifier FROM security_config WHERE id = 1",
+            "SELECT kdf_salt, verifier, COALESCE(recovery_seal, '') FROM security_config WHERE id = 1",
             [],
             |row| {
                 Ok(json!({
                     "kdf_salt": row.get::<_, String>(0)?,
                     "verifier": row.get::<_, String>(1)?,
+                    // v3：带上恢复封印。旧版备份不含封印，换机恢复后即使记得恢复码
+                    // 也无法再解出主密钥——恢复链路在「换电脑」这一最常见场景下断掉。
+                    "recovery_seal": row.get::<_, String>(2)?,
                 }))
             },
         )
@@ -1390,7 +1393,7 @@ pub fn export_backup_json_db() -> Result<String, String> {
 
     let backup = json!({
         "app": "digilegacy",
-        "version": 2,
+        "version": 3,
         "created_at": Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         "tables": {
             "digital_assets": assets,
@@ -1417,10 +1420,33 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
     // v1 备份仍然可导入（向后兼容）：新表缺失时保持本地现状，
     // 旧备份里没有的 heartbeat/platform_overrides 按「未提供」处理。
     let version = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
-    if version != 1 && version != 2 {
+    if !(1..=3).contains(&version) {
         return Err("备份版本不受支持".to_string());
     }
     let tables = v.get("tables").ok_or("备份缺少数据表")?;
+
+    // 加密边界：把「无 security_config 的备份」导进已启用的加密库，
+    // 会把明文写进本应只有密文的列——这是不可接受的静默降级。
+    // 锁定态直接拒绝；解锁态则用当前密钥把这些字段加密后再落库。
+    let local_has_vault = get_security_config_db()?.is_some();
+    let local_unlocked = crate::vault::is_unlocked();
+    let backup_has_security = tables
+        .get("security_config")
+        .map(|x| x.is_object())
+        .unwrap_or(false);
+    let encrypt_plaintext_on_import = local_has_vault && !backup_has_security;
+    if encrypt_plaintext_on_import && !local_unlocked {
+        return Err(
+            "该备份不含加密配置，而当前库已加密且处于锁定状态。请先解锁再导入，否则明文数据会绕过加密"
+                .to_string(),
+        );
+    }
+    let protect = |value: String| -> Result<String, String> {
+        if !encrypt_plaintext_on_import || value.is_empty() {
+            return Ok(value);
+        }
+        crate::vault::encrypt_if_needed(&value)
+    };
 
     let sval = |val: &Value, k: &str| -> String {
         val.get(k)
@@ -1470,16 +1496,16 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
                 params![
                     ival(a, "id"),
                     ival(a, "platform_id"),
-                    sval(a, "account_identifier"),
-                    sval(a, "account_description"),
+                    protect(sval(a, "account_identifier"))?,
+                    protect(sval(a, "account_description"))?,
                     sval(a, "category"),
                     fval(a, "estimated_value"),
                     { let c = sval(a, "value_currency"); if c.is_empty() { "CNY".to_string() } else { c } },
                     sval(a, "disposal_method"),
-                    sval(a, "heir_name"),
-                    sval(a, "heir_contact"),
-                    sval(a, "notes"),
-                    sval(a, "credential_enc"),
+                    protect(sval(a, "heir_name"))?,
+                    protect(sval(a, "heir_contact"))?,
+                    protect(sval(a, "notes"))?,
+                    protect(sval(a, "credential_enc"))?,
                     ival(a, "is_confirmed"),
                     sval(a, "created_at"),
                     sval(a, "updated_at"),
@@ -1494,18 +1520,18 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                 params![
                     ival(p, "id"),
-                    sval(p, "full_name"),
-                    sval(p, "phone"),
-                    sval(p, "email"),
-                    sval(p, "id_last4"),
-                    sval(p, "emergency_contact_name"),
-                    sval(p, "emergency_contact_phone"),
-                    sval(p, "emergency_contact_relation"),
-                    sval(p, "emergency_contact_email"),
-                    sval(p, "heir_primary_name"),
-                    sval(p, "heir_primary_phone"),
-                    sval(p, "heir_primary_relation"),
-                    sval(p, "heir_primary_email"),
+                    protect(sval(p, "full_name"))?,
+                    protect(sval(p, "phone"))?,
+                    protect(sval(p, "email"))?,
+                    protect(sval(p, "id_last4"))?,
+                    protect(sval(p, "emergency_contact_name"))?,
+                    protect(sval(p, "emergency_contact_phone"))?,
+                    protect(sval(p, "emergency_contact_relation"))?,
+                    protect(sval(p, "emergency_contact_email"))?,
+                    protect(sval(p, "heir_primary_name"))?,
+                    protect(sval(p, "heir_primary_phone"))?,
+                    protect(sval(p, "heir_primary_relation"))?,
+                    protect(sval(p, "heir_primary_email"))?,
                     ival(p, "check_in_interval_days"),
                     oval(p, "last_check_in"),
                     ival(p, "dms_enabled"),
@@ -1543,15 +1569,19 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
         }
 
         if let Some(sec) = tables.get("security_config").filter(|x| x.is_object()) {
-            // 关键：恢复密钥封印必须一并清空。备份不含封印，本地旧封印指向旧设备的主密钥，
-            // 残留会让"恢复码解锁"解出错误密钥，导致恢复链路静默断裂
+            // v3 备份带恢复封印：与新主密钥（备份里的 kdf_salt/verifier）成套，
+            // 一起恢复才能保留「记得恢复码就能找回」的能力。
+            // v1/v2 备份不含封印：必须显式清空，否则本地旧封印指向旧设备的主密钥，
+            // 会让恢复码解出错误密钥，恢复链路静默断裂。
+            let seal = sval(sec, "recovery_seal");
             conn.execute(
-                "INSERT INTO security_config (id, kdf_salt, verifier, created_at, recovery_seal) VALUES (1, ?1, ?2, ?3, '')
-                 ON CONFLICT(id) DO UPDATE SET kdf_salt=?1, verifier=?2, recovery_seal=''",
+                "INSERT INTO security_config (id, kdf_salt, verifier, created_at, recovery_seal) VALUES (1, ?1, ?2, ?3, ?4)
+                 ON CONFLICT(id) DO UPDATE SET kdf_salt=?1, verifier=?2, recovery_seal=?4",
                 params![
                     sval(sec, "kdf_salt"),
                     sval(sec, "verifier"),
                     Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    seal,
                 ],
             ).map_err(|e| format!("写入安全配置失败: {}", e))?;
         }
@@ -1747,7 +1777,9 @@ pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
             let next = dt + chrono::Duration::days(interval);
             let now = chrono::Local::now().naive_local();
             let duration = next.signed_duration_since(now);
-            Some(duration.num_days())
+            // 向上取整：`num_days()` 截断会把「还剩 20 小时」算成 0 天，
+            // 界面据此判定逾期，用户会在到期前被误报（含系统通知）。
+            Some((duration.num_seconds() as f64 / 86_400.0).ceil() as i64)
         } else {
             None
         }
@@ -2239,11 +2271,10 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
-    /// 安全回归：导入备份后必须清空本地残留的旧恢复密钥封印。
-    /// 备份不含封印；旧封印指向旧设备的主密钥，残留会让恢复码解锁出错误密钥，
-    /// 恢复链路静默断裂。
+    /// 安全回归：v3 备份自带恢复密钥封印，导入后必须原样保留；
+    /// 而 v1/v2 备份不含封印，导入时必须清空本地残留，否则恢复码会解出错误密钥。
     #[test]
-    fn import_backup_clears_stale_recovery_seal() {
+    fn import_backup_preserves_v3_seal_and_clears_legacy_stale_seal() {
         let _g = vault::test_lock();
         use base64::{engine::general_purpose::STANDARD as b64, Engine};
         vault::clear_key();
@@ -2254,19 +2285,34 @@ mod tests {
         let key = crate::crypto::derive_key_bytes("seal-master-123", &salt);
         let verifier = vault::make_verifier(&key).unwrap();
         set_security_config_db(&b64.encode(salt), &verifier).unwrap();
-        set_recovery_seal_db("旧设备的恢复密钥封印").unwrap();
-        assert!(!get_recovery_seal_db().unwrap().is_empty());
+        set_recovery_seal_db("RS2.本设备的恢复密钥封印").unwrap();
         vault::set_key(key);
 
+        // v3：封印随备份往返
         let backup = export_backup_json_db().unwrap();
         import_backup_json_db(&backup).unwrap();
         assert_eq!(
             get_recovery_seal_db().unwrap(),
-            "",
-            "导入备份后必须清空旧的恢复密钥封印"
+            "RS2.本设备的恢复密钥封印",
+            "v3 备份必须保留恢复密钥封印"
         );
 
+        // 旧 v2 备份（无 recovery_seal）：本地残留封印必须被清空
+        let legacy: serde_json::Value = serde_json::from_str(&backup).unwrap();
+        let mut legacy = legacy;
+        legacy["version"] = serde_json::json!(2);
+        legacy["tables"]["security_config"]
+            .as_object_mut()
+            .unwrap()
+            .remove("recovery_seal");
         vault::clear_key();
+        import_backup_json_db(&legacy.to_string()).unwrap();
+        assert_eq!(
+            get_recovery_seal_db().unwrap(),
+            "",
+            "v2 备份不含封印，导入后不得留下指向旧主密钥的封印"
+        );
+
         let _ = std::fs::remove_file(&path);
     }
 
@@ -2513,7 +2559,7 @@ mod tests {
 
         let json = export_backup_json_db().unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(v["version"], 2, "新增表后必须升版本号");
+        assert_eq!(v["version"], 3, "新增表/封印后必须升版本号");
         assert_eq!(
             v["tables"]["heartbeat_config"]["token"], "hb-token-123",
             "心跳令牌必须进备份"
@@ -2574,6 +2620,105 @@ mod tests {
             "不得清空政策补丁"
         );
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 明文备份不得绕过加密：锁定态拒绝，解锁态必须逐字段加密后再入库。
+    #[test]
+    fn plaintext_backup_never_lands_as_plaintext_in_encrypted_vault() {
+        let _g = vault::test_lock();
+        use base64::{engine::general_purpose::STANDARD as b64, Engine};
+        vault::clear_key();
+        let path = fresh_db_path("plainimport");
+        init_database_at(path.clone()).unwrap();
+
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("plain-import-pw", &salt);
+        let verifier = vault::make_verifier(&key).unwrap();
+        set_security_config_db(&b64.encode(salt), &verifier).unwrap();
+
+        let plaintext_backup = serde_json::json!({
+            "app": "digilegacy",
+            "version": 1,
+            "tables": {
+                "digital_assets": [{
+                    "id": 1,
+                    "platform_id": 1,
+                    "account_identifier": "明文账号",
+                    "account_description": "明文描述",
+                    "category": "property",
+                    "estimated_value": 10.0,
+                    "value_currency": "CNY",
+                    "disposal_method": "inherit",
+                    "heir_name": "明文继承人",
+                    "heir_contact": "13800000000",
+                    "notes": "明文备注",
+                    "credential_enc": "明文凭据",
+                    "is_confirmed": 1,
+                    "created_at": "2026-01-01 00:00:00",
+                    "updated_at": "2026-01-01 00:00:00"
+                }],
+                "user_profile": [{
+                    "id": 1,
+                    "full_name": "明文姓名",
+                    "phone": "13800000000",
+                    "email": "plain@example.com",
+                    "created_at": "2026-01-01 00:00:00",
+                    "updated_at": "2026-01-01 00:00:00"
+                }],
+                "check_in_log": [],
+                "dms_config": null,
+                "security_config": null
+            }
+        })
+        .to_string();
+
+        // 锁定态：必须拒绝，且不能改动已有数据
+        let err = import_backup_json_db(&plaintext_backup).unwrap_err();
+        assert!(
+            err.contains("请先解锁"),
+            "锁定态导入明文备份必须 fail-closed，实际: {}",
+            err
+        );
+
+        // 解锁态：允许导入，但每个敏感字段都必须已加密
+        vault::set_key(key.clone());
+        import_backup_json_db(&plaintext_backup).unwrap();
+
+        let guard = get_conn().unwrap();
+        let conn = guard.as_ref().unwrap();
+        let raw_identifier: String = conn
+            .query_row(
+                "SELECT account_identifier FROM digital_assets WHERE id=1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(
+            crate::vault::is_encrypted(&raw_identifier),
+            "明文账号必须被加密后落库"
+        );
+        let raw_name: String = conn
+            .query_row("SELECT full_name FROM user_profile WHERE id=1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert!(
+            crate::vault::is_encrypted(&raw_name),
+            "档案字段必须被加密后落库"
+        );
+        drop(guard);
+
+        // 导入成功后密钥被清空（强制重新解锁），重新解锁才能验证明文回读
+        vault::set_key(crate::crypto::derive_key_bytes("plain-import-pw", &salt));
+        let assets = get_all_assets_db().unwrap();
+        assert_eq!(assets[0].account_identifier, "明文账号");
+        assert_eq!(
+            get_user_profile_db().unwrap().unwrap().full_name,
+            "明文姓名"
+        );
+
+        vault::clear_key();
         let _ = std::fs::remove_file(&path);
     }
 
@@ -2947,6 +3092,38 @@ mod tests {
         let st = get_check_in_status_db().unwrap();
         assert!(!st.dms_enabled);
         assert_eq!(st.interval_days, 7);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 剩余天数必须向上取整：到期前不到 24 小时应显示为 1 天而不是 0 天。
+    /// 旧实现用 `num_days()` 截断，界面把「还剩 20 小时」判成逾期，会误发提醒。
+    #[test]
+    fn days_until_due_rounds_up_instead_of_truncating() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("dueceil");
+        init_database_at(path.clone()).unwrap();
+
+        // 上次签到在 29 天 4 小时前，间隔 30 天 → 还剩 20 小时
+        let last = (chrono::Local::now() - chrono::Duration::hours(29 * 24 + 4))
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        {
+            let guard = get_conn().unwrap();
+            let conn = guard.as_ref().unwrap();
+            conn.execute(
+                "UPDATE dms_config SET enabled=1, check_in_interval_days=30, last_check_in=?1 WHERE id=1",
+                params![last],
+            )
+            .unwrap();
+        }
+
+        let st = get_check_in_status_db().unwrap();
+        assert_eq!(
+            st.days_until_due,
+            Some(1),
+            "到期前不足一天必须向上取整为 1，不能是 0（会被判成逾期）"
+        );
 
         let _ = std::fs::remove_file(&path);
     }

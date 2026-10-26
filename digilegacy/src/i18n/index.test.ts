@@ -23,15 +23,32 @@ describe('i18n 核心', () => {
     expect(t('common.save')).toBe('保存');
   });
 
-  it('只存在于英文词典的键在英文模式返回英文，中文模式回退键名', () => {
+  it('缺失键在两种语言下都回退键名（新键漏配不能白屏）', () => {
     setLocale('en-US');
-    expect(t('app.demoBanner')).toContain('Live demo');
+    expect(t('app.demoBanner')).toBe('app.demoBanner');
     setLocale('zh-CN');
     expect(t('app.demoBanner')).toBe('app.demoBanner');
   });
 
   it('两个语言都没有的键回退键名本身（不抛错）', () => {
     expect(t('i18n.definitely.missing')).toBe('i18n.definitely.missing');
+  });
+
+  it('中英词典键集完全对齐（漏翻会静默回退中文，必须有门禁）', async () => {
+    const { zhCN, enUS } = await import('./index');
+    const zhOnly = Object.keys(zhCN).filter(k => !(k in enUS));
+    const enOnly = Object.keys(enUS).filter(k => !(k in zhCN));
+    expect(zhOnly, '只在中文词典里的键').toEqual([]);
+    expect(enOnly, '只在英文词典里的键').toEqual([]);
+  });
+
+  it('界面文案不含 emoji（统一走矢量图标，避免平台字形不一致）', async () => {
+    const { zhCN, enUS } = await import('./index');
+    const emoji = /\p{Extended_Pictographic}/u;
+    const offenders = [...Object.entries(zhCN), ...Object.entries(enUS)]
+      .filter(([, v]) => emoji.test(v))
+      .map(([k]) => k);
+    expect(offenders).toEqual([]);
   });
 
   it('插值：{placeholder} 被参数替换', () => {

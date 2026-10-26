@@ -29,7 +29,7 @@ async function mountDash(opts: {
     }
     if (cmd === 'get_all_assets') return { success: true, message: '', data: opts.assets ?? [] };
     if (cmd === 'get_check_in_status') return { success: true, message: '', data: null };
-    if (cmd === 'evaluate_dms') return { success: true, message: '', data: null };
+    if (cmd === 'get_dms_status') return { success: true, message: '', data: null };
     return { success: true, message: '', data: null };
   });
   const router = createRouter({
