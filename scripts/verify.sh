@@ -38,6 +38,7 @@ if [ "$MODE" != "--rust-only" ]; then
   run "生产构建" bash -c "cd '$WEB' && npm run build"
   run "演示构建（VITE_DEMO=1）" bash -c "cd '$WEB' && npm run build:demo"
   run "心跳服务器行为测试" bash -c "cd '$WEB' && node server/heartbeat-server.test.mjs"
+  run "文档数字一致性" bash -c "cd '$WEB' && node scripts/check-doc-facts.mjs"
   # E2E 默认跳过（需先 npx playwright install chromium）；--with-e2e 显式开启
   if [ "$MODE" = "--with-e2e" ]; then
     run "E2E（Playwright）" bash -c "cd '$WEB' && npx playwright test"

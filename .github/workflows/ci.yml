@@ -60,6 +60,11 @@ jobs:
             exit 1
           fi
 
+      - name: 文档数字与源码一致性
+        # 测试数/命令数/平台数这类手抄数字历史上漂移过多次；
+        # 这里从源码重新推导后与 README/官网/架构文档比对，不一致直接红。
+        run: node scripts/check-doc-facts.mjs
+
       - name: 依赖漏洞扫描（npm）
         # 默认镜像的 audit 端点常不可用，显式指向官方 registry
         run: npm audit --audit-level=high --registry=https://registry.npmjs.org
@@ -155,8 +160,13 @@ jobs:
         # 不接受 `vulnerabilities`（旧写法直接以 “invalid value” 失败，
         # CI 曾连续两次红在这一步，与真实漏洞无关）。默认行为即：
         # 发现漏洞 → exit 1；unmaintained/unsound 仅告警。
+        #
+        # 这里显式钉版本并 *不使用* `|| true`：旧写法会吞掉安装失败，
+        # 然后用 runner 上残留的旧版 cargo-audit 扫描（甚至扫不到），
+        # 属于典型的假绿灯。安装失败就该让 job 红。
         run: |
-          cargo install cargo-audit --locked --quiet || true
+          cargo install cargo-audit --version 0.22.1 --locked --quiet
+          cargo audit --version
           cargo audit
 
   heartbeat-server:

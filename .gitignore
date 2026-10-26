@@ -61,6 +61,7 @@ digilegacy/server/registrations.json
 
 # ---- 本地临时产物 ----
 out/
+.tmp/
 
 # ---- Playwright ----
 test-results/
