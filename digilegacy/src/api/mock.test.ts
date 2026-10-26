@@ -41,6 +41,26 @@ describe('资产增改', () => {
     expect(raw.nextAssetId).toBe(id + 1);
   });
 
+  it('非法类别/处置/负金额与 Rust 命令层同样被拒绝', async () => {
+    const invalid = [
+      { req: { platform_id: 1, category: 'nope', disposal_method: 'inherit' } },
+      { req: { platform_id: 1, category: 'property', disposal_method: 'sell' } },
+      { req: { platform_id: 1, category: 'property', disposal_method: 'inherit', estimated_value: -1 } },
+      { req: { platform_id: 1, category: 'property', disposal_method: 'inherit', estimated_value: Number.POSITIVE_INFINITY } },
+      { req: { platform_id: 1, category: 'property', disposal_method: 'inherit', estimated_value: 1e15 } },
+    ];
+    for (const item of invalid) {
+      const res = await mockInvoke<{ success: boolean; message: string }>('add_asset', item);
+      expect(res.success, JSON.stringify(item)).toBe(false);
+      expect(res.message.length).toBeGreaterThan(0);
+    }
+    // 合法值仍应成功（防止校验过严）
+    const good = await mockInvoke<{ success: boolean }>('add_asset', {
+      req: { platform_id: 1, category: 'property', disposal_method: 'inherit', estimated_value: 0 },
+    });
+    expect(good.success).toBe(true);
+  });
+
   it('update_asset 不存在的 id 返回失败', async () => {
     const res = await mockInvoke<{ success: boolean; message: string }>('update_asset', { id: 99999, req: sampleReq });
     expect(res.success).toBe(false);

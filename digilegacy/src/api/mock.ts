@@ -186,6 +186,18 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       return ok(state.assets.filter(x => x.category === a['category']).map(withPlatformName)) as T;
 
     case 'add_asset': {
+      // 与 Rust 命令层同一边界：非法类别/处置与非有限或负金额必须拒绝，
+      // 否则演示环境的行为会与桌面版不一致（用户会以为桌面版也接受）。
+      const VALID_CATEGORIES = ['property', 'personality', 'mixed'];
+      const VALID_DISPOSALS = ['inherit', 'liquidate', 'memorialize', 'authorize_view', 'delete', 'donate', 'no_action'];
+      const inputCategory = String(req.category ?? '');
+      const inputDisposal = String(req.disposal_method ?? 'no_action');
+      if (!VALID_CATEGORIES.includes(inputCategory)) return fail<null>('无效的资产类别') as T;
+      if (!VALID_DISPOSALS.includes(inputDisposal)) return fail<null>('无效的处置方式') as T;
+      const inputValue = req.estimated_value as number | null | undefined;
+      if (inputValue != null && (!Number.isFinite(inputValue) || inputValue < 0 || inputValue > 1e12)) {
+        return fail<null>('预估价值必须是 0 到 1 万亿之间的有限数值') as T;
+      }
       const asset: DigitalAsset = {
         id: state.nextAssetId++,
         platform_id: Number(req.platform_id),

@@ -13,8 +13,13 @@ export const useAssetsStore = defineStore('assets', () => {
   const loadError = ref('');
   const currentAsset = ref<DigitalAsset | null>(null);
 
+  // 统计口径必须与后端一致：只累加有限且非负的估值。
+  // 旧实现用 `|| 0`，负数会原样相加，把总价值算成负数（导入脏数据时最明显）。
   const totalValue = computed(() =>
-    assets.value.reduce((sum, a) => sum + (a.estimated_value || 0), 0)
+    assets.value.reduce((sum, a) => {
+      const v = a.estimated_value;
+      return sum + (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
+    }, 0)
   );
 
   const propertyCount = computed(() =>
