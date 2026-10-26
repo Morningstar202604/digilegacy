@@ -1,0 +1,1 @@
+import{d as e}from"./index-CUFfvxra.js";async function t(){return await e(`plugin:autostart|is_enabled`)}export{t as isEnabled};

@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT 许可">
-  <img src="https://img.shields.io/badge/tests-95%20Rust%20%C2%B7%20330%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="测试">
+  <img src="https://img.shields.io/badge/tests-96%20Rust%20%C2%B7%20332%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="测试">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="无服务器">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="无遥测">
@@ -79,10 +79,10 @@
 
 | 检查项 | 结果 |
 |---|---|
-| Rust 测试 | **95 通过**（`cargo test --locked`） |
-| 前端单元测试 | **330 通过**，30 个文件 |
+| Rust 测试 | **96 通过**（`cargo test --locked`） |
+| 前端单元测试 | **332 通过**，30 个文件 |
 | 端到端测试 | **37 通过**，真实 Chromium |
-| 覆盖率 | **85.1% 语句**、86.5% 行，阈值写进 CI |
+| 覆盖率 | **85.1% 语句**、86.6% 行，阈值写进 CI |
 | 类型安全 | `vue-tsc --noEmit` 无错误，Rust `clippy -D warnings` 无警告 |
 | 供应链 | `cargo audit` 与 `npm audit`：0 漏洞 |
 | CI | 5 个 job——前端、E2E、Rust、心跳服务器、Windows 安装包构建 |
