@@ -606,6 +606,25 @@ pub fn clear_platform_overrides_db() -> Result<usize, String> {
         .collect();
     drop(stmt);
     for id in extra {
+        // 仍有资产挂在这些补丁平台上时不能直接删父行（外键会拦），
+        // 也不该连资产一起删。保留一行「已归档」的平台占位，等用户自己处理
+        // 这些资产（改挂到内置平台或删除），占用方是用户数据，不是补丁。
+        let in_use: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM digital_assets WHERE platform_id=?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        if in_use > 0 {
+            // 改名标注来源，避免用户以为它还是可用平台
+            conn.execute(
+                "UPDATE platforms SET name = name || '（补丁已清除）' WHERE id=?1",
+                params![id],
+            )
+            .map_err(|e| format!("标记补丁平台失败: {}", e))?;
+            continue;
+        }
         conn.execute("DELETE FROM platforms WHERE id=?1", params![id])
             .map_err(|e| format!("清理补丁镜像平台失败: {}", e))?;
     }

@@ -385,7 +385,57 @@ fn dms_timeline_50_scenarios() {
     assert!(c.count >= 70 * 4, "场景检查点不足: {}", c.count);
 }
 
-/// 凭据保险库矩阵：20 个资产 × 加密/明文 × 保存/读取/清除/锁定拒绝。
+/// 回归：补丁平台上有资产时，清除补丁不得失败，也不得连带删掉用户资产。
+#[test]
+fn clearing_patch_keeps_assets_on_patch_only_platforms() {
+    let _g = vault::test_lock();
+    let mut c = Check::new();
+    let path = temp_db("clear_patch_assets");
+    crate::db::init_database_at(path.clone()).unwrap();
+
+    crate::db::import_platform_overrides_db(
+        r#"{"app":"digilegacy","platforms":[{"id":9101,"name":"补丁平台","category":"游戏"}]}"#,
+    )
+    .unwrap();
+    let id = crate::db::add_asset_db(&req(9101, "property", "inherit", Some(1.0))).unwrap();
+
+    let removed =
+        crate::db::clear_platform_overrides_db().expect("有资产挂在补丁平台上时也必须能清除补丁");
+    c.ok(removed == 1, || {
+        format!("应清除 1 条补丁，实际 {}", removed)
+    });
+    c.ok(crate::db::get_asset_by_id_db(id).unwrap().is_some(), || {
+        "用户资产不得被连带删除".to_string()
+    });
+
+    // 平台行保留但被标注，便于用户识别并迁移
+    let platforms = crate::db::get_all_platforms_db().unwrap();
+    let kept = platforms.iter().find(|p| p.id == 9101);
+    c.ok(kept.is_some(), || {
+        "在用的补丁平台必须保留占位行".to_string()
+    });
+    c.ok(
+        kept.map(|p| p.name.contains("补丁已清除")).unwrap_or(false),
+        || "保留的平台必须标注来源".to_string(),
+    );
+
+    // 用户把资产迁走后可以再清除一次，占位行才会被真正删掉
+    crate::db::delete_asset_db(id).unwrap();
+    crate::db::clear_platform_overrides_db().unwrap();
+    c.ok(
+        crate::db::get_all_platforms_db()
+            .unwrap()
+            .iter()
+            .all(|p| p.id != 9101),
+        || "无资产占用后占位行必须被清理".to_string(),
+    );
+
+    let _ = std::fs::remove_file(&path);
+    println!("clearing_patch_keeps_assets: {} 检查点", c.count);
+    assert!(c.count >= 5);
+}
+
+/// 凭据保险库矩阵/// 凭据保险库矩阵：20 个资产 × 加密/明文 × 保存/读取/清除/锁定拒绝。
 #[test]
 fn credential_vault_40_scenarios() {
     let _g = vault::test_lock();
