@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT 许可">
-  <img src="https://img.shields.io/badge/tests-86%20Rust%20%C2%B7%20318%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="测试">
+  <img src="https://img.shields.io/badge/tests-95%20Rust%20%C2%B7%20329%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="测试">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="无服务器">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="无遥测">
@@ -34,7 +34,7 @@
 
 | | |
 |---|---|
-| 内置 **152** 个平台、**16** 个分类的继承政策库 | **42** 个 IPC 命令，Rust 内核 + Vue 前端 |
+| 内置 **152** 个平台、**16** 个分类的继承政策库 | **45** 个 IPC 命令，Rust 内核 + Vue 前端 |
 | **AES-256-GCM** 字段级加密，PBKDF2-SHA256 60 万次迭代 | **0** 服务器、**0** 遥测、**0** 云端调用 |
 
 ## 走一遍界面
@@ -79,16 +79,16 @@
 
 | 检查项 | 结果 |
 |---|---|
-| Rust 测试 | **86 通过**（`cargo test --locked`） |
-| 前端单元测试 | **265 通过**，26 个文件 |
+| Rust 测试 | **95 通过**（`cargo test --locked`） |
+| 前端单元测试 | **329 通过**，30 个文件 |
 | 端到端测试 | **37 通过**，真实 Chromium |
-| 覆盖率 | **79.4% 语句**、80.8% 行，阈值写进 CI |
+| 覆盖率 | **85.1% 语句**、86.5% 行，阈值写进 CI |
 | 类型安全 | `vue-tsc --noEmit` 无错误，Rust `clippy -D warnings` 无警告 |
 | 供应链 | `cargo audit` 与 `npm audit`：0 漏洞 |
 | CI | 5 个 job——前端、E2E、Rust、心跳服务器、Windows 安装包构建 |
 | 发布 | 带 SHA-256 校验和的构建流水线，发布后重新下载校验 |
 
-**生产级细节：** 演示后端不会进入安装包（CI 断言无 `mock-*` 分块）；数据库 schema 带 `PRAGMA user_version`；IPC 入口对输入做长度与取值范围校验；备份格式覆盖心跳与政策补丁配置。
+**生产级细节：** 演示后端不会进入安装包（CI 断言无 `mock-*` 分块）；数据库 schema 带 `PRAGMA user_version`；IPC 入口对输入做长度与取值范围校验；备份格式（v3）覆盖心跳、政策补丁与恢复封印；备份/报告/SMTP 凭据文件按仅本人可读权限落盘。
 
 ## 开始使用
 
@@ -116,7 +116,7 @@ npm run tauri:build    # 产出安装包
 
 ## 诚实的边界
 
-本地加密保护的是静态数据——它挡不住以你的身份运行的恶意软件，也挡不住知道主密码的人。报告与工具包是明文文件，请像对待纸质文件一样对待它。桌面界面目前只有简体中文；官网、文档与演示为双语。
+本地加密保护的是静态数据——它挡不住以你的身份运行的恶意软件，也挡不住知道主密码的人。报告与工具包是明文文件，请像对待纸质文件一样对待它。桌面界面提供简体中文与英文（标题栏切换）；官网、文档与演示同样为双语。
 
 ## 深入了解
 

@@ -7,7 +7,7 @@ DigiLegacy is a single-process Tauri 2 desktop application. There is no backend 
 │ WebView (Vue 3 + TypeScript + Pinia)                         │
 │   views/ ── stores/ ── api/invoke.ts ──┐                     │
 └───────────────────────────────────────┼──────────────────────┘
-                                        │ Tauri IPC (42 commands)
+                                        │ Tauri IPC (45 commands)
 ┌───────────────────────────────────────▼──────────────────────┐
 │ Rust core (src-tauri/src)                                    │
 │   commands.rs   thin command layer, input caps, envelopes    │
@@ -15,6 +15,7 @@ DigiLegacy is a single-process Tauri 2 desktop application. There is no backend 
 │   crypto.rs     AES-256-GCM + PBKDF2 primitives               │
 │   recovery.rs   one-time recovery key seal                    │
 │   db.rs         schema, migrations, all SQL                   │
+│   fsutil.rs     0600 file writes (backups / reports / netrc)   │
 │   notify.rs     dead-man's-switch evaluation + outbox + SMTP  │
 │   heartbeat.rs  zero-content heartbeat over curl              │
 │   backup.rs     daily snapshot, 7-day retention, atomic write │
@@ -75,9 +76,17 @@ Reading reverses it: `row_to_asset` calls `vault::decrypt_or_placeholder`, which
 
 E2E does not feed the v8 coverage numbers. The two are complementary: unit coverage measures branch breadth, E2E measures whether the screens actually work.
 
+## DMS: read vs. dispatch
+
+`notify::status_snapshot` (`get_dms_status`) only reads `dms_config` and computes the stage — no SMTP, no outbox write. `notify::evaluate_dms` is the dispatching path and is only called by the background loop. The UI must never call the dispatcher: opening a page used to send real mail. `get_dms_history` reads the newest 50 entries from `dms_outbox/*.jsonl`.
+
+## Backup format
+
+`version: 3` adds `security_config.recovery_seal` to the export so a recovery code survives a machine move. Imports accept v1/v2/v3. A backup **without** `security_config` is treated as plaintext: importing it into an encrypted vault is rejected while locked and field-encrypted while unlocked — plaintext must never land in an `enc:v1:` column.
+
 ## Known limits
 
-- The desktop UI is Simplified Chinese only. Strings are inline in components; there is no i18n layer yet. The website (`docs/index.html` + `docs/zh/index.html`), `README.md` / `README.zh-CN.md` and the demo banner are bilingual, but that is content parity, not runtime internationalisation.
+- The desktop UI ships in Simplified Chinese and English; `src/i18n/index.ts` holds both dictionaries, `setLocale` also updates `<html lang>`, and a unit test asserts the two key sets are identical. Legal template bodies are Chinese-only by design (they are jurisdiction-specific documents).
 - Migrations are still additive `ALTER TABLE` checks; `PRAGMA user_version` now records the baseline (`SCHEMA_VERSION = 2`), so the first destructive migration should branch on it rather than on column presence.
 - `db.rs` is the largest module (~3k lines). Platform queries, asset CRUD, profile, security, backup, and DMS all live there. Splitting it by domain is the highest-value refactor left, but it is not urgent while the test suite covers the seams.
 - The public demo is a static build of the real UI over the mock backend. It is a showcase, not a security boundary: its data lives unencrypted in `localStorage` and the banner in the UI says so.

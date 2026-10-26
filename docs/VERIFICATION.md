@@ -2,7 +2,39 @@
 
 本文件记录最终验证证据，避免"看起来绿"与"真的绿"混淆。
 
-## 本地门禁（Windows，`bash scripts/verify.sh`）
+## 2026-10-26 扩展升级轮
+
+| 命令 | 结果 |
+|---|---|
+| `npx vue-tsc --noEmit` | exit 0 |
+| `npm run test:coverage` | **329 tests / 30 files**，statements 85.07%（branches 78.43 / functions 76.57 / lines 86.53，阈值 78/78/71/79） |
+| `npm run build` | PASS；`dist/assets` 无 `mock-*.js` 分块 |
+| `npx playwright test` | **37 passed**（27.0s） |
+| `cargo test --locked` | **95 passed, 0 failed, 1 ignored** |
+| `cargo clippy --all-targets -- -D warnings` | 0 warnings |
+| `cargo fmt --check` | PASS |
+| `node server/heartbeat-server.test.mjs` | all assertions passed |
+
+本轮修复与新增（每条都有回归测试）：
+
+| 项目 | 级别 | 回归测试 |
+|---|---|---|
+| 打开仪表板即调用 `evaluate_dms`，会真的执行一轮 SMTP 投递（读页面产生副作用） | P0 | `DMSView.test.ts`「打开页面只读状态，绝不触发投递命令」、`dashboard.test.ts`「evaluateDms 走只读命令」 |
+| 明文备份导入已加密库时绕过加密、直接写明文列 | P0 | `db.rs::plaintext_backup_never_lands_as_plaintext_in_encrypted_vault` |
+| 备份不含恢复封印，换机恢复后恢复码失效 | P1 | `db.rs::import_backup_preserves_v3_seal_and_clears_legacy_stale_seal` |
+| 剩余天数用 `num_days()` 截断，到期前不足一天被误判逾期 | P1 | `db.rs::days_until_due_rounds_up_instead_of_truncating` |
+| 政策补丁导入后 `platformsExtended` 仍是旧缓存，继承人向导显示旧政策 | P1 | `platforms.test.ts::refreshPlatforms` |
+| ZIP 工具包里的报告是页内片段，缺 DOCTYPE 与打印样式 | P1 | `ReportView.test.ts::ZIP 里的报告必须是独立 HTML` |
+| `set_disposal_wish` 绕过全部输入校验（任意长度文本/非法枚举） | P2 | `commands.rs::disposal_wish_validates_enum_and_size` |
+| `import_backup` / `export_report_to_file` 无体积上限 | P2 | `commands.rs::export_commands_reject_oversized_payloads` |
+| 心跳地址经环境变量可绕过 http(s) 校验 | P2 | `heartbeat.rs::post_heartbeat_rejects_non_http_schemes` |
+| 备份与 SMTP netrc 在 Unix 上按 0644 落盘 | P2 | `fsutil.rs::unix_file_is_owner_only` |
+| 英文界面金额仍按「万」显示 | P2 | `format.test.ts::英文界面按 k/M/B 缩写` |
+| 词典存在中英不对称、界面残留 emoji | P3 | `i18n/index.test.ts` 键集对齐 + emoji 门禁 |
+| 自动备份是静默功能，界面不可见 | P3 | `ProfileView.test.ts::自动备份状态可见`、`backup.rs::latest_summary_reports_newest_file_and_size` |
+| 通知历史只看本轮评估结果，刷新即消失 | P2 | `DMSView.test.ts::历史投递持久可见`、`notify.rs::outbox_history_reads_newest_first_and_skips_bad_lines` |
+
+## 本地门禁（Windows，`bash scripts/verify.sh`；历史轮 · 2026-10-24 数字）
 
 | 步骤 | 命令 | 结果 |
 |---|---|---|

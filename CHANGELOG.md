@@ -6,15 +6,31 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
-- 前端视觉重构收官：接入 Naive UI 主题桥接，全应用 emoji 图标迁移至 Ionicon/FontAwesome 矢量图标（新增 `PlatformIcon.vue`，覆盖 24+ 平台与 16 分类品牌映射）。
-- `main.css` 新增视觉升级层：暖色氛围光、毛玻璃头部、胶囊化导航、卡片双层高光、深色模式全套样式。
-- 路由标题解析抽为可测函数 `resolveTitleKey`；清理导航 meta 的 emoji 残留。
+- **备份格式 v3**: exports now carry the `recovery_seal`, so a recovery key still works after moving to a new machine. v1/v2 backups remain importable; importing a backup without a seal clears the stale local one.
+- **Read-only DMS status + notification history**: the dashboard and the Legacy Care page now call `get_dms_status` (no SMTP, no outbox write) and `get_dms_history` (latest 50 entries from the local outbox), so past notifications stay visible after a refresh.
+- **Auto-backup status** in Profile: snapshot count, latest file name and size, with an explicit "no snapshot yet" state and a visible error path.
+- **English money formatting**: amounts now render as `123.5k` / `2.5M` in the English UI instead of reusing the Chinese 万 divisor.
+- **Per-user file permissions** for backups, reports and the temporary SMTP netrc (`0600` on Unix) via a shared `fsutil::write_private`.
+- **Bilingual UI is now real**: the header language switch drives the whole desktop UI, the dictionary key sets are asserted equal in tests, and `<html lang>` follows the selected locale.
+- **Frontend visual pass**: Naive UI theme bridge and every emoji icon replaced by Ionicon / FontAwesome vectors through the new `PlatformIcon.vue` (24+ platforms, 16 categories); `main.css` gained the warm-ambient / glass-header / pill-nav / layered-card / dark-mode layers.
 
 ### Fixed
 
-- DiscoverView 步骤指示器渲染键名原文（漏包 `t()`）的缺陷。
-- 前端单测由 296 增至 318（补托盘事件、解锁边界、恢复密钥确认、卡片定位等分支），分支覆盖率 76.82% → 78.01%，全部门禁转绿。
-- README 中英双语测试数徽章同步为 86 Rust · 318 frontend · 37 E2E。
+- **Opening the dashboard could send real email.** The frontend called `evaluate_dms`, which dispatches SMTP mail and writes the outbox; merely viewing a page performed a notification round. UI now reads the read-only status.
+- **Plaintext backups could bypass encryption.** Importing a backup without `security_config` into an encrypted vault wrote plaintext into columns that must hold `enc:v1:` ciphertext; the import is now rejected while locked and encrypts field-by-field while unlocked.
+- **Remaining days were truncated.** `num_days()` made "20 hours left" render as 0 days and the UI treated it as overdue; the value now rounds up.
+- **Policy patch and backup import left stale platform caches.** `platformsExtended` was never invalidated, so the heir guide kept showing pre-patch policy text.
+- **The ZIP toolkit shipped a broken report.** `01-继承报告.html` was an in-page fragment without `<!DOCTYPE html>` or print styles; it now uses the same standalone document as the single-file export.
+- **`set_disposal_wish` bypassed every input check** (arbitrary length text, invalid enum) even though it writes straight to the asset table.
+- **`import_backup` and `export_report_to_file` had no size caps**, unlike every other IPC entry point.
+- **Heartbeat endpoint validation could be bypassed** through environment variables; non-http(s) schemes are now rejected inside `post_heartbeat`.
+- **Report templates opened a blank WebView window** (`target="_blank"`) instead of the system browser; the form link now goes through `open_external`.
+- **Chinese dictionary no longer carries emoji in UI strings**, and the English dictionary no longer has keys the Chinese one lacks.
+- **DiscoverView step indicator** rendered raw dictionary keys (missing `t()`); route titles are resolved through the testable `resolveTitleKey`.
+
+### Changed
+
+- Frontend unit tests grew from 296 to **329**, branch coverage 76.82% → **78.43%**; README badges synced to 95 Rust · 329 frontend · 37 E2E.
 
 ## [0.2.0] - 2026-10-24
 
@@ -47,7 +63,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
-- **README rewritten as a showcase, not a manual.** Both `README.md` and `README.zh-CN.md` now open with the real dashboard screenshot, a one-line pitch, the live-demo/download links, a four-stat band (152 platforms · 42 commands · AES-256-GCM · 0 servers), an eight-shot guided tour, a capability grid, a verification table and a tech stack. Module layering and the encryption data flow stay in `docs/ARCHITECTURE.md`, verification evidence in `docs/VERIFICATION.md`, and the long-form comparison, security notes and FAQ live on the website (EN + 中文) instead of bloating the front page.
+- **README rewritten as a showcase, not a manual.** Both `README.md` and `README.zh-CN.md` now open with the real dashboard screenshot, a one-line pitch, the live-demo/download links, a four-stat band (152 platforms · 45 commands · AES-256-GCM · 0 servers), an eight-shot guided tour, a capability grid, a verification table and a tech stack. Module layering and the encryption data flow stay in `docs/ARCHITECTURE.md`, verification evidence in `docs/VERIFICATION.md`, and the long-form comparison, security notes and FAQ live on the website (EN + 中文) instead of bloating the front page.
 - README and `docs/VERIFICATION.md` re-derived from real runs: 86 Rust tests, 265 frontend unit tests, 37 E2E, coverage 79.4/79.0/73.2/80.8.
 - `src/router.ts` and `src/api/invoke.ts` — previously 0% / partially covered despite being the single entry points for navigation and IPC — now have dedicated unit tests (`router.test.ts`, extended `invoke.test.ts`), covering the 404 fallback, per-route `document.title`, scroll restoration, mock routing, and the "no backend" error path.
 

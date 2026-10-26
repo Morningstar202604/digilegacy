@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-86%20Rust%20%C2%B7%20318%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-95%20Rust%20%C2%B7%20329%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -34,7 +34,7 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | | |
 |---|---|
-| **152** platforms in the built-in inheritance policy database, 16 categories | **42** IPC commands across a Rust core and a Vue frontend |
+| **152** platforms in the built-in inheritance policy database, 16 categories | **45** IPC commands across a Rust core and a Vue frontend |
 | **AES-256-GCM** field-level encryption, PBKDF2-SHA256 at 600k iterations | **0** servers, **0** telemetry, **0** cloud calls |
 
 ## A guided tour
@@ -79,16 +79,16 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **86 passing** (`cargo test --locked`) |
-| Frontend unit tests | **265 passing** across 26 files |
+| Rust tests | **95 passing** (`cargo test --locked`) |
+| Frontend unit tests | **329 passing** across 30 files |
 | End-to-end tests | **37 passing** in real Chromium |
-| Coverage | **79.4% statements**, 80.8% lines — thresholds enforced in CI |
+| Coverage | **85.1% statements**, 86.5% lines — thresholds enforced in CI |
 | Type safety | `vue-tsc --noEmit` clean, Rust `clippy -D warnings` clean |
 | Supply chain | `cargo audit` and `npm audit`: 0 vulnerabilities |
 | CI | 5 jobs — frontend, E2E, Rust, heartbeat server, Windows installer build |
 | Release | Signed build pipeline with SHA-256 checksums, verified after publish |
 
-**Production hygiene:** the demo backend is compiled out of the installer (CI asserts no `mock-*` chunk), the schema is versioned with `PRAGMA user_version`, command inputs are capped and validated at the IPC boundary, and the backup format carries heartbeat and policy-patch settings.
+**Production hygiene:** the demo backend is compiled out of the installer (CI asserts no `mock-*` chunk), the schema is versioned with `PRAGMA user_version`, command inputs are capped and validated at the IPC boundary, backups carry heartbeat settings, policy patches and the recovery seal (v3), and backup/report/SMTP files are written owner-only.
 
 ## Get started
 
@@ -116,7 +116,7 @@ npm run tauri:build    # installers
 
 ## Honest limits
 
-Local encryption protects data at rest — it cannot stop malware running as you, or someone who knows your master password. Reports and toolkits are plain files: treat them like paper. The desktop UI is Simplified Chinese only; the website, docs and demo are bilingual.
+Local encryption protects data at rest — it cannot stop malware running as you, or someone who knows your master password. Reports and toolkits are plain files: treat them like paper. The desktop UI ships in Simplified Chinese and English (switch in the header); the website, docs and demo are bilingual as well.
 
 ## Go deeper
 
