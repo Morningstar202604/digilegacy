@@ -31,8 +31,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Scenario simulation (2026-10-26)
 
-- **Backend scenario suite** (`src-tauri/src/scenarios.rs`): 246 combinations / **2824 checkpoints** over real SQLite + real AES — asset lifecycle (3 categories × 7 disposals × 3 value shapes × encrypted/plaintext), backup round-trips (30 rounds incl. v1 compatibility and 4 malformed inputs), credential vault (20 assets × encrypted/plaintext), DMS timeline (7 intervals × 10 offsets) and policy patches (30 rounds).
-- **Frontend scenario suite** (`src/scenarios.test.ts`): ~300 combinations / **1692 checkpoints** across the asset store, filter/sort/search, money formatting × locale, locked-state write paths, mock lifecycle and platform cache invalidation.
+- **Backend scenario suite** (`src-tauri/src/scenarios.rs`): **2824 checkpoints** over real SQLite + real AES — asset lifecycle (3 categories × 7 disposals × 3 value shapes × encrypted/plaintext), backup round-trips (30 rounds incl. v1 compatibility and 4 malformed inputs), credential vault (20 assets × encrypted/plaintext), DMS timeline (7 intervals × 10 offsets) and policy patches (30 rounds).
+- **Frontend scenario suite** (`src/scenarios.test.ts`): **1714 checkpoints** across ten matrices — asset store, filter/sort/search, money formatting × locale, locked-state write paths, placeholder detection, mock lifecycle and platform cache invalidation.
 - **Browser scenario suite** (`e2e/scenarios.spec.ts`): **39 scenarios** — 8 routes × 2 locales × 2 themes, 20 platform-search keywords, 4 filters × 4 sorts, 6 legal categories, heir-guide tabs/difficulty/collapse, DMS idempotence, report actions and per-page language/theme round-trips.
 
 ### Hardening follow-up (2026-10-26, third pass)

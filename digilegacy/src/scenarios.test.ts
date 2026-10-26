@@ -162,7 +162,7 @@ describe('筛选/排序/搜索 矩阵（120 场景）', () => {
     return sorted;
   }
 
-  it('4 类别筛选 × 5 关键词 × 6 排序 = 120 组合全部自洽', () => {
+  it('4 类别筛选 × 5 关键词 × 4 排序 = 80 组合全部自洽', () => {
     const c = makeChecker();
     const rows = makeRows();
     const filters = ['all', 'property', 'personality', 'mixed'];

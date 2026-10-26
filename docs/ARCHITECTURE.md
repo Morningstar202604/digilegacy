@@ -71,7 +71,7 @@ Reading reverses it: `row_to_asset` calls `vault::decrypt_or_placeholder`, which
 |---|---|---|
 | Rust units | `cargo test` | SQL, encryption round-trips, migration, re-encryption, DMS staging, SMTP header sanitisation, backup retention. |
 | Frontend units | Vitest + jsdom | Store behaviour, view rendering, error paths, accessibility attributes. Coverage thresholds are enforced over all of `src/**`. |
-| Scenario matrices | `scenarios.rs` (Rust) + `scenarios.test.ts` (Vitest) | Combination sweeps that assert invariants after every step rather than per-function: 246 backend combinations / 2824 checkpoints over real SQLite + AES, and ~339 frontend combinations / 1692 checkpoints. These caught the missing backup-import validation and the negative `totalValue` sum. |
+| Scenario matrices | `scenarios.rs` (Rust) + `scenarios.test.ts` (Vitest) | Combination sweeps that assert invariants after every step rather than per-function: 2824 backend checkpoints over real SQLite + AES, and 1714 frontend checkpoints across ten matrices. Counts are quoted as checkpoints only — the "combination" definition varies per family, so a single combo total was a drift source. These caught the missing backup-import validation and the negative `totalValue` sum. |
 | E2E | Playwright (browser preview) | Real component tree, router, and store interactions against the mock backend. Catches view-layer regressions unit tests miss. `e2e/scenarios.spec.ts` adds 39 matrix scenarios (8 routes × 2 locales × 2 themes, 20 search keywords, 4×4 filter/sort, etc.). |
 | Release | CI `release-build` + `release.yml` | The installers actually build, and version numbers agree across three manifests. |
 
@@ -116,5 +116,5 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 
 - The desktop UI ships in Simplified Chinese and English; `src/i18n/index.ts` holds both dictionaries, `setLocale` also updates `<html lang>`, and a unit test asserts the two key sets are identical. Legal template bodies are Chinese-only by design (they are jurisdiction-specific documents).
 - Migrations are still additive `ALTER TABLE` checks; `PRAGMA user_version` now records the baseline (`SCHEMA_VERSION = 2`), so the first destructive migration should branch on it rather than on column presence.
-- `db.rs` is the largest module (~3.4k lines). Platform queries, asset CRUD, profile, security, backup, and DMS all live there. Splitting it by domain is the highest-value refactor left, but it is not urgent while the test suite covers the seams.
+- `db.rs` is still the largest module (1882 lines): connection lifecycle, asset CRUD, profile, security, backup, and DMS live there. Platform patches already moved to `db_platforms.rs` (293 lines) and the regression suite to `db_tests.rs` (1722 lines). Splitting the remaining domains is the next step, but it is not urgent while the test suite covers the seams.
 - The public demo is a static build of the real UI over the mock backend. It is a showcase, not a security boundary: its data lives unencrypted in `localStorage` and the banner in the UI says so.

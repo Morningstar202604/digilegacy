@@ -2,7 +2,7 @@
 
 本文件记录最终验证证据，避免"看起来绿"与"真的绿"混淆。
 
-## 2026-10-26 扩展升级轮
+## 2026-10-26 扩展升级轮（历史快照 · 数字为当时状态，最终数字见第三轮门禁）
 
 | 命令 | 结果 |
 |---|---|
@@ -43,7 +43,7 @@
 | 项 | 做法 | 验证 |
 |---|---|---|
 | CI 假绿灯 | `cargo-audit` 去 `|| true`、钉 0.22.1、打印 `--version` | `ci.yml:154-165`；本地 `cargo audit` 0 漏洞 |
-| 文档数字漂移 | `doc-facts-lib.mjs` 单一推导 + `check-doc-facts.mjs` 门禁 + `sync-doc-facts.mjs` 修正 | `node scripts/check-doc-facts.mjs` exit 0（Rust 119 / 前端 352 / E2E 76 / IPC 46） |
+| 文档数字漂移 | `doc-facts-lib.mjs` 单一推导 + `check-doc-facts.mjs` 门禁 + `sync-doc-facts.mjs` 修正 | `node scripts/check-doc-facts.mjs` exit 0（Rust 声明 120 / 前端 352 / E2E 76 / IPC 46） |
 | 报告抓 DOM | 新增 `report.rs` 后端渲染，单文件与 ZIP 同源；含占位符拒绝导出 | `report.rs` 5 组测试 + `ReportView.test.ts` 2 例 + `commands.rs::render_report_response_refuses_placeholder_and_returns_full_document` |
 | 「已解锁」不可信 | `security_status` 用验证器校验密钥；写路径同样拒绝错配密钥 | `commands.rs::security_status_is_false_when_key_does_not_match_verifier` |
 | DMS 边界未披露 | 安心传承页新增边界区块 + 实际通道显示 | `DMSView.test.ts` 3 例 |
@@ -101,7 +101,9 @@
 | 凭据保险库矩阵 | 20 资产 × 加密/明文 | **180** | 锁定态拒绝、密文以 `enc:v1:` 落库、`has_credential` 同步、清除后不可读 |
 | DMS 时间线矩阵 | 7 间隔 × 10 偏移 = 70 | **350** | 逾期判定、三级分级、签到后归零，与界面判定口径一致 |
 | 政策补丁矩阵 | 30 轮 | **216** | 新增/覆盖判定、导出、清除回落到内置 152 条 |
-| **合计** | **246 个组合** | **2824** | |
+| **合计** | **五个矩阵族** | **2824** | |
+
+> 口径说明：组合数按「轮次 × 资产数」等不同定义，各矩阵族的「组合」不可加总，因此合计只报可执行的检查点数。
 
 ### 前端（真实 Pinia store + 真实 mock 后端，`src/scenarios.test.ts`）
 
@@ -114,8 +116,10 @@
 | 锁定态 × 写路径 | 5 条命令 | **12** |
 | 锁定态批量读取 | 12 资产 | **36** |
 | mock 资产生命周期 | 20 轮 | **160** |
+| 占位符识别（资产 5 字段） | 5 字段 × 正常/占位 | **10** |
+| 档案占位符（12 字段） | 12 字段 | **12** |
 | 平台缓存失效 | 10 轮 × 3 态 | **40** |
-| **合计** | **约 300 组合** | **1692** |
+| **合计** | **十个矩阵族** | **1714** |
 
 ### 浏览器（真实 Chromium，`e2e/scenarios.spec.ts`）
 
