@@ -88,7 +88,7 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 | CI | 5 jobs — frontend, E2E, Rust, heartbeat server, Windows installer build |
 | Release | Signed build pipeline with SHA-256 checksums, verified after publish |
 
-**Production hygiene:** the demo backend is compiled out of the installer (CI asserts no `mock-*` chunk), the schema is versioned with `PRAGMA user_version`, command inputs are capped and validated at the IPC boundary, backups carry heartbeat settings, policy patches and the recovery seal (v3), and backup/report/SMTP files are written owner-only.
+**Production hygiene:** the demo backend is compiled out of the installer (CI asserts no `mock-*` chunk), the schema is versioned with `PRAGMA user_version`, command inputs are capped and validated at the IPC boundary, backups carry heartbeat settings, policy patches and the recovery seal (v3), backup, report, toolkit and SMTP-credential files are written owner-only, and importing a backup writes a pre-import snapshot and merges by default.
 
 ## Get started
 

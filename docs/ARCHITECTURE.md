@@ -96,7 +96,12 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 | `db_tests.rs` | the db regression suite (split out so production code stays readable) |
 | `report.rs` | report HTML rendering (escaping, print styles, placeholder refusal) |
 | `fsutil.rs` | owner-only file writes/appends |
-| `notify.rs` | DMS staging, outbox, SMTP; read-only status snapshot |
+| `db_custody.rs` | custody locations (where the backup and recovery code live), field-encrypted |
+| `action_guide.rs` | the family's printable, platform-grouped action checklist |
+| `toolkit.rs` | action-guide assembly + family drill (metadata only, no credentials) |
+| `family_faq.rs` | 12 deterministic bilingual FAQ entries embedded in the guide (no LLM, no network) |
+| `notify.rs` | DMS staging, outbox, SMTP (UI config first, env vars as fallback); read-only status snapshot |
+| `report.rs` | report HTML rendering (escaping, print styles, placeholder refusal, bilingual) |
 
 ## Placeholder is read-only
 

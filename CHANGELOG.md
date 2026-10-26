@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- **Family action guide** (`action_guide.rs`, `toolkit.rs`): a self-contained, printable HTML checklist grouped by platform — documents required, procedure, difficulty, expected duration, official link, and who handles each asset. It answers "what do I do first" rather than repeating the report. Includes an offline FAQ of 12 questions (no LLM, no network).
+- **Custody locations** (`db_custody.rs`): where the encrypted backup lives and where the recovery code was written down. Without these two facts the family cannot read credentials even with the toolkit; both are field-encrypted and printed into the action guide, with an explicit warning when blank.
+- **Family drill** (`toolkit::evaluate_drill`): checks, using metadata only, where the family would get stuck — missing heir, missing policy, unverified policy, unreachable trigger chain. Reads no credentials.
+- **SMTP configuration in the UI** (`smtp_config` table): host / port / sender / username / app password plus a "send test email" button. Previously SMTP was environment-variables-only, so the packaged app could never actually reach the family; delivery still degrades to the local outbox when unconfigured.
+- **Import snapshot + merge mode**: importing a backup now writes a pre-import snapshot first and defaults to *merge* (append) instead of wiping the database. Replace is still available behind a separate destructive confirmation.
+- **Policy provenance gate** (`scripts/check-policy-provenance.mjs`): every built-in policy must carry a real source or an explicit "unverified" marker; the count of unverified entries is ratcheted so it can only decrease. Never auto-fills sources or review dates.
+- **Four-dimension completion metric**: the dashboard now reports disposal decided / heir named / identifier filled / trigger reachable separately instead of one percentage that counted "picked a disposal method" as done.
+- **Report export parity**: the exported report now carries the platform guidance, heir contact and bilingual copy that the on-screen preview always had, and the ZIP is written with owner-only permissions.
+
+### Fixed
+
+- **Exporting a report dropped the guidance** the preview showed: platform policy, required documents, difficulty, duration and the official link were in the preview but absent from the file. The heir received a shortened document.
+- **The report was always Chinese** (`<html lang="zh-CN">` hardcoded), so English users exported a Chinese document.
+- **The ZIP toolkit skipped `write_private`**, so `02-资产清单.json` (all account identifiers) landed with default umask permissions while reports and backups were owner-only.
+- **The discovery questionnaire was decorative**: answers only changed a counter. They now pre-select the matching asset categories (still fully editable).
+- **`is_confirmed` was always 1** and `unconfirmed_count` therefore always 0 while being invisible in the UI. The metric is removed rather than left lying.
+- **"Inherit" could be saved with no heir**, producing reports that say "heir: not specified". Both the frontend and the DB now reject it; batch registration validates the whole set before writing anything.
+- **`db.rs` deadlocked the dashboard** when it read SMTP settings through a helper that re-acquired the global connection mutex. The check now queries the same connection.
+
 - **备份格式 v3**: exports now carry the `recovery_seal`, so a recovery key still works after moving to a new machine. v1/v2 backups remain importable; importing a backup without a seal clears the stale local one.
 - **Read-only DMS status + notification history**: the dashboard and the Legacy Care page now call `get_dms_status` (no SMTP, no outbox write) and `get_dms_history` (latest 50 entries from the local outbox), so past notifications stay visible after a refresh.
 - **Auto-backup status** in Profile: snapshot count, latest file name and size, with an explicit "no snapshot yet" state and a visible error path.
