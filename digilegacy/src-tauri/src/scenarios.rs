@@ -435,6 +435,190 @@ fn clearing_patch_keeps_assets_on_patch_only_platforms() {
     assert!(c.count >= 5);
 }
 
+/// 导入层鲁棒性：用确定性伪随机生成 500 份畸形/边界备份，
+/// 断言「永不 panic、永不留下半截数据、错误信息非空」。
+///
+/// 为什么不用 proptest：不引入新依赖；用固定种子的 LCG 即可复现，
+/// 且覆盖的畸形形态由下面的变异算子显式列出（比随机字符串更有针对性）。
+#[test]
+fn backup_import_survives_500_malformed_inputs() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = temp_db("fuzz_backup");
+    crate::db::init_database_at(path.clone()).unwrap();
+
+    // 先放一条基线数据，用来验证「拒绝后原数据不变」
+    let id = crate::db::add_asset_db(&req(1, "property", "inherit", Some(10.0))).unwrap();
+    assert!(crate::db::get_asset_by_id_db(id).unwrap().is_some());
+
+    let mut seed: u64 = 0x5EED_1234;
+    let mut next = || {
+        seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        seed
+    };
+
+    let mut checked = 0usize;
+
+    // 1) 纯随机字节串（含非法 UTF-8 已由 &str 边界挡掉，这里测 JSON 层面）
+    for _ in 0..80 {
+        let len = (next() % 200) as usize;
+        let s: String = (0..len)
+            .map(|_| {
+                let pool = b"{}[]\",:0123456789abcdefghijklmnopqrstuvwxyz \n\t\\";
+                pool[(next() as usize) % pool.len()] as char
+            })
+            .collect();
+        let result = crate::db::import_backup_json_db(&s);
+        assert!(result.is_err(), "随机串不应被当作合法备份: {}", s);
+        let err = result.unwrap_err();
+        assert!(!err.is_empty(), "错误信息不得为空");
+        checked += 1;
+    }
+
+    // 2) 结构合法但字段类型错误（string 位置给 number、array 位置给 object 等）
+    let type_confusions = [
+        r#"{"app":"digilegacy","version":"three","tables":{}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":[]}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":{}}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[1,2,3]}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[null]}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[[]]}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[{"id":"x"}]}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[{"category":[]}]}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[],"user_profile":"x"}}"#,
+        r#"{"app":"digilegacy","version":3,"tables":{"digital_assets":[],"check_in_log":{}}}"#,
+    ];
+    for s in type_confusions {
+        let result = crate::db::import_backup_json_db(s);
+        assert!(result.is_err(), "类型错乱必须拒绝: {}", s);
+        checked += 1;
+    }
+
+    // 3) 边界数值：极端 id / 超大数组 / 深层嵌套
+    let mut cases = Vec::new();
+    cases.push(
+        serde_json::json!({
+            "app": "digilegacy", "version": 3,
+            "tables": {"digital_assets": [{
+                "id": 9223372036854775807i64, "platform_id": 1,
+                "account_identifier": "x", "category": "property",
+                "disposal_method": "inherit", "estimated_value": 1.0,
+                "is_confirmed": 1,
+                "created_at": "x", "updated_at": "x"
+            }], "user_profile": [], "check_in_log": []}
+        })
+        .to_string(),
+    );
+    cases.push(
+        serde_json::json!({
+            "app": "digilegacy", "version": 3,
+            "tables": {"digital_assets": [{
+                "id": 1, "platform_id": -1,
+                "account_identifier": "x", "category": "property",
+                "disposal_method": "inherit", "estimated_value": 1.0,
+                "is_confirmed": 1,
+                "created_at": "x", "updated_at": "x"
+            }], "user_profile": [], "check_in_log": []}
+        })
+        .to_string(),
+    );
+    cases.push(
+        serde_json::json!({
+            "app": "digilegacy", "version": 3,
+            "tables": {"digital_assets": [], "user_profile": [
+                {"id": 1, "check_in_interval_days": -999}
+            ], "check_in_log": []}
+        })
+        .to_string(),
+    );
+    for s in &cases {
+        // 这些要么拒绝、要么成功但不得破坏既有数据；两种都可接受，但不得 panic
+        let before = crate::db::get_all_assets_db().unwrap().len();
+        match crate::db::import_backup_json_db(s) {
+            Ok(_) => {
+                // 成功导入是允许的（导入本就是整体替换），只要不 panic
+            }
+            Err(e) => {
+                assert!(!e.is_empty());
+                assert_eq!(
+                    crate::db::get_all_assets_db().unwrap().len(),
+                    before,
+                    "拒绝导入后数据条数不得变化"
+                );
+            }
+        }
+        checked += 1;
+    }
+
+    // 4) 每轮随机挑一种变异：删字段 / 改类型 / 截断 / 注入非法枚举
+    let base = serde_json::json!({
+        "app": "digilegacy",
+        "version": 3,
+        "tables": {
+            "digital_assets": [{
+                "id": 1, "platform_id": 1,
+                "account_identifier": "acc", "account_description": "",
+                "category": "property", "estimated_value": 1.0,
+                "value_currency": "CNY", "disposal_method": "inherit",
+                "heir_name": "", "heir_contact": "", "notes": "",
+                "credential_enc": "", "is_confirmed": 1,
+                "created_at": "2026-01-01 00:00:00", "updated_at": "2026-01-01 00:00:00"
+            }],
+            "user_profile": [], "check_in_log": [], "dms_config": null,
+            "security_config": null
+        }
+    });
+
+    let field_mutations: [(&str, serde_json::Value); 6] = [
+        ("category", serde_json::json!("not_a_category")),
+        ("disposal_method", serde_json::json!("sell")),
+        ("estimated_value", serde_json::json!(-1.0)),
+        ("estimated_value", serde_json::json!(1e300)),
+        ("platform_id", serde_json::json!(0)),
+        ("account_identifier", serde_json::json!(12345)),
+    ];
+
+    for round in 0..420 {
+        let mut v = base.clone();
+        let pick = (next() as usize) % field_mutations.len();
+        let (field, value) = &field_mutations[pick];
+        if let Some(asset) = v["tables"]["digital_assets"].get_mut(0) {
+            asset[*field] = value.clone();
+        }
+        let encoded = v.to_string();
+
+        // 再用 1/3 的概率做「截断」
+        let payload = if round % 3 == 0 {
+            &encoded[..encoded.len() / 2]
+        } else {
+            &encoded[..]
+        };
+
+        let before = crate::db::get_all_assets_db().unwrap().len();
+        let result = std::panic::catch_unwind(|| crate::db::import_backup_json_db(payload));
+        assert!(result.is_ok(), "导入不得 panic（round {}）", round);
+        match result.unwrap() {
+            Ok(_) => {}
+            Err(e) => {
+                assert!(!e.is_empty(), "错误信息不得为空（round {}）", round);
+                assert_eq!(
+                    crate::db::get_all_assets_db().unwrap().len(),
+                    before,
+                    "拒绝导入后数据不得变化（round {}）",
+                    round
+                );
+            }
+        }
+        checked += 1;
+    }
+
+    assert!(checked >= 500, "至少覆盖 500 个畸形输入，实际 {}", checked);
+    println!("backup_import_fuzz: {} 输入", checked);
+    let _ = std::fs::remove_file(&path);
+}
+
 /// 凭据保险库矩阵/// 凭据保险库矩阵：20 个资产 × 加密/明文 × 保存/读取/清除/锁定拒绝。
 #[test]
 fn credential_vault_40_scenarios() {
