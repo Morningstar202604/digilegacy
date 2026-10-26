@@ -22,6 +22,13 @@
           {{ checking ? t('dms.checking') : t('dms.checkInBtn') }}
         </button>
         <div v-if="lastCheckIn" class="mt-16 text-muted" style="font-size: 13px;">{{ t('dms.lastCheckIn') }}：{{ lastCheckIn }}</div>
+        <!-- 签到历史：让「我上次到底点过没有」可自查，而不是只有一行最新时间 -->
+        <div v-if="recentCheckIns.length > 1" class="mt-12">
+          <div class="text-muted" style="font-size: 12px; margin-bottom: 4px;">{{ t('dms.recentCheckIns') }}</div>
+          <ul class="dms-history-list">
+            <li v-for="(ts, i) in recentCheckIns.slice(1)" :key="i">{{ ts }}</li>
+          </ul>
+        </div>
       </div>
 
       <div class="card">
@@ -127,6 +134,7 @@ async function handleTestNotify() {
 const status = computed(() => dashboard.checkInStatus);
 const lastCheckIn = computed(() => status.value?.last_check_in);
 const daysUntilDue = computed(() => status.value?.days_until_due);
+const recentCheckIns = computed(() => status.value?.recent_check_ins ?? []);
 const dmsEvaluation = computed(() => dashboard.dmsStatus);
 const dmsHistory = computed(() => dashboard.dmsHistory);
 
@@ -207,4 +215,5 @@ onMounted(async () => {
 .dms-stage-3 { background: var(--danger-light); }
 .dms-stage-active { outline: 2px solid var(--primary); outline-offset: 2px; }
 .dms-stage-num { font-size: 24px; }
+.dms-history-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--gray-600); line-height: 1.7; font-variant-numeric: tabular-nums; }
 </style>

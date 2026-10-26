@@ -161,6 +161,25 @@ describe('通知记录', () => {
   });
 });
 
+describe('签到历史', () => {
+  it('显示最近几次确认记录（不含最新那条，避免与「上次确认」重复）', async () => {
+    const w = await mountDms(checkInStatus({
+      last_check_in: '2026-10-20 09:00:00',
+      recent_check_ins: ['2026-10-20 09:00:00', '2026-09-20 09:00:00', '2026-08-20 09:00:00'],
+    }));
+    expect(w.text()).toContain('更早的确认记录');
+    expect(w.text()).toContain('2026-09-20 09:00:00');
+    expect(w.text()).toContain('2026-08-20 09:00:00');
+    const items = w.findAll('.dms-history-list li');
+    expect(items).toHaveLength(2);
+  });
+
+  it('只有一次记录时不渲染历史区块', async () => {
+    const w = await mountDms(checkInStatus({ recent_check_ins: ['2026-10-20 09:00:00'] }));
+    expect(w.find('.dms-history-list').exists()).toBe(false);
+  });
+});
+
 describe('签到', () => {
   it('点击「我还安好」调用 checkIn 并复位按钮', async () => {
     const w = await mountDms(checkInStatus());

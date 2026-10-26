@@ -109,6 +109,8 @@ export interface CheckInStatus {
   dms_enabled: boolean;
   next_check_in_due: string | null;
   days_until_due: number | null;
+  /** 最近 5 次确认时间（新的在前） */
+  recent_check_ins?: string[];
 }
 
 export interface DmsNotification {

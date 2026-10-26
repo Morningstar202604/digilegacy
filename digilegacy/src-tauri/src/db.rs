@@ -1737,7 +1737,6 @@ pub fn record_check_in_db() -> Result<(), String> {
 pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
-
     let last_check_in: Option<String> = conn
         .query_row(
             "SELECT last_check_in FROM dms_config WHERE id=1",
@@ -1793,7 +1792,20 @@ pub fn get_check_in_status_db() -> Result<CheckInStatus, String> {
         dms_enabled,
         next_check_in_due,
         days_until_due,
+        recent_check_ins: recent_check_ins_db(conn, 5).unwrap_or_default(),
     })
+}
+
+/// 最近若干次签到时间（新的在前）。读失败返回 Err，由调用方决定是否降级为空。
+fn recent_check_ins_db(conn: &Connection, limit: usize) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare("SELECT checked_at FROM check_in_log ORDER BY id DESC LIMIT ?1")
+        .map_err(|e| format!("查询签到记录失败: {}", e))?;
+    let rows = stmt
+        .query_map(params![limit as i64], |r| r.get::<_, String>(0))
+        .map_err(|e| format!("读取签到记录失败: {}", e))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("收集签到记录失败: {}", e))
 }
 
 pub fn set_dms_config_db(enabled: bool, interval_days: i64) -> Result<(), String> {
@@ -1906,6 +1918,9 @@ pub struct CheckInStatus {
     pub dms_enabled: bool,
     pub next_check_in_due: Option<String>,
     pub days_until_due: Option<i64>,
+    /// 最近 5 次确认时间（新的在前）。签到日志此前只写不读，
+    /// 用户无法判断「我真的点过吗、上次是什么时候」。
+    pub recent_check_ins: Vec<String>,
 }
 
 // ========== 继承报告 ==========
@@ -3124,6 +3139,33 @@ mod tests {
             Some(1),
             "到期前不足一天必须向上取整为 1，不能是 0（会被判成逾期）"
         );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 签到历史：新的在前、只取指定条数，并在 status 里回传。
+    #[test]
+    fn check_in_history_is_newest_first_and_capped() {
+        let _g = vault::test_lock();
+        let path = fresh_db_path("checkin_log");
+        init_database_at(path.clone()).unwrap();
+
+        for _ in 0..7 {
+            record_check_in_db().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1100));
+        }
+
+        let st = get_check_in_status_db().unwrap();
+        assert_eq!(st.recent_check_ins.len(), 5, "只回传最近 5 条");
+        assert_eq!(
+            Some(st.recent_check_ins[0].clone()),
+            st.last_check_in,
+            "第一条必须是最新签到"
+        );
+        let mut sorted = st.recent_check_ins.clone();
+        sorted.sort();
+        sorted.reverse();
+        assert_eq!(sorted, st.recent_check_ins, "必须按时间倒序");
 
         let _ = std::fs::remove_file(&path);
     }

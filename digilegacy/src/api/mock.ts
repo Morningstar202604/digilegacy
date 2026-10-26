@@ -314,6 +314,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
         dms_enabled: state.dms.enabled,
         next_check_in_due: nextDue,
         days_until_due: daysUntil,
+        recent_check_ins: [...state.checkIns].reverse().slice(0, 5),
       };
       return ok(status) as T;
     }
