@@ -200,6 +200,8 @@ fn compute_stage(overdue_days: i64, cfg: &DmsConfig) -> i64 {
     } else if overdue_days <= cfg.stage1_wait_days + cfg.stage2_wait_days {
         2
     } else {
+        // stage3_wait_days 目前不参与分级：三级窗口本身没有「下一级」，
+        // 超过 stage1+stage2 即进入 stage 3 并保持（去重保证同阶段同收件人每天至多一次）。
         3
     }
 }
@@ -225,14 +227,18 @@ fn already_notified(path: &std::path::Path, stage: i64, recipient: &str) -> bool
 }
 
 fn append_outbox(path: &std::path::Path, entry: &DmsNotification) -> Result<(), String> {
-    use std::io::Write;
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| format!("打开发件箱失败: {}", e))?;
     let line = serde_json::to_string(entry).map_err(|e| format!("序列化通知失败: {}", e))?;
-    writeln!(file, "{}", line).map_err(|e| format!("写入发件箱失败: {}", e))?;
+    // 发件箱含收件人邮箱/手机号与通知正文，按「仅本人可读」追加写。
+    crate::fsutil::append_private(
+        path,
+        format!(
+            "{}
+",
+            line
+        )
+        .as_bytes(),
+    )
+    .map_err(|e| format!("写入发件箱失败: {}", e))?;
     Ok(())
 }
 
@@ -822,6 +828,61 @@ mod tests {
         assert!(!already_notified(&missing, 2, "heir@example.com"));
 
         let _ = fs::remove_file(&path);
+    }
+
+    /// DMS 启用后必须有「起始锚点」：从未签到过时以启用时刻为准计算逾期，
+    /// 而不是永远 waiting。旧实现 last_check_in 为 NULL 时 stage 恒为 0，
+    /// 用户以为开了保险，实际永远不会触发任何提醒。
+    #[test]
+    fn enabled_dms_anchors_on_first_enable_instead_of_never_firing() {
+        let _g = crate::vault::test_lock();
+        let path =
+            std::env::temp_dir().join(format!("digilegacy_dms_anchor_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        crate::db::init_database_at(path.clone()).unwrap();
+
+        crate::db::set_dms_config_db(true, 7).unwrap();
+        let status = status_snapshot().unwrap();
+        assert!(status.enabled);
+        assert_eq!(status.current_stage, 0, "刚启用不应立刻逾期");
+
+        // 启用时刻必须被记录为锚点（否则永远不会逾期）
+        let anchor: Option<String> = {
+            let guard = crate::db::get_conn().unwrap();
+            guard
+                .as_ref()
+                .unwrap()
+                .query_row("SELECT last_check_in FROM dms_config WHERE id=1", [], |r| {
+                    r.get(0)
+                })
+                .ok()
+        };
+        assert!(
+            anchor.is_some(),
+            "启用 DMS 时必须写入起始锚点，否则永远不逾期"
+        );
+
+        // 把锚点推到 8 天前（间隔 7 天），应进入 stage 1
+        let past = (chrono::Local::now() - chrono::Duration::days(8))
+            .format("%Y-%m-%d %H:%M:%S")
+            .to_string();
+        {
+            let guard = crate::db::get_conn().unwrap();
+            guard
+                .as_ref()
+                .unwrap()
+                .execute(
+                    "UPDATE dms_config SET last_check_in=?1 WHERE id=1",
+                    rusqlite::params![past],
+                )
+                .unwrap();
+        }
+        let overdue = status_snapshot().unwrap();
+        assert!(overdue.overdue, "超过间隔必须逾期");
+        assert_eq!(overdue.current_stage, 1);
+        assert_eq!(overdue.days_overdue, 1);
+
+        let _ = std::fs::remove_file(&path);
     }
 
     /// 只读状态快照必须与投递共用同一套分级，但绝不产生副作用。

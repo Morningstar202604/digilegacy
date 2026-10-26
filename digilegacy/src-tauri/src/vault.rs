@@ -86,6 +86,9 @@ pub fn decrypt_if_needed(value: &str) -> Result<String, String> {
     decrypt_field(value, &key)
 }
 
+/// 解密失败时的占位符。界面据此提示「只读」，写路径据此拒绝回写。
+pub const PLACEHOLDER_LOCKED: &str = "【加密数据 · 需解锁】";
+
 /// 读取容错版：解密失败返回占位符，避免单行异常导致整表加载失败
 pub fn decrypt_or_placeholder(value: &str) -> String {
     if value.is_empty() || !is_encrypted(value) {
@@ -93,8 +96,17 @@ pub fn decrypt_or_placeholder(value: &str) -> String {
     }
     match decrypt_if_needed(value) {
         Ok(v) => v,
-        Err(_) => "【加密数据 · 需解锁】".to_string(),
+        Err(_) => PLACEHOLDER_LOCKED.to_string(),
     }
+}
+
+/// 该值是否来自「解密失败的占位符」。
+///
+/// 存在的理由：占位符是读路径的降级产物，**绝不能**被写路径当成真实内容。
+/// 用户看到占位符后点保存（资产详情、我的档案都会原样提交表单），
+/// 旧实现会把占位符当作明文重新加密写回，原始密文被永久覆盖。
+pub fn is_placeholder(value: &str) -> bool {
+    value == PLACEHOLDER_LOCKED
 }
 
 /// 生成主密码验证器（用于校验解锁口令是否正确）
@@ -121,11 +133,18 @@ pub fn verify_key(verifier: &str, key: &[u8; 32]) -> bool {
         .unwrap_or(false)
 }
 
-/// 校验外部链接：仅允许 http/https 且包含主机名
+/// 校验外部链接：仅允许 http/https、必须有主机名、不得带 userinfo。
+///
+/// 为什么拒绝 userinfo：`https://trusted.example.com@evil.example.com/` 在浏览器里
+/// 真实主机是 evil.example.com，但肉眼会读成 trusted。政策补丁里的
+/// `official_policy_url` 是用户可导入的外部数据，必须挡住这种钓鱼构造。
 pub fn validate_external_url(url: &str) -> Result<String, String> {
     let u = url.trim();
     if u.is_empty() {
         return Err("链接为空".to_string());
+    }
+    if u.chars().any(|c| c.is_control()) {
+        return Err("链接包含非法字符".to_string());
     }
     let lower = u.to_ascii_lowercase();
     if !(lower.starts_with("https://") || lower.starts_with("http://")) {
@@ -134,6 +153,14 @@ pub fn validate_external_url(url: &str) -> Result<String, String> {
     let rest = &u[u.find("://").map(|i| i + 3).unwrap_or(u.len())..];
     if rest.is_empty() || rest.starts_with('/') {
         return Err("链接缺少主机名".to_string());
+    }
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..authority_end];
+    if authority.is_empty() {
+        return Err("链接缺少主机名".to_string());
+    }
+    if authority.contains('@') {
+        return Err("链接不得包含账号信息（@ 前的主机名不是真实访问目标）".to_string());
     }
     Ok(u.to_string())
 }
@@ -205,6 +232,38 @@ mod tests {
         assert!(validate_external_url("ftp://example.com").is_err());
         assert!(validate_external_url("").is_err());
         assert!(validate_external_url("https://").is_err());
+    }
+
+    /// 安全回归：政策补丁里的 `official_policy_url` 可被任意构造，
+    /// 必须挡住 userinfo 欺骗（真实主机在 @ 之后）与控制字符。
+    #[test]
+    fn url_validation_rejects_userinfo_and_control_chars() {
+        for bad in [
+            "https://trusted.example.com@evil.example.com/steal",
+            "https://user:pass@evil.example.com/",
+            "http://a@b@c.com",
+            "https://example.com/\r\nX-Injected: 1",
+        ] {
+            assert!(
+                validate_external_url(bad).is_err(),
+                "必须拒绝可疑链接: {}",
+                bad.escape_debug()
+            );
+        }
+
+        // 正常链接不受影响（含端口、路径、查询、锚点）
+        for good in [
+            "https://www.alipay.com",
+            "http://127.0.0.1:8080/ok",
+            "https://example.com/path?q=1#anchor",
+            "https://example.com:443/a/b",
+        ] {
+            assert!(
+                validate_external_url(good).is_ok(),
+                "正常链接必须放行: {}",
+                good
+            );
+        }
     }
 
     #[test]

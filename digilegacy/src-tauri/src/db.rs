@@ -513,7 +513,31 @@ pub fn import_platform_overrides_db(payload: &str) -> Result<(usize, usize), Str
     }
     tx.commit()
         .map_err(|e| format!("提交政策补丁失败: {}", e))?;
+
+    // 补丁里「内置库没有」的平台只写进 platform_overrides，但 digital_assets 的外键
+    // 指向 platforms 表——不镜像过去的话，界面上能选到、一登记资产就
+    // "FOREIGN KEY constraint failed"（已由 repro_patch_only_platform_cannot_hold_assets 复现）。
+    // 这里把补丁条目同步进 platforms 作为占位行，让外键成立；
+    // 读取时 apply_platform_overrides 仍会用补丁内容覆盖展示。
+    sync_platform_overrides_into_platforms(conn)?;
+
     Ok((added, updated))
+}
+
+/// 把 platform_overrides 里的条目镜像到 platforms 表（幂等）。
+///
+/// 只镜像外键所需的行；字段内容以补丁为准，所以这里写入的就是补丁值。
+fn sync_platform_overrides_into_platforms(conn: &Connection) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO platforms (id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes)
+         SELECT id, name, name_en, category, subtype, has_property, has_personality, inheritable, required_documents, process_description, estimated_difficulty, official_policy_url, estimated_time_days, notes
+         FROM platform_overrides
+         WHERE id NOT IN (SELECT id FROM platforms)
+         ON CONFLICT(id) DO NOTHING",
+        [],
+    )
+    .map_err(|e| format!("同步政策补丁平台失败: {}", e))?;
+    Ok(())
 }
 
 /// 导出当前全部政策补丁（供用户备份或分发给他人）。
@@ -557,12 +581,37 @@ pub fn export_platform_overrides_db() -> Result<String, String> {
 }
 
 /// 清除全部政策补丁，回到内置库状态。
+///
+/// 必须同时撤掉 `sync_platform_overrides_into_platforms` 写入的镜像行，
+/// 否则「清除补丁」后平台列表仍留着补丁新增的平台（已由场景矩阵抓到）。
+/// 内置平台 id 由 `platform_data` 决定，这里直接删「不在内置集合里」的行，
+/// 并把被补丁覆盖过的内置行恢复为内置值。
 pub fn clear_platform_overrides_db() -> Result<usize, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let n = conn
         .execute("DELETE FROM platform_overrides", [])
         .map_err(|e| format!("清除政策补丁失败: {}", e))?;
+
+    let builtin = get_all_platforms();
+    let builtin_ids: std::collections::HashSet<i64> = builtin.iter().map(|p| p.id).collect();
+    let mut stmt = conn
+        .prepare("SELECT id FROM platforms")
+        .map_err(|e| format!("查询平台失败: {}", e))?;
+    let extra: Vec<i64> = stmt
+        .query_map([], |r| r.get::<_, i64>(0))
+        .map_err(|e| format!("读取平台 id 失败: {}", e))?
+        .filter_map(|r| r.ok())
+        .filter(|id| !builtin_ids.contains(id))
+        .collect();
+    drop(stmt);
+    for id in extra {
+        conn.execute("DELETE FROM platforms WHERE id=?1", params![id])
+            .map_err(|e| format!("清理补丁镜像平台失败: {}", e))?;
+    }
+    // 被补丁覆盖过的内置行恢复为内置内容（重新 upsert 一次即可）
+    crate::db::sync_platforms(conn)?;
+
     Ok(n)
 }
 
@@ -591,6 +640,21 @@ fn ensure_vault_writable(conn: &Connection) -> Result<(), String> {
         .unwrap_or(0);
     if configured > 0 {
         return Err("主密码已设置但处于锁定状态，请先解锁后再保存".to_string());
+    }
+    Ok(())
+}
+
+/// 写路径的统一守卫：拒绝把「解密失败的占位符」当作真实内容写回。
+///
+/// 背景：`decrypt_or_placeholder` 在锁定/错钥匙时返回占位符，界面会把它渲染到表单里；
+/// 用户点保存时整张表单原样提交，占位符就被当成明文重新加密，原始数据永久丢失。
+/// 只拦截占位符本身，不影响用户真的想把字段清空（空串）或手动输入同款文本之外的内容。
+fn reject_placeholder(field: &str, value: &str) -> Result<(), String> {
+    if crate::vault::is_placeholder(value) {
+        return Err(format!(
+            "{}当前处于加密锁定状态，无法保存。请先解锁后重试（本次未写入任何数据）",
+            field
+        ));
     }
     Ok(())
 }
@@ -632,6 +696,16 @@ pub fn add_asset_db(req: &AssetRequest) -> Result<i64, String> {
 pub fn update_asset_db(id: i64, req: &AssetRequest) -> Result<(), String> {
     validate_category(&req.category)?;
     validate_disposal(&req.disposal_method)?;
+    // 占位符检查必须在任何写操作之前：这是「数据被覆盖」而非「写入失败」的风险。
+    reject_placeholder("账号标识", &req.account_identifier)?;
+    reject_placeholder("账号描述", &req.account_description)?;
+    reject_placeholder("备注", &req.notes)?;
+    if let Some(v) = req.heir_name.as_deref() {
+        reject_placeholder("继承人姓名", v)?;
+    }
+    if let Some(v) = req.heir_contact.as_deref() {
+        reject_placeholder("继承人联系方式", v)?;
+    }
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     ensure_vault_writable(conn)?;
@@ -666,6 +740,9 @@ pub fn update_asset_db(id: i64, req: &AssetRequest) -> Result<(), String> {
 pub fn delete_asset_db(id: i64) -> Result<(), String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
+    // 删除同样是写操作：已设主密码的库在锁定态不得删除，
+    // 否则「锁定」只挡住了读取，没挡住破坏。
+    ensure_vault_writable(conn)?;
     conn.execute("DELETE FROM digital_assets WHERE id=?1", params![id])
         .map_err(|e| format!("删除资产失败: {}", e))?;
     Ok(())
@@ -675,8 +752,10 @@ pub fn get_all_assets_db() -> Result<Vec<DigitalAsset>, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
-         FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id ORDER BY a.created_at DESC"
+        "SELECT a.id, a.platform_id, COALESCE(o.name, p.name) AS platform_name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
+         FROM digital_assets a
+         LEFT JOIN platforms p ON a.platform_id = p.id
+         LEFT JOIN platform_overrides o ON a.platform_id = o.id ORDER BY a.created_at DESC"
     ).map_err(|e| format!("查询资产失败: {}", e))?;
 
     let assets = stmt
@@ -692,8 +771,10 @@ pub fn get_asset_by_id_db(id: i64) -> Result<Option<DigitalAsset>, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
-         FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id WHERE a.id = ?1"
+        "SELECT a.id, a.platform_id, COALESCE(o.name, p.name) AS platform_name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
+         FROM digital_assets a
+         LEFT JOIN platforms p ON a.platform_id = p.id
+         LEFT JOIN platform_overrides o ON a.platform_id = o.id WHERE a.id = ?1"
     ).map_err(|e| format!("查询资产失败: {}", e))?;
 
     let mut rows = stmt
@@ -713,8 +794,10 @@ pub fn get_assets_by_category_db(category: &str) -> Result<Vec<DigitalAsset>, St
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT a.id, a.platform_id, p.name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
-         FROM digital_assets a LEFT JOIN platforms p ON a.platform_id = p.id WHERE a.category = ?1 ORDER BY a.estimated_value DESC"
+        "SELECT a.id, a.platform_id, COALESCE(o.name, p.name) AS platform_name, a.account_identifier, a.account_description, a.category, a.estimated_value, a.value_currency, a.disposal_method, a.heir_name, a.heir_contact, a.notes, a.is_confirmed, a.created_at, a.updated_at, CASE WHEN a.credential_enc IS NOT NULL AND a.credential_enc != '' THEN 1 ELSE 0 END AS has_cred
+         FROM digital_assets a
+         LEFT JOIN platforms p ON a.platform_id = p.id
+         LEFT JOIN platform_overrides o ON a.platform_id = o.id WHERE a.category = ?1 ORDER BY a.estimated_value DESC"
     ).map_err(|e| format!("按类别查询失败: {}", e))?;
 
     let assets = stmt
@@ -841,6 +924,25 @@ pub fn get_user_profile_db() -> Result<Option<UserProfile>, String> {
 }
 
 pub fn save_user_profile_db(profile: &UserProfile) -> Result<(), String> {
+    for (name, value) in [
+        ("姓名", profile.full_name.as_str()),
+        ("手机号", profile.phone.as_str()),
+        ("邮箱", profile.email.as_str()),
+        ("身份证后四位", profile.id_last4.as_str()),
+        ("紧急联系人姓名", profile.emergency_contact_name.as_str()),
+        ("紧急联系人电话", profile.emergency_contact_phone.as_str()),
+        (
+            "紧急联系人关系",
+            profile.emergency_contact_relation.as_str(),
+        ),
+        ("紧急联系人邮箱", profile.emergency_contact_email.as_str()),
+        ("继承人姓名", profile.heir_primary_name.as_str()),
+        ("继承人电话", profile.heir_primary_phone.as_str()),
+        ("继承人关系", profile.heir_primary_relation.as_str()),
+        ("继承人邮箱", profile.heir_primary_email.as_str()),
+    ] {
+        reject_placeholder(name, value)?;
+    }
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
     ensure_vault_writable(conn)?;
@@ -1833,9 +1935,14 @@ pub fn set_dms_config_db(enabled: bool, interval_days: i64) -> Result<(), String
         [],
     ).map_err(|e| format!("初始化DMS配置失败: {}", e))?;
 
+    // 首次启用时写入起始锚点：没有锚点，逾期天数永远算不出来，
+    // 用户会以为「已开启」而实际永远不会触发任何提醒（已由
+    // enabled_dms_anchors_on_first_enable_instead_of_never_firing 锁定）。
+    // 已有锚点则保持不变——改间隔不应重置倒计时。
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     conn.execute(
-        "UPDATE dms_config SET enabled=?1, check_in_interval_days=?2 WHERE id=1",
-        params![if enabled { 1 } else { 0 }, interval_days],
+        "UPDATE dms_config SET enabled=?1, check_in_interval_days=?2,          last_check_in = CASE WHEN ?1 = 1 AND last_check_in IS NULL THEN ?3 ELSE last_check_in END          WHERE id=1",
+        params![if enabled { 1 } else { 0 }, interval_days, now],
     )
     .map_err(|e| format!("设置DMS失败: {}", e))?;
 
@@ -1878,9 +1985,11 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
             |row| row.get(0),
         )
         .unwrap_or(0);
+    // 只累加非负有限值：数据可能来自手改备份或外部导入，
+    // 负估值会把「总价值」算成负数（前端 totalValue 已有同样口径）。
     let total_value: f64 = conn
         .query_row(
-            "SELECT COALESCE(SUM(estimated_value), 0.0) FROM digital_assets",
+            "SELECT COALESCE(SUM(CASE WHEN estimated_value > 0 AND estimated_value < 1e12 THEN estimated_value ELSE 0 END), 0.0) FROM digital_assets",
             [],
             |row| row.get(0),
         )
@@ -1964,7 +2073,12 @@ pub fn get_inheritance_report_db() -> Result<InheritanceReport, String> {
     });
 
     let assets = get_all_assets_db()?;
-    let total_value: f64 = assets.iter().filter_map(|a| a.estimated_value).sum();
+    // 与仪表板同口径：只累加有限非负值，避免脏数据让报告金额为负。
+    let total_value: f64 = assets
+        .iter()
+        .filter_map(|a| a.estimated_value)
+        .filter(|v| v.is_finite() && *v > 0.0 && *v < 1e12)
+        .sum();
 
     let property_count = assets.iter().filter(|a| a.category == "property").count() as i64;
     let personality_count = assets
@@ -2848,6 +2962,284 @@ mod tests {
             get_all_assets_db().unwrap().len(),
             1,
             "合法备份应替换为 1 条"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 安全回归：资产详情页拿到占位符后点「保存修改」，必须被拒绝且原始密文不受影响。
+    ///
+    /// 历史缺陷：`row_to_asset` 用占位符降级，前端把整张表单原样提交，
+    /// `update_asset_db` 就把占位符当成明文重新加密写回，真实账号被永久覆盖。
+    #[test]
+    fn asset_placeholder_cannot_be_written_back() {
+        let _g = vault::test_lock();
+        use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+        vault::clear_key();
+        let path = fresh_db_path("asset_placeholder");
+        init_database_at(path.clone()).unwrap();
+
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("asset-pw", &salt);
+        let verifier = vault::make_verifier(&key).unwrap();
+        set_security_config_db(&b64.encode(salt), &verifier).unwrap();
+        vault::set_key(key.clone());
+
+        let id = add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "real-account".to_string(),
+            account_description: "真实描述".to_string(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: Some("真实继承人".to_string()),
+            heir_contact: Some("13800000000".to_string()),
+            notes: "真实备注".to_string(),
+        })
+        .unwrap();
+
+        let wrong = crate::crypto::derive_key_bytes("other-pw", &salt);
+        vault::set_key(wrong);
+        let loaded = get_asset_by_id_db(id).unwrap().unwrap();
+        assert!(
+            crate::vault::is_placeholder(&loaded.account_identifier),
+            "错钥匙时必须降级为占位符"
+        );
+
+        // 前端资产详情点「保存修改」时会把这个占位符原样提交
+        let err = update_asset_db(
+            id,
+            &AssetRequest {
+                platform_id: loaded.platform_id,
+                account_identifier: loaded.account_identifier.clone(),
+                account_description: loaded.account_description.clone(),
+                category: loaded.category.clone(),
+                estimated_value: loaded.estimated_value,
+                disposal_method: loaded.disposal_method.clone(),
+                heir_name: loaded.heir_name.clone(),
+                heir_contact: loaded.heir_contact.clone(),
+                notes: loaded.notes.clone(),
+            },
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("解锁") && err.contains("未写入"),
+            "必须明确拒绝并说明未写入，实际: {}",
+            err
+        );
+
+        // 原始密文必须完好
+        vault::set_key(key);
+        let after = get_asset_by_id_db(id).unwrap().unwrap();
+        assert_eq!(after.account_identifier, "real-account", "原始账号必须还在");
+        assert_eq!(after.heir_name.as_deref(), Some("真实继承人"));
+        assert_eq!(after.notes, "真实备注");
+
+        // 正常编辑（非占位符）仍然可以保存
+        update_asset_db(
+            id,
+            &AssetRequest {
+                platform_id: 1,
+                account_identifier: "edited-account".to_string(),
+                account_description: String::new(),
+                category: "property".to_string(),
+                estimated_value: Some(2.0),
+                disposal_method: "memorialize".to_string(),
+                heir_name: None,
+                heir_contact: None,
+                notes: String::new(),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            get_asset_by_id_db(id).unwrap().unwrap().account_identifier,
+            "edited-account"
+        );
+
+        vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 安全回归：档案页拿到占位符后点「保存档案」，必须被拒绝且原始密文完好。
+    #[test]
+    fn profile_placeholder_cannot_be_written_back() {
+        let _g = vault::test_lock();
+        use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+        vault::clear_key();
+        let path = fresh_db_path("placeholder_wb");
+        init_database_at(path.clone()).unwrap();
+
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("wb-pw", &salt);
+        let verifier = vault::make_verifier(&key).unwrap();
+        set_security_config_db(&b64.encode(salt), &verifier).unwrap();
+        vault::set_key(key.clone());
+
+        let mut profile = UserProfile {
+            id: None,
+            full_name: "真实姓名".to_string(),
+            phone: "13800000000".to_string(),
+            email: "real@example.com".to_string(),
+            id_last4: "1234".to_string(),
+            emergency_contact_name: "紧急".to_string(),
+            emergency_contact_phone: "13900000000".to_string(),
+            emergency_contact_relation: "子女".to_string(),
+            emergency_contact_email: "e@example.com".to_string(),
+            heir_primary_name: "继承人".to_string(),
+            heir_primary_phone: "13700000000".to_string(),
+            heir_primary_relation: "子女".to_string(),
+            heir_primary_email: "h@example.com".to_string(),
+            check_in_interval_days: 30,
+            last_check_in: None,
+            dms_enabled: false,
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+        save_user_profile_db(&profile).unwrap();
+
+        // 换一把钥匙：库内密文用旧钥匙，内存里是另一把 → 读回全是占位符
+        let wrong = crate::crypto::derive_key_bytes("other-pw", &salt);
+        vault::set_key(wrong);
+        let loaded = get_user_profile_db().unwrap().unwrap();
+        assert!(
+            crate::vault::is_placeholder(&loaded.full_name),
+            "错钥匙/未解锁时必须降级为占位符"
+        );
+
+        // 用户在界面上点保存（占位符被原样提交）
+        profile.id = loaded.id;
+        profile.full_name = loaded.full_name.clone();
+        profile.phone = loaded.phone.clone();
+        let err = save_user_profile_db(&profile).unwrap_err();
+        assert!(
+            err.contains("解锁") && err.contains("未写入"),
+            "必须明确拒绝，实际: {}",
+            err
+        );
+
+        // 原始密文完好
+        vault::set_key(key);
+        let after = get_user_profile_db().unwrap().unwrap();
+        assert_eq!(after.full_name, "真实姓名");
+        assert_eq!(after.phone, "13800000000");
+        assert_eq!(after.heir_primary_name, "继承人");
+
+        // 正常保存仍然可用
+        let mut fixed = after.clone();
+        fixed.full_name = "改名后".to_string();
+        save_user_profile_db(&fixed).unwrap();
+        assert_eq!(get_user_profile_db().unwrap().unwrap().full_name, "改名后");
+
+        vault::clear_key();
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 回归：政策补丁新增的平台必须能直接登记资产。
+    ///
+    /// 历史缺陷：补丁只写 platform_overrides，而 digital_assets.platform_id 的外键
+    /// 指向 platforms 表，于是「界面能选、一保存就 FOREIGN KEY constraint failed」。
+    #[test]
+    fn patch_only_platform_can_hold_assets() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("patch_fk");
+        init_database_at(path.clone()).unwrap();
+
+        import_platform_overrides_db(
+            r#"{"app":"digilegacy","platforms":[{"id":9001,"name":"补丁专属平台","category":"游戏"}]}"#,
+        )
+        .unwrap();
+
+        let listed = get_all_platforms_db().unwrap();
+        assert!(listed.iter().any(|p| p.id == 9001), "补丁平台应出现在列表");
+
+        let id = add_asset_db(&AssetRequest {
+            platform_id: 9001,
+            account_identifier: "acc".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .expect("补丁平台必须能登记资产（外键依赖已通过镜像解决）");
+
+        let asset = get_asset_by_id_db(id).unwrap().unwrap();
+        assert_eq!(asset.platform_name, "补丁专属平台", "平台名应来自补丁");
+
+        // 补丁覆盖内置平台时也不得破坏既有资产的外键
+        import_platform_overrides_db(
+            r#"{"app":"digilegacy","platforms":[{"id":1,"name":"支付宝（改名）","category":"支付金融"}]}"#,
+        )
+        .unwrap();
+        let builtin_id = add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "builtin".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap();
+        assert_eq!(
+            get_asset_by_id_db(builtin_id)
+                .unwrap()
+                .unwrap()
+                .platform_name,
+            "支付宝（改名）",
+            "补丁覆盖后的名称必须用于展示"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 仪表板与报告的总价值口径：负值与超大值都必须被排除，
+    /// 否则一条脏数据就能让「我的遗产总值」变成负数或荒谬数字。
+    #[test]
+    fn totals_ignore_negative_and_absurd_values() {
+        let _g = vault::test_lock();
+        vault::clear_key();
+        let path = fresh_db_path("totals");
+        init_database_at(path.clone()).unwrap();
+
+        for (identifier, value) in [
+            ("valid", 100.0),
+            ("zero", 0.0),
+            ("negative", -5.0),
+            ("absurd", 1e15),
+        ] {
+            add_asset_db(&AssetRequest {
+                platform_id: 1,
+                account_identifier: identifier.to_string(),
+                account_description: String::new(),
+                category: "property".to_string(),
+                estimated_value: Some(value),
+                disposal_method: "inherit".to_string(),
+                heir_name: None,
+                heir_contact: None,
+                notes: String::new(),
+            })
+            .unwrap();
+        }
+
+        let stats = get_dashboard_stats_db().unwrap();
+        assert_eq!(stats.total_assets, 4, "条数统计不受金额影响");
+        assert!(
+            (stats.total_estimated_value - 100.0).abs() < 1e-6,
+            "只应累加合法的 100，实际 {}",
+            stats.total_estimated_value
+        );
+
+        let report = get_inheritance_report_db().unwrap();
+        assert!(
+            (report.total_estimated_value - 100.0).abs() < 1e-6,
+            "报告口径必须与仪表板一致，实际 {}",
+            report.total_estimated_value
         );
 
         let _ = std::fs::remove_file(&path);
