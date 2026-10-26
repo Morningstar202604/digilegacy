@@ -1854,4 +1854,110 @@ mod tests {
         assert!(r.success);
         assert_eq!(db::get_check_in_status_db().unwrap().interval_days, 30);
     }
+
+    /// 保管位置是「家人能否找到凭据」的前提，命令层必须：
+    /// 1) 长度有上限（防止把整篇文章塞进清单）；
+    /// 2) 拒绝占位符（锁定态读出来的值不能被当作用户输入存回去）；
+    /// 3) 正常值可往返。
+    #[test]
+    fn custody_hints_validate_and_roundtrip() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_custody_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        // 空值可保存（表示「尚未填写」）
+        let r = set_custody_hints(db::CustodyHints::default()).unwrap();
+        assert!(r.success, "空保管位置应允许保存");
+
+        // 超长拒绝
+        let too_long = db::CustodyHints {
+            backup_location: "x".repeat(501),
+            recovery_code_location: String::new(),
+        };
+        let r = set_custody_hints(too_long).unwrap();
+        assert!(!r.success, "超长位置必须被拒绝: {}", r.message);
+
+        // 占位符拒绝：锁定态读出来的值绝不能被写回
+        let placeholder = db::CustodyHints {
+            backup_location: crate::vault::PLACEHOLDER_LOCKED.to_string(),
+            recovery_code_location: String::new(),
+        };
+        let r = set_custody_hints(placeholder).unwrap();
+        assert!(!r.success, "占位符必须被拒绝: {}", r.message);
+        assert!(
+            r.message.contains("解锁"),
+            "提示必须指向解锁: {}",
+            r.message
+        );
+
+        // 正常值往返
+        let hints = db::CustodyHints {
+            backup_location: "家中书房保险柜".to_string(),
+            recovery_code_location: "纸质笔记本第 3 页".to_string(),
+        };
+        assert!(set_custody_hints(hints.clone()).unwrap().success);
+        let got = get_custody_hints().unwrap().data.unwrap();
+        assert_eq!(got.backup_location, "家中书房保险柜");
+        assert_eq!(got.recovery_code_location, "纸质笔记本第 3 页");
+
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("digilegacy_cmd_custody_{}.db", std::process::id())),
+        );
+    }
+
+    /// 执行清单：含占位符时必须拒绝，且错误信息说明「没有生成文件」。
+    #[test]
+    fn action_guide_refuses_undecrypted_data() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_guide_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        // 空库：可以生成（内容只有「尚未登记」与保管位置警告）
+        let r = render_action_guide(Some("zh-CN".to_string())).unwrap();
+        assert!(r.success, "空库也应能生成清单: {}", r.message);
+        assert!(r.data.unwrap().contains("数字遗产执行清单"));
+
+        // 英文
+        let r = render_action_guide(Some("en-US".to_string())).unwrap();
+        assert!(r.data.unwrap().contains("Digital Legacy Action Guide"));
+
+        // 未指定 locale 时回退中文
+        let r = render_action_guide(None).unwrap();
+        assert!(r.data.unwrap().contains("数字遗产执行清单"));
+
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("digilegacy_cmd_guide_{}.db", std::process::id())),
+        );
+    }
+
+    /// 演练：空库时不应 panic，且必须如实报「触发链不可用」。
+    #[test]
+    fn family_drill_reports_unready_trigger_on_empty_vault() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_drill_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        let r = run_family_drill().unwrap();
+        assert!(r.success, "演练必须可执行: {}", r.message);
+        let d = r.data.unwrap();
+        assert_eq!(d.assets, 0);
+        assert!(!d.trigger_ready, "未启用 DMS 时触发链不可用");
+        assert!(
+            d.checks.iter().any(|c| c.key == "trigger" && !c.ok),
+            "必须把触发链列为未通过"
+        );
+
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("digilegacy_cmd_drill_{}.db", std::process::id())),
+        );
+    }
 }
