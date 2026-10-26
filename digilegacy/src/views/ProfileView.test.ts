@@ -20,7 +20,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 }));
 
 import ProfileView from './ProfileView.vue';
-import { useFeedback } from '../composables/feedback';
+import { useFeedback, settleConfirm, lastConfirm } from '../composables/feedback';
 import { invoke } from '../api/invoke';
 import { useSecurityStore } from '../stores/security';
 import { silenceExpectedErrors } from '../test-utils/silence';
@@ -529,5 +529,95 @@ describe('占位符防护（档案数据覆盖风险）', () => {
     await saveBtn.trigger('click');
     await flushPromises();
     expect(mockedInvoke.mock.calls.some(c => c[0] === 'set_user_profile')).toBe(true);
+  });
+});
+
+describe('SMTP 配置（家人能否真的收到通知的前提）', () => {
+  const baseSmtp = {
+    host: 'smtp.example.com', port: 587, from_addr: 'noreply@example.com',
+    username: 'noreply', has_password: true, allow_insecure: false,
+  };
+
+  it('打开页面即回显已保存配置，但不回显密码明文', async () => {
+    const w = await mountProfile({ get_smtp_config: () => ({ success: true, message: '', data: baseSmtp }) });
+    expect((w.find('#smtp-host').element as HTMLInputElement).value).toBe('smtp.example.com');
+    expect((w.find('#smtp-port').element as HTMLInputElement).value).toBe('587');
+    // 密码框永远为空：只有 has_password 提示，绝不下发明文
+    expect((w.find('#smtp-pass').element as HTMLInputElement).value).toBe('');
+    // 只通过 placeholder 提示「已保存」，绝不回填明文
+    expect(w.find('#smtp-pass').attributes('placeholder')).toContain('已保存');
+  });
+
+  it('保存时不填密码则传 null，避免把已保存的密码清空', async () => {
+    const w = await mountProfile({
+      get_smtp_config: () => ({ success: true, message: '', data: baseSmtp }),
+      set_smtp_config: () => ({ success: true, message: 'SMTP 配置已保存', data: null }),
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('保存 SMTP 配置'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'set_smtp_config');
+    expect(call, '必须调用后端保存').toBeTruthy();
+    expect((call![1] as Record<string, unknown>).password, '未填密码必须传 null').toBeNull();
+  });
+
+  it('填了新密码则明文传给后端（由后端负责加密落库）', async () => {
+    const w = await mountProfile({
+      get_smtp_config: () => ({ success: true, message: '', data: baseSmtp }),
+      set_smtp_config: () => ({ success: true, message: 'ok', data: null }),
+    });
+    await w.find('#smtp-pass').setValue('app-specific-key');
+    const btn = w.findAll('button').find(b => b.text().includes('保存 SMTP 配置'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect((mockedInvoke.mock.calls.find(c => c[0] === 'set_smtp_config')![1] as Record<string, unknown>).password)
+      .toBe('app-specific-key');
+  });
+
+  it('测试发送成功与失败都必须可见', async () => {
+    const w = await mountProfile({
+      get_smtp_config: () => ({ success: true, message: '', data: baseSmtp }),
+      send_test_email: () => ({ success: false, message: '测试邮件发送失败：连接超时', data: null }),
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('发送测试邮件'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect(w.text(), '失败原因必须显示').toContain('连接超时');
+  });
+});
+
+describe('备份导入模式（覆盖是不可逆操作）', () => {
+  it('默认入口按 merge 导入', async () => {
+    const w = await mountProfile({
+      import_backup: () => ({ success: true, message: '备份导入完成', data: '已按合并模式导入 1 条资产' }),
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('导入备份'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    settleConfirm(true);
+    await flushPromises();
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'import_backup');
+    expect(call, '必须调用导入').toBeTruthy();
+    expect((call![1] as Record<string, unknown>).mode).toBe('merge');
+  });
+
+  it('覆盖导入必须显式传 replace，且在确认框里说明会清空', async () => {
+    const w = await mountProfile({
+      import_backup: () => ({ success: true, message: '备份导入完成', data: '已按覆盖模式导入 1 条资产' }),
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('覆盖导入'))!;
+    expect(btn, '覆盖入口必须存在').toBeTruthy();
+    await btn.trigger('click');
+    await flushPromises();
+    // 确认框由 App 级 FeedbackLayer 渲染；单测里直接结算该 Promise。
+    // 断言确认文案本身是破坏性的（说明会清空），不能静默覆盖。
+    const pending = lastConfirm();
+    expect(pending, '必须弹出确认').toBeTruthy();
+    expect(pending!.title + pending!.message).toContain('清空');
+    settleConfirm(true);
+    await flushPromises();
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'import_backup');
+    expect((call![1] as Record<string, unknown>).mode).toBe('replace');
   });
 });

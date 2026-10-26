@@ -170,16 +170,35 @@ describe('import_backup', () => {
     expect(res.message).toBe('不是有效的归零备份文件');
   });
 
-  it('合法备份恢复数据、清空解锁态、续号正确', async () => {
+  it('默认合并：追加备份资产、不清空现有数据、清空解锁态、续号正确', async () => {
     await mockInvoke('set_master_password', { password: 'master-pass-1' });
+    const before = await mockInvoke<{ data: unknown[] }>('get_all_assets');
+    const beforeCount = before.data.length;
 
     const res = await mockInvoke<{ success: boolean; data: string }>('import_backup', { content: JSON.stringify(validBackup) });
     expect(res.success).toBe(true);
-    expect(res.data).toContain('已恢复 1 条');
+    expect(res.data).toContain('已导入 1 条');
+    expect(res.data).toContain('合并');
     expect(sessionStorage.getItem(SS_UNLOCK)).toBeNull();
 
+    const after = await mockInvoke<{ data: unknown[] }>('get_all_assets');
+    expect(after.data.length, '合并必须保留现有资产').toBe(beforeCount + 1);
+
+    // 合并时不能复用备份里的 id（可能撞本地主键），应由本地分配
     const added = await mockInvoke<{ data: number }>('add_asset', { req: { platform_id: 1, category: 'mixed' } });
-    expect(added.data).toBe(8);
+    expect(added.data).toBe(beforeCount + 2);
+  });
+
+  it('显式覆盖：清空现有资产后写入备份内容', async () => {
+    const res = await mockInvoke<{ success: boolean; data: string }>('import_backup', {
+      content: JSON.stringify(validBackup),
+      mode: 'replace',
+    });
+    expect(res.success).toBe(true);
+    expect(res.data).toContain('覆盖');
+
+    const after = await mockInvoke<{ data: unknown[] }>('get_all_assets');
+    expect(after.data.length, '覆盖后只剩备份里的资产').toBe(1);
   });
 });
 

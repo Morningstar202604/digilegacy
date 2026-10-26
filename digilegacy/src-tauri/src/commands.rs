@@ -290,24 +290,33 @@ pub fn get_inheritance_report() -> Result<ApiResponse<InheritanceReport>, String
 ///
 /// 顺序是刻意的：先查占位符再渲染。占位符意味着「这些字段根本没被解密」，
 /// 渲染出来的报告会给继承人一份写着「需解锁」的废纸，且用户会误以为数据已损毁。
+///
+/// `locale` 决定文档语言：导出必须与界面语言一致，否则英文用户拿到中文文档。
 pub(crate) fn render_report_response(
     report: &crate::models::InheritanceReport,
+    locale: &str,
 ) -> Result<ApiResponse<String>, String> {
     if crate::report::contains_placeholder(report) {
         return Ok(ApiResponse::fail(
             "报告中存在未解密字段，请先解锁后重新生成（本次未生成任何文件）",
         ));
     }
-    let html = crate::report::render_report_html(report);
+    let html =
+        crate::report::render_report_html(report, crate::report::ReportLocale::parse(locale));
     validate_report_html(&html)?;
     Ok(ApiResponse::ok_with_msg(html, "报告已生成"))
 }
 
 /// 由后端渲染报告 HTML（单一事实源），前端不再抓 DOM。
+///
+/// `locale` 由前端传入当前界面语言（`zh-CN` / `en-US`），未知值回退中文。
 #[command]
-pub fn render_report(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
+pub fn render_report(
+    app_handle: AppHandle,
+    locale: Option<String>,
+) -> Result<ApiResponse<String>, String> {
     let report = db::get_inheritance_report_db()?;
-    let response = render_report_response(&report)?;
+    let response = render_report_response(&report, locale.as_deref().unwrap_or("zh-CN"))?;
     // app_handle 仅为与其他导出命令保持一致的签名；这里不写盘。
     let _ = &app_handle;
     Ok(response)
@@ -392,12 +401,93 @@ pub fn export_zip_to_file(
         "归零继承工具包_{}.zip",
         chrono::Local::now().format("%Y%m%d_%H%M%S")
     ));
-    std::fs::write(&zip_path, &decoded).map_err(|e| format!("写入ZIP失败: {}", e))?;
+    // 工具包内含 `02-资产清单.json`（全部账号标识），必须与报告/备份同权限。
+    // 旧实现用裸 std::fs::write，Unix 下按 umask 落成 0644，同机其他用户可读。
+    crate::fsutil::write_private(&zip_path, &decoded).map_err(|e| format!("写入ZIP失败: {}", e))?;
 
     Ok(ApiResponse::ok_with_msg(
         zip_path.to_string_lossy().to_string(),
         "继承工具包已导出",
     ))
+}
+
+/// 在系统文件管理器中定位刚导出的文件。
+///
+/// 导出后只显示一行路径，普通用户往往找不到（尤其应用数据目录是隐藏的
+/// `%APPDATA%`）。这里只接受「本应用数据目录内的已存在文件」，
+/// 不接受任意路径——否则等于把 `open_external` 扩成任意路径执行器。
+#[command]
+pub fn reveal_exported_file(
+    path: String,
+    app_handle: AppHandle,
+) -> Result<ApiResponse<()>, String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("获取目录失败: {}", e))?;
+    let target = std::path::PathBuf::from(&path);
+    if path.chars().any(|c| c == '\0' || c.is_control()) {
+        return Ok(ApiResponse::fail("路径包含非法字符"));
+    }
+    // 规范化后必须仍在应用数据目录内：防 `..` 穿越到任意位置。
+    let canon_target = match target.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return Ok(ApiResponse::fail("文件不存在或已被移动")),
+    };
+    let canon_root = app_dir
+        .canonicalize()
+        .map_err(|e| format!("解析应用目录失败: {}", e))?;
+    if !canon_target.starts_with(&canon_root) {
+        return Ok(ApiResponse::fail("只允许定位本应用导出的文件"));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let dir = canon_target
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| canon_root.to_string_lossy().to_string());
+        // explorer /select,<file> 会打开父目录并选中该文件
+        let params = format!("/select,\"{}\"", canon_target.display());
+        let op = win_shell::wide("open");
+        let file = win_shell::wide("explorer.exe");
+        let params_w = win_shell::wide(&params);
+        let dir_w = win_shell::wide(&dir);
+        let rc = unsafe {
+            win_shell::ShellExecuteW(
+                std::ptr::null_mut(),
+                op.as_ptr(),
+                file.as_ptr(),
+                params_w.as_ptr(),
+                dir_w.as_ptr(),
+                1,
+            )
+        };
+        if rc <= 32 {
+            return Ok(ApiResponse::fail("无法打开文件管理器"));
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&canon_target)
+            .spawn()
+            .map_err(|e| format!("打开访达失败: {}", e))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let dir = canon_target
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| canon_root.clone());
+        std::process::Command::new("xdg-open")
+            .arg(&dir)
+            .spawn()
+            .map_err(|e| format!("打开文件管理器失败: {}", e))?;
+    }
+
+    Ok(ApiResponse::ok_with_msg((), "已定位文件"))
 }
 
 // ========== 检查记录 / Dead Man's Switch ==========
@@ -626,18 +716,67 @@ pub fn export_backup(app_handle: AppHandle) -> Result<ApiResponse<String>, Strin
     ))
 }
 
-#[command]
-pub fn import_backup(content: String) -> Result<ApiResponse<String>, String> {
-    if let Err(e) = validate_backup_content(&content) {
+/// 导入备份的核心策略（纯函数，便于脱离 Tauri 运行时回归）。
+///
+/// `snapshot_dir` 为 `Some` 时先写一份导入前快照；命令层传应用数据目录，
+/// 测试传 `None`。快照失败不阻断导入——但会出现在返回消息里，不做静默。
+pub(crate) fn import_backup_response(
+    content: &str,
+    mode: &str,
+    snapshot_dir: Option<&std::path::Path>,
+) -> Result<ApiResponse<String>, String> {
+    if let Err(e) = validate_backup_content(content) {
         return Ok(ApiResponse::fail(&e));
     }
-    match db::import_backup_json_db(&content) {
-        Ok(n) => Ok(ApiResponse::ok_with_msg(
-            format!("已恢复 {} 条资产，请用该备份对应的主密码重新解锁", n),
-            "备份导入完成",
-        )),
+    let import_mode = db::ImportMode::parse(mode);
+
+    let snapshot = match snapshot_dir {
+        Some(dir) => match db::export_backup_json_db() {
+            Ok(json) => crate::backup::write_pre_import_snapshot(dir, &json)
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            Err(_) => String::new(),
+        },
+        None => String::new(),
+    };
+
+    match db::import_backup_json_db_with_mode(content, import_mode) {
+        Ok(n) => {
+            let mode_label = if import_mode == db::ImportMode::Replace {
+                "覆盖"
+            } else {
+                "合并"
+            };
+            let snapshot_note = if snapshot.is_empty() {
+                String::new()
+            } else {
+                format!("；导入前快照：{}", snapshot)
+            };
+            Ok(ApiResponse::ok_with_msg(
+                format!(
+                    "已按{}模式导入 {} 条资产，请用该备份对应的主密码重新解锁{}",
+                    mode_label, n, snapshot_note
+                ),
+                "备份导入完成",
+            ))
+        }
         Err(e) => Ok(ApiResponse::fail(&e)),
     }
+}
+
+/// 导入备份。
+///
+/// `mode`：`merge`（默认，保留现有资产，只追加）或 `replace`（清空后写入）。
+/// 两种模式都会在写入前自动落一份「导入前快照」——覆盖导入是不可逆操作，
+/// 误选一次就永久丢数据，快照是唯一能回滚的路径。
+#[command]
+pub fn import_backup(
+    content: String,
+    mode: Option<String>,
+    app_handle: AppHandle,
+) -> Result<ApiResponse<String>, String> {
+    let dir = app_handle.path().app_data_dir().ok();
+    import_backup_response(&content, mode.as_deref().unwrap_or("merge"), dir.as_deref())
 }
 
 #[command]
@@ -733,6 +872,79 @@ pub fn complete_recovery(
     ))
 }
 
+/// SMTP 配置（界面可填；密码只落库不回传）。
+#[command]
+pub fn get_smtp_config() -> Result<ApiResponse<db::SmtpConfig>, String> {
+    db::get_smtp_config_db().map(ApiResponse::ok)
+}
+
+/// 保存 SMTP 配置。`password` 传 `None` 表示保持原密码不变。
+#[command]
+pub fn set_smtp_config(
+    host: String,
+    port: i64,
+    from_addr: String,
+    username: String,
+    password: Option<String>,
+    allow_insecure: bool,
+) -> Result<ApiResponse<()>, String> {
+    if host.len() > 253 {
+        return Ok(ApiResponse::fail("SMTP 服务器地址过长"));
+    }
+    if from_addr.len() > 320 || username.len() > 320 {
+        return Ok(ApiResponse::fail("发件人或用户名过长"));
+    }
+    if let Some(p) = password.as_deref() {
+        if p.len() > 512 {
+            return Ok(ApiResponse::fail("SMTP 密码过长"));
+        }
+    }
+    match db::set_smtp_config_db(
+        &host,
+        port,
+        &from_addr,
+        &username,
+        password.as_deref(),
+        allow_insecure,
+    ) {
+        Ok(()) => Ok(ApiResponse::ok_with_msg(
+            (),
+            "SMTP 配置已保存；配置后请用「发送测试邮件」确认能真正送达",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+/// 发送一封测试邮件。
+///
+/// 为什么必须有这个按钮：SMTP 配错时用户完全看不出来——通知只在到期时
+/// 静默降级到本地发件箱，「安心传承」看起来是开着的，家人却什么都收不到。
+/// 测试发送把这个隐性失败提前暴露在配置当下。
+#[command]
+pub fn send_test_email(recipient: String) -> Result<ApiResponse<String>, String> {
+    if recipient.len() > 320 {
+        return Ok(ApiResponse::fail("收件人地址过长"));
+    }
+    let Some(settings) = crate::notify::resolve_smtp_settings() else {
+        return Ok(ApiResponse::fail(
+            "尚未配置 SMTP 服务器（需要服务器地址与发件人地址）",
+        ));
+    };
+    if !recipient.contains('@') {
+        return Ok(ApiResponse::fail("请填写有效的收件人邮箱"));
+    }
+    match crate::notify::send_test_message(&settings, &recipient) {
+        Ok(()) => Ok(ApiResponse::ok_with_msg(
+            recipient,
+            "测试邮件已发送，请检查收件箱（含垃圾邮件）",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&format!(
+            "测试邮件发送失败：{}。提示：多数邮箱需要「授权码」而非登录密码，端口常用 465/587",
+            e
+        ))),
+    }
+}
+
 #[command]
 pub fn get_heartbeat_status() -> Result<ApiResponse<crate::heartbeat::HeartbeatStatus>, String> {
     Ok(ApiResponse::ok(crate::heartbeat::current_status()))
@@ -825,34 +1037,43 @@ pub fn hide_main_window(app_handle: AppHandle) -> Result<ApiResponse<()>, String
     Ok(ApiResponse::ok_with_msg((), "已隐藏到托盘"))
 }
 
+#[cfg(target_os = "windows")]
+mod win_shell {
+    use std::os::windows::ffi::OsStrExt;
+
+    // `ShellExecuteW` 只在 Windows 存在；返回 `HINSTANCE`（指针宽度）。
+    // 全项目只声明一次：两个调用点重复声明会触发 `clashing_extern_declarations`，
+    // 而签名不一致在 ABI 上属于未定义行为。
+    #[link(name = "shell32")]
+    extern "system" {
+        pub fn ShellExecuteW(
+            hwnd: *mut core::ffi::c_void,
+            operation: *const u16,
+            file: *const u16,
+            parameters: *const u16,
+            directory: *const u16,
+            show_cmd: i32,
+        ) -> isize;
+    }
+
+    pub fn wide(s: &str) -> Vec<u16> {
+        std::ffi::OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+}
+
 #[command]
 pub fn open_external(url: String) -> Result<ApiResponse<()>, String> {
     let checked = crate::vault::validate_external_url(&url)?;
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::ffi::OsStrExt;
-        #[link(name = "shell32")]
-        extern "system" {
-            fn ShellExecuteW(
-                hwnd: *mut core::ffi::c_void,
-                operation: *const u16,
-                file: *const u16,
-                parameters: *const u16,
-                directory: *const u16,
-                show_cmd: i32,
-            ) -> *mut core::ffi::c_void;
-        }
-        let to_wide = |s: &str| -> Vec<u16> {
-            std::ffi::OsStr::new(s)
-                .encode_wide()
-                .chain(std::iter::once(0))
-                .collect()
-        };
-        let op = to_wide("open");
-        let target = to_wide(&checked);
+        let op = win_shell::wide("open");
+        let target = win_shell::wide(&checked);
         let result = unsafe {
-            ShellExecuteW(
+            win_shell::ShellExecuteW(
                 std::ptr::null_mut(),
                 op.as_ptr(),
                 target.as_ptr(),
@@ -861,7 +1082,7 @@ pub fn open_external(url: String) -> Result<ApiResponse<()>, String> {
                 1,
             )
         };
-        if (result as isize) <= 32 {
+        if result <= 32 {
             return Err("无法打开链接".to_string());
         }
     }
@@ -1023,7 +1244,7 @@ mod tests {
         db::add_asset_db(&req).unwrap();
 
         for bad in ["{not json", "", r#"{"app":"other","version":1}"#] {
-            let res = import_backup(bad.to_string()).unwrap();
+            let res = import_backup_response(bad, "replace", None).unwrap();
             assert!(!res.success, "非法备份必须被拒绝: {}", bad);
         }
 
@@ -1161,6 +1382,7 @@ mod tests {
         let mk = |identifier: &str| InheritanceReport {
             user: user.clone(),
             assets: vec![asset(identifier)],
+            policies: Vec::new(),
             total_estimated_value: 100.0,
             property_assets_count: 1,
             personality_assets_count: 0,
@@ -1169,15 +1391,23 @@ mod tests {
         };
 
         // 正常报告：成功，且是完整独立文档
-        let ok = render_report_response(&mk("real-account")).unwrap();
+        let ok = render_report_response(&mk("real-account"), "zh-CN").unwrap();
         assert!(ok.success, "合法报告必须成功");
         let html = ok.data.unwrap();
         assert!(html.starts_with("<!DOCTYPE html>"));
         assert!(html.contains("@media print"));
         assert!(html.contains("real-account"));
 
+        // 语言必须跟随界面：英文用户导出英文文档
+        let en = render_report_response(&mk("real-account"), "en-US").unwrap();
+        let en_html = en.data.unwrap();
+        assert!(en_html.contains(r#"<html lang="en">"#));
+        assert!(en_html.contains("Digital Legacy Inheritance Report"));
+        assert!(!en_html.contains("数字遗产继承报告"));
+
         // 占位符：必须拒绝，且不产出任何 HTML
-        let blocked = render_report_response(&mk(crate::vault::PLACEHOLDER_LOCKED)).unwrap();
+        let blocked =
+            render_report_response(&mk(crate::vault::PLACEHOLDER_LOCKED), "zh-CN").unwrap();
         assert!(!blocked.success, "含占位符的报告必须拒绝");
         assert!(blocked.data.is_none(), "拒绝时不得返回半成品 HTML");
         assert!(

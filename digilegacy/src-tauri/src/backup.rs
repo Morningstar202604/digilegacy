@@ -97,6 +97,36 @@ pub fn list_backups(app_data_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
+/// 导入前快照：写在自动备份目录，命名带秒级时间戳（同日多次导入不会互相覆盖）。
+///
+/// 与每日快照的区别：每日快照一天只留一份（当天已有就跳过），
+/// 而「导入前」这一刻的状态必须被无条件保存——覆盖导入是不可逆操作。
+/// 该文件同样计入 `KEEP` 裁剪，避免无限增长。
+pub fn write_pre_import_snapshot(app_data_dir: &Path, json: &str) -> Result<PathBuf, String> {
+    let dir = backup_dir(app_data_dir);
+    fs::create_dir_all(&dir).map_err(|e| format!("创建备份目录失败: {}", e))?;
+
+    let stamp = Local::now().format("%Y%m%d-%H%M%S").to_string();
+    let mut target = dir.join(format!("digilegacy-preimport-{}.json", stamp));
+    // 同一秒内连续导入两次：加序号，绝不覆盖前一份快照。
+    let mut n = 1;
+    while target.exists() {
+        target = dir.join(format!("digilegacy-preimport-{}-{}.json", stamp, n));
+        n += 1;
+    }
+
+    let tmp = dir.join(format!(".digilegacy-preimport-{}.json.tmp", stamp));
+    crate::fsutil::write_private(&tmp, json.as_bytes())
+        .map_err(|e| format!("写入导入前快照失败: {}", e))?;
+    fs::rename(&tmp, &target).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("保存导入前快照失败: {}", e)
+    })?;
+
+    prune(&dir);
+    Ok(target)
+}
+
 /// 最近一次自动备份的文件名与大小（界面展示用；无快照返回 None）。
 pub fn latest_backup_summary(app_data_dir: &Path) -> Option<(String, u64)> {
     let latest = list_backups(app_data_dir).pop()?;
@@ -217,6 +247,36 @@ mod tests {
         assert!(name.ends_with(".json"));
         assert_eq!(size, 2);
         assert!(latest_backup_summary(&temp_dir("latest_empty")).is_none());
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// 导入前快照：同日多次导入必须每次都留一份，绝不覆盖。
+    #[test]
+    fn pre_import_snapshot_is_never_overwritten() {
+        let base = temp_dir("preimport");
+        let first = write_pre_import_snapshot(&base, "{\"v\":1}").unwrap();
+        let second = write_pre_import_snapshot(&base, "{\"v\":2}").unwrap();
+        assert_ne!(first, second, "两次快照必须是不同文件");
+        assert_eq!(fs::read_to_string(&first).unwrap(), "{\"v\":1}");
+        assert_eq!(fs::read_to_string(&second).unwrap(), "{\"v\":2}");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// 快照必须是仅本人可读（Windows 继承用户目录 ACL；Unix 断言 0600）。
+    #[test]
+    fn pre_import_snapshot_is_written_privately() {
+        let base = temp_dir("preimport_perm");
+        let path = write_pre_import_snapshot(&base, "{}").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600, "导入前快照必须仅本人可读，实际 {:o}", mode);
+        }
+        #[cfg(not(unix))]
+        {
+            assert!(path.exists());
+        }
         let _ = fs::remove_dir_all(&base);
     }
 }

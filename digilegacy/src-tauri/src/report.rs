@@ -9,11 +9,15 @@
 //!
 //! 现在由 Rust 直接渲染：不可信内容统一 HTML 转义，字体/打印样式集中在此，
 //! 前端只负责请求与展示，导出物与预览的结构性差异降到零。
+//!
+//! 导出内容必须覆盖「家人照着就能办」所需的全部信息：平台政策、所需材料、
+//! 预计时长、难度、官方入口、继承人联系方式。少任何一项，报告就退化成
+//! 一份「知道有这件事、但不知道怎么办」的清单。
 
-use crate::models::{DigitalAsset, InheritanceReport};
+use crate::models::{DigitalAsset, InheritanceReport, PlatformPolicyBrief};
 
 const STYLE: &str = r#"
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:0 auto;padding:44px 48px;color:#232019;background:#fff;line-height:1.6}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:820px;margin:0 auto;padding:44px 48px;color:#232019;background:#fff;line-height:1.6}
 h1,h2,h3{margin:0}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td,th{border-bottom:1px solid #e8e2d8;padding:10px 12px;text-align:left;vertical-align:middle;word-break:break-word}
@@ -30,6 +34,15 @@ th{background:#f6f3ee;color:#6b6157;font-weight:600;font-size:13px;border-bottom
 .stats div{padding:12px;border:1px solid #e4ddd3;border-radius:8px;text-align:center}
 .stats .num{font-size:32px;font-weight:700}
 .note{padding:12px;background:#f6f3ee;border-radius:8px;border-left:3px solid #b4594a;margin-bottom:12px}
+.policy{padding:14px 16px;border:1px solid #e4ddd3;border-radius:10px;margin-bottom:14px;break-inside:avoid}
+.policy-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:8px}
+.policy-name{font-size:15px;font-weight:700}
+.policy-badges{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:#6b6157}
+.policy-badge{padding:2px 8px;border-radius:999px;background:#f6f3ee;border:1px solid #e4ddd3}
+.policy-row{margin:6px 0;font-size:13px}
+.policy-label{color:#8a8073;font-weight:600}
+.policy-link{font-size:12px;color:#8a8073;word-break:break-all}
+.unverified{color:#a06a2c}
 .doc-footer{display:flex;justify-content:space-between;margin-top:44px;padding-top:14px;border-top:1px solid #e4ddd3;font-size:11px;color:#a49a8d}
 @page{margin:18mm 16mm}
 @media print{body{padding:0}.section{break-inside:avoid}.no-print{display:none}}
@@ -37,6 +50,180 @@ th{background:#f6f3ee;color:#6b6157;font-weight:600;font-size:13px;border-bottom
 
 /// 占位符：未解密的值绝不能出现在任何导出物里。
 const PLACEHOLDER: &str = "【加密数据 · 需解锁】";
+
+/// 报告语言。导出物必须与界面语言一致——
+/// 旧实现硬编码 `zh-CN`，英文用户导出的仍是中文文档。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportLocale {
+    Zh,
+    En,
+}
+
+impl ReportLocale {
+    /// 从 IPC 传入的 locale 归一化。未知值回退中文（桌面历史默认）。
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "en" | "en-us" | "en_us" => Self::En,
+            _ => Self::Zh,
+        }
+    }
+
+    fn lang(self) -> &'static str {
+        match self {
+            Self::Zh => "zh-CN",
+            Self::En => "en",
+        }
+    }
+}
+
+/// 一份报告里用到的全部静态文案。集中在这里，避免正文里散布 match。
+struct Copy {
+    title: &'static str,
+    meta: &'static str,
+    sec_holder: &'static str,
+    sec_overview: &'static str,
+    sec_assets: &'static str,
+    sec_disposal: &'static str,
+    sec_policies: &'static str,
+    sec_statement: &'static str,
+    name: &'static str,
+    phone: &'static str,
+    email: &'static str,
+    heir: &'static str,
+    emergency: &'static str,
+    total: &'static str,
+    property: &'static str,
+    personality: &'static str,
+    total_value: &'static str,
+    col_platform: &'static str,
+    col_account: &'static str,
+    col_category: &'static str,
+    col_value: &'static str,
+    col_disposal: &'static str,
+    col_heir: &'static str,
+    col_contact: &'static str,
+    no_assets: &'static str,
+    not_set: &'static str,
+    docs: &'static str,
+    process: &'static str,
+    difficulty: &'static str,
+    duration: &'static str,
+    official: &'static str,
+    risks: &'static str,
+    no_policy: &'static str,
+    sourced: &'static str,
+    unsourced: &'static str,
+    unsourced_note: &'static str,
+    disposal_phrase: &'static str,
+    heir_phrase: &'static str,
+    footer: &'static str,
+    page: &'static str,
+    statement_1: &'static str,
+    statement_2: &'static str,
+    statement_3: &'static str,
+    statement_4: &'static str,
+}
+
+const ZH: Copy = Copy {
+    title: "数字遗产继承报告",
+    meta: "｜ 仅供继承人内部使用",
+    sec_holder: "一、持有人信息",
+    sec_overview: "二、资产概览",
+    sec_assets: "三、资产清单",
+    sec_disposal: "四、处置安排",
+    sec_policies: "五、平台办理指引",
+    sec_statement: "六、声明",
+    name: "姓名",
+    phone: "联系电话",
+    email: "邮箱",
+    heir: "主要继承人",
+    emergency: "紧急联系人",
+    total: "资产总数",
+    property: "财产型",
+    personality: "人格型",
+    total_value: "预估总值",
+    col_platform: "平台",
+    col_account: "账号标识",
+    col_category: "类别",
+    col_value: "预估价值",
+    col_disposal: "处置方式",
+    col_heir: "继承人",
+    col_contact: "继承人联系方式",
+    no_assets: "尚未登记任何数字资产",
+    not_set: "未指定",
+    docs: "所需材料",
+    process: "办理流程",
+    difficulty: "难度",
+    duration: "预计时长",
+    official: "官方入口",
+    risks: "风险提示",
+    no_policy: "该平台暂无政策记录，请以平台官方公告为准",
+    sourced: "有来源标注",
+    unsourced: "无来源标注",
+    unsourced_note: "本条政策没有来源标注，办理前请向平台官方客服核实",
+    disposal_phrase: "处置",
+    heir_phrase: "继承人",
+    footer: "归零 DigiLegacy · 本地生成",
+    page: "共 1 页",
+    statement_1: "1. 本报告由「归零 DigiLegacy」根据持有人登记的信息生成，不含任何账号密码或密钥。",
+    statement_2: "2. 账号继承须遵守各平台用户协议与适用法律，通常需提供死亡证明与继承权公证书。",
+    statement_3: "3. 报告为明文文件，请与纸质文书同等保管。",
+    statement_4: "4. 平台政策可能随时间变化，办理前请以平台最新公告为准。",
+};
+
+const EN: Copy = Copy {
+    title: "Digital Legacy Inheritance Report",
+    meta: "｜ For the family's internal use only",
+    sec_holder: "1. Holder information",
+    sec_overview: "2. Asset overview",
+    sec_assets: "3. Asset list",
+    sec_disposal: "4. Disposal arrangements",
+    sec_policies: "5. Platform-by-platform instructions",
+    sec_statement: "6. Statement",
+    name: "Name",
+    phone: "Phone",
+    email: "Email",
+    heir: "Primary heir",
+    emergency: "Emergency contact",
+    total: "Total assets",
+    property: "Property",
+    personality: "Personality",
+    total_value: "Estimated value",
+    col_platform: "Platform",
+    col_account: "Account",
+    col_category: "Category",
+    col_value: "Value",
+    col_disposal: "Disposal",
+    col_heir: "Heir",
+    col_contact: "Heir contact",
+    no_assets: "No digital assets registered yet",
+    not_set: "Not set",
+    docs: "Documents required",
+    process: "Procedure",
+    difficulty: "Difficulty",
+    duration: "Typical duration",
+    official: "Official page",
+    risks: "Risks",
+    no_policy: "No policy record for this platform; check the platform's official announcement",
+    sourced: "Source noted",
+    unsourced: "No source",
+    unsourced_note: "This policy entry has no source annotation; confirm with the platform's official support before proceeding",
+    disposal_phrase: "Disposal",
+    heir_phrase: "Heir",
+    footer: "DigiLegacy · generated locally",
+    page: "1 page",
+    statement_1: "1. This report is generated by DigiLegacy from the information the holder registered. It contains no passwords or keys.",
+    statement_2: "2. Account inheritance is subject to each platform's terms of service and applicable law; a death certificate and certificate of inheritance are usually required.",
+    statement_3: "3. This report is a plaintext file. Treat it like a paper document.",
+    statement_4: "4. Platform policies change over time; always confirm against the platform's latest announcement before acting.",
+};
+
+fn copy_for(locale: ReportLocale) -> &'static Copy {
+    match locale {
+        ReportLocale::Zh => &ZH,
+        ReportLocale::En => &EN,
+    }
+}
 
 /// HTML 转义：报告里所有来自数据库/用户输入的文本都必须经过它。
 pub fn escape_html(input: &str) -> String {
@@ -78,47 +265,181 @@ pub fn contains_placeholder(report: &InheritanceReport) -> bool {
     })
 }
 
-fn category_label(cat: &str) -> &'static str {
-    match cat {
-        "property" => "财产型",
-        "personality" => "人格型",
-        "mixed" => "混合型",
-        _ => "未知",
+fn category_label(cat: &str, locale: ReportLocale) -> &'static str {
+    match (cat, locale) {
+        ("property", ReportLocale::Zh) => "财产型",
+        ("personality", ReportLocale::Zh) => "人格型",
+        ("mixed", ReportLocale::Zh) => "混合型",
+        ("property", ReportLocale::En) => "Property",
+        ("personality", ReportLocale::En) => "Personality",
+        ("mixed", ReportLocale::En) => "Mixed",
+        (_, ReportLocale::Zh) => "未知",
+        (_, ReportLocale::En) => "Unknown",
     }
 }
 
-fn disposal_label(method: &str) -> &'static str {
-    match method {
-        "inherit" => "指定继承",
-        "liquidate" => "变现分配",
-        "memorialize" => "保留纪念",
-        "authorize_view" => "授权查阅",
-        "delete" => "彻底删除",
-        "donate" => "捐赠",
-        "no_action" => "待设定",
-        _ => "未知",
+fn disposal_label(method: &str, locale: ReportLocale) -> &'static str {
+    match (method, locale) {
+        ("inherit", ReportLocale::Zh) => "指定继承",
+        ("liquidate", ReportLocale::Zh) => "变现分配",
+        ("memorialize", ReportLocale::Zh) => "保留纪念",
+        ("authorize_view", ReportLocale::Zh) => "授权查阅",
+        ("delete", ReportLocale::Zh) => "彻底删除",
+        ("donate", ReportLocale::Zh) => "捐赠",
+        ("no_action", ReportLocale::Zh) => "待设定",
+        ("inherit", ReportLocale::En) => "Inherit",
+        ("liquidate", ReportLocale::En) => "Liquidate",
+        ("memorialize", ReportLocale::En) => "Memorialize",
+        ("authorize_view", ReportLocale::En) => "Authorize access",
+        ("delete", ReportLocale::En) => "Delete",
+        ("donate", ReportLocale::En) => "Donate",
+        ("no_action", ReportLocale::En) => "Not decided",
+        (_, ReportLocale::Zh) => "未知",
+        (_, ReportLocale::En) => "Unknown",
     }
 }
 
-fn asset_row(asset: &DigitalAsset) -> String {
+fn asset_row(asset: &DigitalAsset, locale: ReportLocale) -> String {
     let value = asset
         .estimated_value
         .filter(|v| v.is_finite() && *v > 0.0)
         .map(|v| format!("¥{:.2}", v))
         .unwrap_or_else(|| "-".to_string());
+    let contact = asset
+        .heir_contact
+        .as_deref()
+        .filter(|v| !v.is_empty())
+        .map(escape_html)
+        .unwrap_or_else(|| "-".to_string());
     format!(
-        "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+        "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
         escape_html(&asset.platform_name),
         escape_html(&asset.account_identifier),
-        category_label(&asset.category),
+        category_label(&asset.category, locale),
         value,
-        disposal_label(&asset.disposal_method),
+        disposal_label(&asset.disposal_method, locale),
         escape_html(asset.heir_name.as_deref().unwrap_or("-")),
+        contact,
+    )
+}
+
+/// 平台办理指引卡片：家人拿到后照着做的那一页。
+fn policy_card(p: &PlatformPolicyBrief, locale: ReportLocale) -> String {
+    let c = copy_for(locale);
+    let dash = |v: &str| -> String {
+        if v.trim().is_empty() {
+            "-".to_string()
+        } else {
+            escape_html(v)
+        }
+    };
+    let mut badges = String::new();
+    if !p.estimated_difficulty.trim().is_empty() {
+        badges.push_str(&format!(
+            "<span class=\"policy-badge\">{}：{}</span>",
+            c.difficulty,
+            escape_html(&p.estimated_difficulty)
+        ));
+    }
+    if !p.estimated_time_days.trim().is_empty() {
+        badges.push_str(&format!(
+            "<span class=\"policy-badge\">{}：{}</span>",
+            c.duration,
+            escape_html(&p.estimated_time_days)
+        ));
+    }
+    for tag in p
+        .tags
+        .split(',')
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+    {
+        badges.push_str(&format!(
+            "<span class=\"policy-badge\">{}</span>",
+            escape_html(tag)
+        ));
+    }
+    let source = if p.has_source {
+        format!(
+            "<span class=\"policy-badge\">{}</span>",
+            escape_html(c.sourced)
+        )
+    } else {
+        format!(
+            "<span class=\"policy-badge unverified\">{}</span>",
+            escape_html(c.unsourced)
+        )
+    };
+    let risk = if p.risk_warnings.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<div class=\"policy-row\"><span class=\"policy-label\">{}：</span>{}</div>",
+            c.risks,
+            escape_html(&p.risk_warnings)
+        )
+    };
+    let monetization = if p.monetization_path.trim().is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<div class=\"policy-row\"><span class=\"policy-label\">{}：</span>{}</div>",
+            if locale == ReportLocale::Zh {
+                "过户/变现路径"
+            } else {
+                "Transfer / liquidation path"
+            },
+            escape_html(&p.monetization_path)
+        )
+    };
+    let link = if p.official_policy_url.trim().is_empty() {
+        String::new()
+    } else {
+        // 只允许 http(s)：报告会被家人用浏览器打开，不能给出 javascript: 之类入口。
+        let url = p.official_policy_url.trim();
+        let lower = url.to_ascii_lowercase();
+        if lower.starts_with("https://") || lower.starts_with("http://") {
+            format!(
+                "<div class=\"policy-row\"><span class=\"policy-label\">{}：</span><span class=\"policy-link\">{}</span></div>",
+                c.official,
+                escape_html(url)
+            )
+        } else {
+            String::new()
+        }
+    };
+    let unsourced_note = if p.has_source {
+        String::new()
+    } else {
+        format!(
+            "<div class=\"policy-row unverified\">{}</div>",
+            escape_html(c.unsourced_note)
+        )
+    };
+    format!(
+        "<div class=\"policy\">\
+<div class=\"policy-head\"><span class=\"policy-name\">{name}</span><span class=\"policy-badges\">{badges}{source}</span></div>\
+<div class=\"policy-row\"><span class=\"policy-label\">{docs}：</span>{docs_v}</div>\
+<div class=\"policy-row\"><span class=\"policy-label\">{process}：</span>{process_v}</div>\
+{monetization}{risk}{link}{unsourced_note}\
+</div>",
+        name = escape_html(&p.name),
+        badges = badges,
+        source = source,
+        docs = c.docs,
+        docs_v = dash(&p.required_documents),
+        process = c.process,
+        process_v = dash(&p.process_description),
+        monetization = monetization,
+        risk = risk,
+        link = link,
+        unsourced_note = unsourced_note,
     )
 }
 
 /// 渲染完整、可独立打开的 HTML 文档（单文件导出与 ZIP 工具包共用同一份）。
-pub fn render_report_html(report: &InheritanceReport) -> String {
+pub fn render_report_html(report: &InheritanceReport, locale: ReportLocale) -> String {
+    let c = copy_for(locale);
     let doc_no: String = report
         .generated_at
         .chars()
@@ -126,107 +447,212 @@ pub fn render_report_html(report: &InheritanceReport) -> String {
         .collect();
 
     let rows = if report.assets.is_empty() {
-        "<tr><td colspan=\"6\" class=\"muted\">尚未登记任何数字资产</td></tr>".to_string()
+        format!(
+            "<tr><td colspan=\"7\" class=\"muted\">{}</td></tr>",
+            c.no_assets
+        )
     } else {
         report
             .assets
             .iter()
-            .map(asset_row)
+            .map(|a| asset_row(a, locale))
             .collect::<Vec<_>>()
             .join("")
     };
 
-    let inheritable = report
+    let inheritable = if report
         .assets
         .iter()
-        .filter(|a| a.disposal_method != "no_action")
-        .map(|a| {
-            format!(
-                "<div class=\"note\"><strong>{}</strong><br><span class=\"muted\">{}</span></div>",
-                escape_html(&a.platform_name),
-                escape_html(&format!(
-                    "处置：{}；继承人：{}",
-                    disposal_label(&a.disposal_method),
-                    a.heir_name.as_deref().unwrap_or("未指定")
-                ))
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("");
+        .all(|a| a.disposal_method == "no_action")
+    {
+        format!(
+            "<p class=\"muted\">{}</p>",
+            escape_html(if locale == ReportLocale::Zh {
+                "尚未设定任何处置意愿"
+            } else {
+                "No disposal wishes set yet"
+            })
+        )
+    } else {
+        report
+            .assets
+            .iter()
+            .filter(|a| a.disposal_method != "no_action")
+            .map(|a| {
+                let heir = a
+                    .heir_name
+                    .as_deref()
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or(c.not_set);
+                let contact = a
+                    .heir_contact
+                    .as_deref()
+                    .filter(|v| !v.is_empty())
+                    .unwrap_or(c.not_set);
+                format!(
+                    "<div class=\"note\"><strong>{}</strong><br><span class=\"muted\">{}：{}；{}：{}（{}）</span></div>",
+                    escape_html(&a.platform_name),
+                    c.disposal_phrase,
+                    disposal_label(&a.disposal_method, locale),
+                    c.heir_phrase,
+                    escape_html(heir),
+                    escape_html(contact)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    };
+
+    let policies = if report.policies.is_empty() {
+        format!("<p class=\"muted\">{}</p>", c.no_policy)
+    } else {
+        report
+            .policies
+            .iter()
+            .map(|p| policy_card(p, locale))
+            .collect::<Vec<_>>()
+            .join("")
+    };
+
+    let heir_label = format!(
+        "{}（{}）",
+        escape_html(&report.user.heir_primary_name),
+        escape_html(&report.user.heir_primary_relation)
+    );
+    let emergency_label = format!(
+        "{}（{}）",
+        escape_html(&report.user.emergency_contact_name),
+        escape_html(&report.user.emergency_contact_relation)
+    );
 
     format!(
         r#"<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><title>数字遗产继承报告</title>
+<html lang="{lang}"><head><meta charset="UTF-8"><title>{title}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>{style}</style></head>
 <body>
 <div class="doc-header">
-  <div class="doc-brand">归零 DigiLegacy</div>
-  <div class="doc-no">编号 {doc_no}</div>
+  <div class="doc-brand">{app_name}</div>
+  <div class="doc-no">{doc_no_label} {doc_no}</div>
 </div>
-<div class="doc-title">数字遗产继承报告</div>
-<div class="doc-meta">生成时间 {generated} ｜ 仅供继承人内部使用</div>
+<div class="doc-title">{title}</div>
+<div class="doc-meta">{generated_label} {generated}{meta}</div>
 
 <div class="section">
-  <div class="section-title">一、持有人信息</div>
+  <div class="section-title">{sec_holder}</div>
   <table><tbody>
-    <tr><td>姓名</td><td>{name}</td></tr>
-    <tr><td>联系电话</td><td>{phone}</td></tr>
-    <tr><td>邮箱</td><td>{email}</td></tr>
-    <tr><td>主要继承人</td><td>{heir}（{relation}）</td></tr>
-    <tr><td>紧急联系人</td><td>{emergency}（{emergency_relation}）</td></tr>
+    <tr><td>{name_label}</td><td>{name}</td></tr>
+    <tr><td>{phone_label}</td><td>{phone}</td></tr>
+    <tr><td>{email_label}</td><td>{email}</td></tr>
+    <tr><td>{heir_label}</td><td>{heir}</td></tr>
+    <tr><td>{emergency_label}</td><td>{emergency}</td></tr>
   </tbody></table>
 </div>
 
 <div class="section">
-  <div class="section-title">二、资产概览</div>
+  <div class="section-title">{sec_overview}</div>
   <div class="stats">
-    <div><div class="num">{total}</div><div class="muted">资产总数</div></div>
-    <div><div class="num">{property}</div><div class="muted">财产型</div></div>
-    <div><div class="num">{personality}</div><div class="muted">人格型</div></div>
-    <div><div class="num">¥{value:.2}</div><div class="muted">预估总值</div></div>
+    <div><div class="num">{total}</div><div class="muted">{total_label}</div></div>
+    <div><div class="num">{property}</div><div class="muted">{property_label}</div></div>
+    <div><div class="num">{personality}</div><div class="muted">{personality_label}</div></div>
+    <div><div class="num">¥{value:.2}</div><div class="muted">{value_label}</div></div>
   </div>
 </div>
 
 <div class="section">
-  <div class="section-title">三、资产清单</div>
-  <table><thead><tr><th>平台</th><th>账号标识</th><th>类别</th><th>预估价值</th><th>处置方式</th><th>继承人</th></tr></thead>
+  <div class="section-title">{sec_assets}</div>
+  <table><thead><tr><th>{col_platform}</th><th>{col_account}</th><th>{col_category}</th><th>{col_value}</th><th>{col_disposal}</th><th>{col_heir}</th><th>{col_contact}</th></tr></thead>
   <tbody>{rows}</tbody></table>
 </div>
 
 <div class="section">
-  <div class="section-title">四、处置安排</div>
+  <div class="section-title">{sec_disposal}</div>
   {inheritable}
 </div>
 
 <div class="section">
-  <div class="section-title">五、声明</div>
-  <p>1. 本报告由「归零 DigiLegacy」根据持有人登记的信息生成，不含任何账号密码或密钥。</p>
-  <p>2. 账号继承须遵守各平台用户协议与适用法律，通常需提供死亡证明与继承权公证书。</p>
-  <p>3. 报告为明文文件，请与纸质文书同等保管。</p>
+  <div class="section-title">{sec_policies}</div>
+  {policies}
+</div>
+
+<div class="section">
+  <div class="section-title">{sec_statement}</div>
+  <p>{statement_1}</p>
+  <p>{statement_2}</p>
+  <p>{statement_3}</p>
+  <p>{statement_4}</p>
 </div>
 
 <div class="doc-footer">
-  <span>归零 DigiLegacy · 本地生成</span>
-  <span>第 1 页 / 共 1 页</span>
+  <span>{footer}</span>
+  <span>{page}</span>
 </div>
 </body></html>"#,
+        lang = locale.lang(),
+        title = c.title,
         style = STYLE,
+        app_name = "归零 DigiLegacy",
+        doc_no_label = if locale == ReportLocale::Zh {
+            "编号"
+        } else {
+            "No."
+        },
         doc_no = escape_html(&doc_no),
+        generated_label = if locale == ReportLocale::Zh {
+            "生成时间"
+        } else {
+            "Generated"
+        },
         generated = escape_html(&report.generated_at),
+        meta = c.meta,
+        sec_holder = c.sec_holder,
+        sec_overview = c.sec_overview,
+        sec_assets = c.sec_assets,
+        sec_disposal = c.sec_disposal,
+        sec_policies = c.sec_policies,
+        sec_statement = c.sec_statement,
+        name_label = c.name,
+        phone_label = c.phone,
+        email_label = c.email,
+        heir_label = c.heir,
+        emergency_label = c.emergency,
         name = escape_html(&report.user.full_name),
         phone = escape_html(&report.user.phone),
         email = escape_html(&report.user.email),
-        heir = escape_html(&report.user.heir_primary_name),
-        relation = escape_html(&report.user.heir_primary_relation),
-        emergency = escape_html(&report.user.emergency_contact_name),
-        emergency_relation = escape_html(&report.user.emergency_contact_relation),
+        heir = if report.user.heir_primary_name.trim().is_empty() {
+            escape_html(c.not_set)
+        } else {
+            heir_label
+        },
+        emergency = if report.user.emergency_contact_name.trim().is_empty() {
+            escape_html(c.not_set)
+        } else {
+            emergency_label
+        },
         total = report.assets.len(),
+        total_label = c.total,
         property = report.property_assets_count,
+        property_label = c.property,
         personality = report.personality_assets_count,
+        personality_label = c.personality,
         value = report.total_estimated_value,
+        value_label = c.total_value,
+        col_platform = c.col_platform,
+        col_account = c.col_account,
+        col_category = c.col_category,
+        col_value = c.col_value,
+        col_disposal = c.col_disposal,
+        col_heir = c.col_heir,
+        col_contact = c.col_contact,
         rows = rows,
         inheritable = inheritable,
+        policies = policies,
+        statement_1 = c.statement_1,
+        statement_2 = c.statement_2,
+        statement_3 = c.statement_3,
+        statement_4 = c.statement_4,
+        footer = c.footer,
+        page = c.page,
     )
 }
 
@@ -270,7 +696,7 @@ mod tests {
             value_currency: "CNY".to_string(),
             disposal_method: "inherit".to_string(),
             heir_name: Some("王五".to_string()),
-            heir_contact: None,
+            heir_contact: Some("13700000000".to_string()),
             notes: String::new(),
             has_credential: false,
             is_confirmed: true,
@@ -281,10 +707,29 @@ mod tests {
         a
     }
 
+    fn policy(over: impl FnOnce(&mut PlatformPolicyBrief)) -> PlatformPolicyBrief {
+        let mut p = PlatformPolicyBrief {
+            platform_id: 1,
+            name: "支付宝".to_string(),
+            required_documents: "死亡证明、继承公证书、继承人身份证".to_string(),
+            process_description: "联系客服 95188 办理余额继承".to_string(),
+            estimated_difficulty: "中等".to_string(),
+            estimated_time_days: "30-90天".to_string(),
+            official_policy_url: "https://help.alipay.com".to_string(),
+            monetization_path: "余额可依法过户".to_string(),
+            risk_warnings: "大额需公证".to_string(),
+            tags: "需公证,高价值".to_string(),
+            has_source: false,
+        };
+        over(&mut p);
+        p
+    }
+
     fn report(assets: Vec<DigitalAsset>) -> InheritanceReport {
         InheritanceReport {
             user: user(),
             assets,
+            policies: vec![policy(|_| {})],
             total_estimated_value: 100.0,
             property_assets_count: 1,
             personality_assets_count: 0,
@@ -295,7 +740,7 @@ mod tests {
 
     #[test]
     fn renders_standalone_document_with_print_styles() {
-        let html = render_report_html(&report(vec![asset(|_| {})]));
+        let html = render_report_html(&report(vec![asset(|_| {})]), ReportLocale::Zh);
         assert!(html.starts_with("<!DOCTYPE html>"), "必须是完整文档");
         assert!(html.contains("@media print"), "必须带打印样式");
         assert!(html.contains("数字遗产继承报告"));
@@ -313,11 +758,17 @@ mod tests {
             a.platform_name = evil.to_string();
             a.account_identifier = evil.to_string();
             a.heir_name = Some(evil.to_string());
+            a.heir_contact = Some(evil.to_string());
         })]);
         r.user.full_name = evil.to_string();
         r.user.heir_primary_name = evil.to_string();
+        r.policies = vec![policy(|p| {
+            p.name = evil.to_string();
+            p.process_description = evil.to_string();
+            p.risk_warnings = evil.to_string();
+        })];
 
-        let html = render_report_html(&r);
+        let html = render_report_html(&r, ReportLocale::Zh);
         assert!(!html.contains("<script>"), "不得出现未转义脚本标签");
         assert!(html.contains("&lt;script&gt;"), "必须转义为实体");
         assert!(html.contains("&#39;"), "单引号也必须转义");
@@ -342,7 +793,7 @@ mod tests {
     /// 空资产清单不能渲染成空表格（继承人会以为文件坏了）。
     #[test]
     fn empty_report_explains_itself() {
-        let html = render_report_html(&report(vec![]));
+        let html = render_report_html(&report(vec![]), ReportLocale::Zh);
         assert!(html.contains("尚未登记任何数字资产"));
     }
 
@@ -350,9 +801,92 @@ mod tests {
     #[test]
     fn value_column_never_shows_invalid_amounts() {
         for bad in [None, Some(-5.0), Some(f64::NAN), Some(0.0)] {
-            let html = render_report_html(&report(vec![asset(|a| a.estimated_value = bad)]));
+            let html = render_report_html(
+                &report(vec![asset(|a| a.estimated_value = bad)]),
+                ReportLocale::Zh,
+            );
             assert!(!html.contains("NaN"), "不得出现 NaN");
             assert!(!html.contains("¥-"), "不得出现负金额");
         }
+    }
+
+    /// 导出必须包含平台办理指引——预览里有、导出里没有，是家人拿到删节版的主因。
+    #[test]
+    fn export_includes_platform_guidance_like_the_preview() {
+        let html = render_report_html(&report(vec![asset(|_| {})]), ReportLocale::Zh);
+        assert!(html.contains("平台办理指引"), "必须有办理指引章节");
+        assert!(
+            html.contains("死亡证明、继承公证书、继承人身份证"),
+            "必须含所需材料"
+        );
+        assert!(
+            html.contains("联系客服 95188 办理余额继承"),
+            "必须含办理流程"
+        );
+        assert!(html.contains("中等"), "必须含难度");
+        assert!(html.contains("30-90天"), "必须含预计时长");
+        assert!(html.contains("https://help.alipay.com"), "必须含官方入口");
+        assert!(html.contains("大额需公证"), "必须含风险提示");
+    }
+
+    /// 继承人联系方式必须进导出：预览显示了，导出丢了，家人联系不上人。
+    #[test]
+    fn export_includes_heir_contact() {
+        let html = render_report_html(&report(vec![asset(|_| {})]), ReportLocale::Zh);
+        assert!(html.contains("13700000000"), "必须含继承人联系方式");
+        assert!(html.contains("继承人联系方式"), "必须有该列");
+    }
+
+    /// 无来源标注的政策必须显式提示，不能让家人误以为是官方口径。
+    #[test]
+    fn unsourced_policies_are_marked_in_export() {
+        let html = render_report_html(&report(vec![asset(|_| {})]), ReportLocale::Zh);
+        assert!(html.contains("无来源标注"), "无来源必须标注");
+        assert!(
+            html.contains("办理前请向平台官方客服核实"),
+            "必须给出核实建议"
+        );
+
+        let mut with_source = report(vec![asset(|_| {})]);
+        with_source.policies = vec![policy(|p| p.has_source = true)];
+        let html = render_report_html(&with_source, ReportLocale::Zh);
+        assert!(html.contains("有来源标注"));
+        assert!(!html.contains("现该条政策没有来源标注"));
+    }
+
+    /// 非 http(s) 的官方链接不得进报告：报告直接在浏览器打开，不能给出可执行协议。
+    #[test]
+    fn non_http_policy_links_are_dropped() {
+        let mut r = report(vec![asset(|_| {})]);
+        r.policies = vec![policy(|p| {
+            p.official_policy_url = "javascript:alert(1)".to_string()
+        })];
+        let html = render_report_html(&r, ReportLocale::Zh);
+        assert!(!html.contains("javascript:"), "非 http(s) 链接必须丢弃");
+    }
+
+    /// 导出必须跟随界面语言——否则英文用户拿到中文文档。
+    #[test]
+    fn english_locale_produces_english_document() {
+        let html = render_report_html(&report(vec![asset(|_| {})]), ReportLocale::En);
+        assert!(html.contains(r#"<html lang="en">"#), "lang 必须是 en");
+        assert!(html.contains("Digital Legacy Inheritance Report"));
+        assert!(html.contains("Holder information"));
+        assert!(html.contains("Documents required"));
+        assert!(
+            !html.contains("数字遗产继承报告"),
+            "英文报告不得混入中文标题"
+        );
+        assert!(!html.contains("指定继承"), "英文报告不得混入中文处置文案");
+    }
+
+    #[test]
+    fn locale_parse_normalises_inputs() {
+        assert_eq!(ReportLocale::parse("en-US"), ReportLocale::En);
+        assert_eq!(ReportLocale::parse("EN"), ReportLocale::En);
+        assert_eq!(ReportLocale::parse("en_us"), ReportLocale::En);
+        assert_eq!(ReportLocale::parse("zh-CN"), ReportLocale::Zh);
+        assert_eq!(ReportLocale::parse(""), ReportLocale::Zh);
+        assert_eq!(ReportLocale::parse("fr"), ReportLocale::Zh);
     }
 }

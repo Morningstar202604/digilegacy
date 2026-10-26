@@ -90,12 +90,45 @@
             {{ t('report.disposalMethod', { method: disposalLabel(asset.disposal_method) }) }} |
             <span v-if="asset.heir_name">{{ t('report.heirInfo', { name: asset.heir_name, contact: asset.heir_contact }) }}</span>
           </p>
-          <p style="font-size: 12px; color: var(--gray-600); margin-top: 4px;">{{ t('report.platformPolicy', { policy: getPlatformProcess(asset.platform_id) }) }}</p>
+        </div>
+      </div>
+
+      <!-- 平台办理指引：与导出物来自同一份后端数据（report.policies），
+           预览与导出不再各自拼一份，避免「预览有、导出没有」。 -->
+      <div class="report-section" v-if="report.policies && report.policies.length > 0">
+        <div class="report-section-title">{{ t('report.section5Policies') }}</div>
+        <div v-for="p in report.policies" :key="p.platform_id" style="margin-bottom: 12px; padding: 12px; background: var(--gray-50); border-radius: 8px; border-left: 3px solid var(--secondary);">
+          <div style="display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; margin-bottom:6px;">
+            <strong>{{ p.name }}</strong>
+            <span v-if="p.estimated_difficulty" class="tag tag-secondary" style="font-size:11px;">{{ t('report.policyDifficulty') }}：{{ p.estimated_difficulty }}</span>
+            <span v-if="p.estimated_time_days" class="tag tag-secondary" style="font-size:11px;">{{ t('report.policyDuration') }}：{{ p.estimated_time_days }}</span>
+            <span class="tag" :class="p.has_source ? 'tag-success' : 'tag-warning'" style="font-size:11px;">
+              {{ p.has_source ? t('report.policySourced') : t('report.policyUnsourced') }}
+            </span>
+          </div>
+          <p style="font-size: 12px; color: var(--gray-600); margin: 4px 0;">
+            <strong>{{ t('report.policyDocs') }}</strong>{{ p.required_documents || t('report.notFilled') }}
+          </p>
+          <p style="font-size: 12px; color: var(--gray-600); margin: 4px 0;">
+            <strong>{{ t('report.policyProcess') }}</strong>{{ p.process_description || t('report.notFilled') }}
+          </p>
+          <p v-if="p.monetization_path" style="font-size: 12px; color: var(--gray-600); margin: 4px 0;">
+            <strong>{{ t('report.policyPath') }}</strong>{{ p.monetization_path }}
+          </p>
+          <p v-if="p.risk_warnings" style="font-size: 12px; color: var(--warning-strong); margin: 4px 0;">
+            <strong>{{ t('report.policyRisks') }}</strong>{{ p.risk_warnings }}
+          </p>
+          <p v-if="p.official_policy_url" style="font-size: 11px; color: var(--gray-500); margin: 4px 0; word-break: break-all;">
+            <strong>{{ t('report.policyOfficial') }}</strong>{{ p.official_policy_url }}
+          </p>
+          <p v-if="!p.has_source" style="font-size: 11px; color: var(--warning-strong); margin: 4px 0;">
+            {{ t('report.policyUnsourcedNote') }}
+          </p>
         </div>
       </div>
 
       <div class="report-section">
-        <div class="report-section-title">{{ t('report.section5') }}</div>
+        <div class="report-section-title">{{ t('report.section6') }}</div>
         <div style="font-size: 13px; color: var(--gray-600); line-height: 1.8;">
           <p style="margin: 4px 0;">{{ t('report.statement1') }}</p>
           <p style="margin: 4px 0;">{{ t('report.statement2') }}</p>
@@ -123,7 +156,11 @@
     <div v-if="exportPath" class="card mt-24 tag-success" style="background: var(--success-light); border-color: var(--success);">
       <div style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
         <span>{{ t('report.savedTo') }}<code style="font-size:12px;word-break:break-all;">{{ exportPath }}</code></span>
-        <button class="btn btn-secondary btn-sm" @click="copyExportPath">{{ t('report.copyPath') }}</button>
+        <div style="display:flex;gap:8px;">
+          <!-- 导出后只给一行路径，普通用户找不到（应用数据目录是隐藏的） -->
+          <button v-if="canReveal" class="btn btn-secondary btn-sm" @click="revealExport">{{ t('report.revealFile') }}</button>
+          <button class="btn btn-secondary btn-sm" @click="copyExportPath">{{ t('report.copyPath') }}</button>
+        </div>
       </div>
     </div>
     <div v-if="exportError" class="card mt-24 tag-danger" style="background: var(--danger-light, #fdecea); border-color: var(--danger);" role="alert">
@@ -143,13 +180,12 @@ import { ref, computed, onMounted } from 'vue';
 import { invoke } from '../api/invoke';
 
 import { useI18n } from '../i18n';
-import { usePlatformsStore } from '../stores/platforms';
 import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
 import ArchiveOutline from '@vicons/ionicons5/es/ArchiveOutline';
 import DownloadOutline from '@vicons/ionicons5/es/DownloadOutline';
 import PrintOutline from '@vicons/ionicons5/es/PrintOutline';
 import { toast } from '../composables/feedback';
-import type { ApiResponse, DigitalAsset } from '../types';
+import type { ApiResponse, DigitalAsset, PlatformPolicyBrief } from '../types';
 
 interface InheritanceReportData {
   user: {
@@ -158,6 +194,8 @@ interface InheritanceReportData {
     emergency_contact_name: string; emergency_contact_relation: string;
   };
   assets: DigitalAsset[];
+  /** 平台办理指引：与导出 HTML 来自同一份后端数据 */
+  policies: PlatformPolicyBrief[];
   total_estimated_value: number;
   property_assets_count: number;
   personality_assets_count: number;
@@ -166,21 +204,17 @@ interface InheritanceReportData {
 }
 
 const { t, locale } = useI18n();
-const platforms = usePlatformsStore();
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
 const exportError = ref('');
 const loadError = ref('');
 const loading = ref(true);
+/** 浏览器预览模式没有 `reveal_exported_file`，按钮不该出现。 */
+const canReveal = computed(() => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window);
 
 const inheritableAssets = computed(() =>
   (report.value?.assets || []).filter(a => a.disposal_method !== 'no_action')
 );
-
-function getPlatformProcess(platformId: number): string {
-  const platform = platforms.platforms.find(p => p.id === platformId);
-  return platform?.process_description || t('report.noPolicy');
-}
 
 async function loadReport() {
   loadError.value = '';
@@ -203,13 +237,25 @@ async function loadReport() {
 
 /** 由后端渲染报告 HTML：唯一事实源，含转义/打印样式/占位符拦截。
  *  前端不再用 `querySelector('.report-page').outerHTML` 抓 DOM——
- *  那样会把界面占位符与 Naive UI 注入样式一起打进文件。 */
+ *  那样会把界面占位符与 Naive UI 注入样式一起打进文件。
+ *  `locale` 必须随请求发出：导出语言要与界面一致，否则英文用户拿到中文文档。 */
 async function fetchStandaloneHtml(): Promise<string> {
-  const res = await invoke<ApiResponse<string>>('render_report');
+  const res = await invoke<ApiResponse<string>>('render_report', { locale: locale.value });
   if (!res.success || !res.data) {
     throw new Error(res.message || t('report.exportFailed'));
   }
   return res.data;
+}
+
+/** 在系统文件管理器中定位刚导出的文件（仅桌面端）。 */
+async function revealExport() {
+  if (!exportPath.value) return;
+  try {
+    const res = await invoke<ApiResponse<null>>('reveal_exported_file', { path: exportPath.value });
+    if (!res.success) exportError.value = res.message;
+  } catch (e) {
+    exportError.value = String(e);
+  }
 }
 
 async function exportReport() {
@@ -318,7 +364,8 @@ async function copyExportPath() {
 function handlePrint() { window.print(); }
 
 onMounted(async () => {
-  await platforms.loadPlatforms();
+  // 报告页不再依赖前端平台库：政策文案由后端 `report.policies` 提供，
+  // 预览与导出读同一份，避免两处各拼一条政策而漂移。
   await loadReport();
 });
 </script>

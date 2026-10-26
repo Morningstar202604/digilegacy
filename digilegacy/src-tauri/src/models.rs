@@ -179,11 +179,34 @@ pub struct UserProfile {
     pub updated_at: String,
 }
 
+/// 报告用平台政策摘要。
+///
+/// 为什么单独建结构：导出物必须与界面预览同源。旧实现的导出只有平台名与
+/// 处置方式，把政策、所需材料、难度、官方入口全丢了，家人拿到的是一份
+/// 「知道有这件事、但不知道怎么办」的清单。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PlatformPolicyBrief {
+    pub platform_id: i64,
+    pub name: String,
+    pub required_documents: String,
+    pub process_description: String,
+    pub estimated_difficulty: String,
+    pub estimated_time_days: String,
+    pub official_policy_url: String,
+    pub monetization_path: String,
+    pub risk_warnings: String,
+    pub tags: String,
+    /// 是否带来源标注（`platform_data.rs` 的 `data_source` 非空）。
+    /// 这不等于「已核验官方原文」——那需要人工逐条比对；界面与报告都按此措辞。
+    pub has_source: bool,
+}
+
 /// 继承报告
 #[derive(Debug, Serialize)]
 pub struct InheritanceReport {
     pub user: UserProfile,
     pub assets: Vec<DigitalAsset>,
+    pub policies: Vec<PlatformPolicyBrief>,
     pub total_estimated_value: f64,
     pub property_assets_count: i64,
     pub personality_assets_count: i64,

@@ -75,6 +75,11 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   });
 }
 
+/** 读取当前挂起的确认框（测试用：断言破坏性操作的文案与危险标记）。 */
+export function lastConfirm(): ConfirmState | null {
+  return confirmState.open ? { ...confirmState } : null;
+}
+
 export function settleConfirm(ok: boolean) {
   confirmState.open = false;
   const r = confirmState.resolve;

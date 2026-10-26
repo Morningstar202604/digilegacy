@@ -271,9 +271,28 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'get_inheritance_report': {
       const assets = state.assets.map(withPlatformName);
       const total = assets.reduce((sum, x) => sum + (x.estimated_value || 0), 0);
+      // 与桌面版同契约：政策随报告一起下发，预览与导出读同一份。
+      const policyIds = Array.from(new Set(assets.map(x => x.platform_id)));
+      const policies = policyIds.map(pid => {
+        const p = platformById(pid);
+        return {
+          platform_id: pid,
+          name: String(p?.name ?? ''),
+          required_documents: String(p?.required_documents ?? ''),
+          process_description: String(p?.process_description ?? ''),
+          estimated_difficulty: String(p?.estimated_difficulty ?? ''),
+          estimated_time_days: String(p?.estimated_time_days ?? ''),
+          official_policy_url: String(p?.official_policy_url ?? ''),
+          monetization_path: String(p?.monetization_path ?? ''),
+          risk_warnings: String(p?.risk_warnings ?? ''),
+          tags: String(p?.tags ?? ''),
+          has_source: false,
+        };
+      });
       return ok({
         user: state.profile || { full_name: '未设置' },
         assets,
+        policies,
         total_estimated_value: total,
         property_assets_count: assets.filter(x => x.category === 'property').length,
         personality_assets_count: assets.filter(x => x.category === 'personality').length,
@@ -456,15 +475,26 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
         const parsed = JSON.parse(String(a['content'] ?? ''));
         if (parsed.app !== 'digilegacy' || ![1, 2, 3].includes(parsed.version)) return fail<null>('不是有效的归零备份文件') as T;
         const tables = parsed.tables || {};
-        state.assets = (tables.digital_assets || []).map((x: DigitalAsset) => withPlatformName(x));
-        state.profile = (tables.user_profile || [])[0] || null;
-        state.checkIns = (tables.check_in_log || []).map((x: { checked_at: string }) => x.checked_at);
+        const incoming = (tables.digital_assets || []).map((x: DigitalAsset) => withPlatformName(x));
+        // 与桌面版同一语义：merge 追加、replace 清空。演示环境也必须一致，
+        // 否则用户会在演示里以为「导入=覆盖」而不敢用，或反之误覆盖真实数据。
+        const mode = String(a['mode'] ?? 'merge');
+        if (mode === 'replace') {
+          state.assets = incoming;
+          state.profile = (tables.user_profile || [])[0] || null;
+          state.checkIns = (tables.check_in_log || []).map((x: { checked_at: string }) => x.checked_at);
+        } else {
+          let nextId = state.assets.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1;
+          for (const item of incoming) {
+            state.assets.push({ ...item, id: nextId++ });
+          }
+        }
         state.dms = { enabled: Boolean(tables.dms_config?.enabled), interval: Number(tables.dms_config?.check_in_interval_days ?? 30), lastCheckIn: tables.dms_config?.last_check_in ?? null };
         state.nextAssetId = state.assets.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1;
         saveState(state);
         sessionStorage.removeItem(SS_UNLOCK);
         if (tables.security_config) state.masterPassword = state.masterPassword ?? 'preview';
-        return ok(`已恢复 ${state.assets.length} 条资产（预览模式）`, '备份导入完成') as T;
+        return ok(`已导入 ${incoming.length} 条资产（预览模式，${String(a['mode'] ?? 'merge') === 'replace' ? '覆盖' : '合并'}）`, '备份导入完成') as T;
       } catch (e) {
         return fail<null>('备份文件解析失败：' + String(e)) as T;
       }
@@ -484,6 +514,20 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     case 'set_heartbeat_config':
       return ok(null, '演示模式不会真的发送心跳') as T;
+
+    // 演示环境没有真实 SMTP：返回「未配置」让界面展示真实降级态，
+    // 并让测试发送明确失败，而不是假装成功。
+    case 'get_smtp_config':
+      return ok({ host: '', port: 587, from_addr: '', username: '', has_password: false, allow_insecure: false }) as T;
+
+    case 'set_smtp_config':
+      return ok(null, '演示模式不会真的保存 SMTP 配置') as T;
+
+    case 'send_test_email':
+      return fail<null>('演示模式没有 SMTP 服务器，无法发送测试邮件') as T;
+
+    case 'reveal_exported_file':
+      return ok(null, '演示模式不支持打开文件夹') as T;
 
     case 'get_backup_status':
       return ok({ count: 0, latest_name: null, latest_size: null }) as T;

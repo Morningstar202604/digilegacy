@@ -248,6 +248,71 @@ fn append_outbox(path: &std::path::Path, entry: &DmsNotification) -> Result<(), 
     Ok(())
 }
 
+/// 一次 SMTP 投递所需的全部参数。集中成一个结构，是为了让
+/// 「界面配置」与「环境变量」两条来源走完全相同的投递路径——
+/// 旧实现只认环境变量，普通用户在发布版里根本配不起来。
+#[derive(Debug, Clone)]
+pub struct SmtpSettings {
+    pub host: String,
+    pub port: u16,
+    pub from: String,
+    pub user: Option<String>,
+    pub pass: Option<String>,
+    pub allow_insecure: bool,
+}
+
+/// 解析 SMTP 配置：优先读界面（数据库），没有则回退环境变量。
+///
+/// 顺序刻意如此：界面配置是用户可见可改的，环境变量是历史兼容路径。
+/// 两者都没有时返回 `None`，调用方降级到本地发件箱。
+pub fn resolve_smtp_settings() -> Option<SmtpSettings> {
+    if let Ok(cfg) = db::get_smtp_config_db() {
+        if !cfg.host.trim().is_empty() && !cfg.from_addr.trim().is_empty() {
+            let pass = db::get_smtp_password_plain().ok().flatten();
+            return Some(SmtpSettings {
+                host: cfg.host.trim().to_string(),
+                port: if (1..=65535).contains(&cfg.port) {
+                    cfg.port as u16
+                } else {
+                    587
+                },
+                from: cfg.from_addr.trim().to_string(),
+                user: Some(cfg.username).filter(|u| !u.trim().is_empty()),
+                pass,
+                allow_insecure: cfg.allow_insecure,
+            });
+        }
+    }
+
+    let (Ok(host), Ok(port), Ok(from)) = (
+        std::env::var("DMS_SMTP_HOST"),
+        std::env::var("DMS_SMTP_PORT"),
+        std::env::var("SMTP_FROM"),
+    ) else {
+        return None;
+    };
+    if host.trim().is_empty() || from.trim().is_empty() {
+        return None;
+    }
+    Some(SmtpSettings {
+        host,
+        port: port.parse().unwrap_or(25),
+        from,
+        user: std::env::var("DMS_SMTP_USER")
+            .ok()
+            .filter(|v| !v.is_empty()),
+        pass: std::env::var("DMS_SMTP_PASS")
+            .ok()
+            .filter(|v| !v.is_empty()),
+        allow_insecure: std::env::var("DMS_SMTP_ALLOW_INSECURE")
+            .map(|v| v == "1")
+            .unwrap_or(false),
+    })
+}
+
+/// 环境变量版投递入口，仅供既有回归测试使用。
+/// 生产路径统一走 `try_smtp_with`（配置来自界面或环境变量，由 `resolve_smtp_settings` 归一化）。
+#[cfg(test)]
 fn try_smtp(
     host: &str,
     port: u16,
@@ -256,11 +321,42 @@ fn try_smtp(
     subject: &str,
     body: &str,
 ) -> Result<(), String> {
+    let insecure = std::env::var("DMS_SMTP_ALLOW_INSECURE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    let user = std::env::var("DMS_SMTP_USER")
+        .ok()
+        .filter(|v| !v.is_empty());
+    let pass = std::env::var("DMS_SMTP_PASS")
+        .ok()
+        .filter(|v| !v.is_empty());
+    try_smtp_with(
+        &SmtpSettings {
+            host: host.to_string(),
+            port,
+            from: from.to_string(),
+            user,
+            pass,
+            allow_insecure: insecure,
+        },
+        to,
+        subject,
+        body,
+    )
+}
+
+fn try_smtp_with(
+    settings: &SmtpSettings,
+    to: &str,
+    subject: &str,
+    body: &str,
+) -> Result<(), String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    let host = host.trim();
-    let url = format!("smtp://{}:{}", host, port);
+    let host = settings.host.trim();
+    let from = settings.from.trim();
+    let url = format!("smtp://{}:{}", host, settings.port);
     let mut cmd = Command::new("curl");
     cmd.args([
         "-s",
@@ -277,14 +373,15 @@ fn try_smtp(
         "-",
     ]);
     // 默认要求 STARTTLS（curl --ssl-reqd：服务器不提供即中止，拒绝明文投递）
-    if std::env::var("DMS_SMTP_ALLOW_INSECURE")
-        .map(|v| v != "1")
-        .unwrap_or(true)
-    {
+    if !settings.allow_insecure {
         cmd.arg("--ssl-reqd");
     }
     // 凭据经临时 netrc 文件传入：密码不出现在命令行参数里（同机进程可枚举 argv）
-    let netrc_path = build_smtp_netrc(host);
+    let netrc_path = build_smtp_netrc_from(
+        host,
+        settings.user.as_deref().unwrap_or(""),
+        settings.pass.as_deref().unwrap_or(""),
+    );
     if let Ok(Some(path)) = &netrc_path {
         cmd.arg("--netrc")
             .arg("--netrc-optional")
@@ -349,14 +446,12 @@ fn netrc_entry(host: &str, user: &str, pass: &str) -> String {
     format!("machine {} login {} password {}\n", host, user, pass)
 }
 
-/// 若配置了 SMTP 凭据环境变量则生成临时 netrc 文件；调用方负责在 curl 结束后删除
-fn build_smtp_netrc(host: &str) -> Result<Option<std::path::PathBuf>, String> {
-    let (Ok(user), Ok(pass)) = (
-        std::env::var("DMS_SMTP_USER"),
-        std::env::var("DMS_SMTP_PASS"),
-    ) else {
-        return Ok(None);
-    };
+/// 若提供了非空凭据则生成临时 netrc 文件；调用方负责在 curl 结束后删除
+fn build_smtp_netrc_from(
+    host: &str,
+    user: &str,
+    pass: &str,
+) -> Result<Option<std::path::PathBuf>, String> {
     if user.is_empty() || pass.is_empty() {
         return Ok(None);
     }
@@ -369,7 +464,7 @@ fn build_smtp_netrc(host: &str) -> Result<Option<std::path::PathBuf>, String> {
             .unwrap_or(0)
     ));
     // 该文件含明文 SMTP 密码：必须以仅本人可读的权限创建。
-    crate::fsutil::write_private(&path, netrc_entry(host, &user, &pass).as_bytes())
+    crate::fsutil::write_private(&path, netrc_entry(host, user, pass).as_bytes())
         .map_err(|e| format!("写入 SMTP 凭据文件失败: {}", e))?;
     Ok(Some(path))
 }
@@ -439,6 +534,22 @@ fn smtp_message(from: &str, to: &str, subject: &str, body: &str) -> String {
     )
 }
 
+/// 发送一封测试邮件：验证「用户填的 SMTP 真的能送达」。
+///
+/// 与正式通知走同一个 `try_smtp_with`，只换主题和正文——
+/// 若这里成功而到期通知失败，说明问题在收件人而非配置。
+pub fn send_test_message(settings: &SmtpSettings, recipient: &str) -> Result<(), String> {
+    try_smtp_with(
+        settings,
+        recipient,
+        "【归零】SMTP 测试邮件",
+        "这是一封来自「归零 DigiLegacy」的测试邮件。\n\n\
+如果你收到了它，说明 SMTP 配置可用，到期提醒会通过这条通道发出。\n\
+本邮件不含任何账号信息，可安全删除。\n\n\
+—— 归零 DigiLegacy",
+    )
+}
+
 fn dispatch(
     app_handle: &AppHandle,
     stage: i64,
@@ -458,11 +569,7 @@ fn dispatch(
         });
     }
 
-    let channel = if let (Ok(host), Ok(port), Ok(from)) = (
-        std::env::var("DMS_SMTP_HOST"),
-        std::env::var("DMS_SMTP_PORT"),
-        std::env::var("SMTP_FROM"),
-    ) {
+    let channel = if let Some(settings) = resolve_smtp_settings() {
         if !is_valid_email(recipient) {
             // 收件人不是合法邮箱（如未填邮箱时的手机号回退）：
             // 不允许进入 SMTP 会话，直接写入本地发件箱供人工查看
@@ -479,8 +586,7 @@ fn dispatch(
             );
             "local_outbox".to_string()
         } else {
-            let port: u16 = port.parse().unwrap_or(25);
-            match try_smtp(&host, port, &from, recipient, subject, body) {
+            match try_smtp_with(&settings, recipient, subject, body) {
                 Ok(()) => "smtp".to_string(),
                 Err(_) => {
                     let _ = append_outbox(

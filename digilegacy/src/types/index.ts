@@ -83,6 +83,21 @@ export interface UserProfile {
   updated_at: string;
 }
 
+/** 报告里的平台政策摘要（后端 `get_policy_briefs_db` 产出，导出与预览同源）。 */
+export interface PlatformPolicyBrief {
+  platform_id: number;
+  name: string;
+  required_documents: string;
+  process_description: string;
+  estimated_difficulty: string;
+  estimated_time_days: string;
+  official_policy_url: string;
+  monetization_path: string;
+  risk_warnings: string;
+  tags: string;
+  has_source: boolean;
+}
+
 export interface DashboardStats {
   total_assets: number;
   property_count: number;

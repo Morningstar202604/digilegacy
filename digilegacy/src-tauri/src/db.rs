@@ -159,6 +159,20 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
             endpoint TEXT DEFAULT ''
         );
 
+        -- SMTP 配置：此前只能通过环境变量设置，普通用户根本配不起来，
+        -- 结果「安心传承」的通知永远只落本地发件箱，家人一封邮件也收不到。
+        -- 密码走 vault 字段级加密（与凭据同一条路径），不明文落库。
+        CREATE TABLE IF NOT EXISTS smtp_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            host TEXT DEFAULT '',
+            port INTEGER DEFAULT 587,
+            from_addr TEXT DEFAULT '',
+            username TEXT DEFAULT '',
+            password_enc TEXT DEFAULT '',
+            allow_insecure INTEGER DEFAULT 0,
+            updated_at TEXT NOT NULL
+        );
+
         -- 政策库补丁：内置平台数据每次启动都会被 sync_platforms 覆盖，
         -- 用户导入的更新必须单独存这里，并在读取时叠加到内置数据之上。
         CREATE TABLE IF NOT EXISTS platform_overrides (
@@ -360,6 +374,51 @@ pub fn get_all_platforms_db() -> Result<Vec<Platform>, String> {
     platforms::apply_platform_overrides(conn, &mut platforms)?;
 
     Ok(platforms)
+}
+
+/// 报告用：把资产实际引用到的平台政策收成一份索引。
+///
+/// 只收 `assets` 用到的平台，避免报告里塞进 152 条无关政策。
+/// 扩展字段（变现路径/风险提示/标签）来自内置表；政策补丁覆盖过的平台
+/// 以 `platforms` 表为准（补丁镜像后的结果），保证导出与界面读同一份数据。
+pub fn get_policy_briefs_db(platform_ids: &[i64]) -> Result<Vec<PlatformPolicyBrief>, String> {
+    use std::collections::HashSet;
+    let wanted: HashSet<i64> = platform_ids.iter().copied().collect();
+    if wanted.is_empty() {
+        return Ok(Vec::new());
+    }
+    let platforms = get_all_platforms_db()?;
+    let meta_by_id: std::collections::HashMap<i64, crate::platform_data::PlatformEntry> =
+        crate::platform_data::get_all_platforms()
+            .into_iter()
+            .map(|m| (m.id, m))
+            .collect();
+    let mut out: Vec<PlatformPolicyBrief> = platforms
+        .into_iter()
+        .filter(|p| wanted.contains(&p.id))
+        .map(|p| {
+            let meta = meta_by_id.get(&p.id);
+            PlatformPolicyBrief {
+                platform_id: p.id,
+                name: p.name,
+                required_documents: p.required_documents,
+                process_description: p.process_description,
+                estimated_difficulty: p.estimated_difficulty,
+                estimated_time_days: p.estimated_time_days,
+                official_policy_url: p.official_policy_url,
+                monetization_path: meta
+                    .map(|m| m.monetization_path.clone())
+                    .unwrap_or_default(),
+                risk_warnings: meta.map(|m| m.risk_warnings.clone()).unwrap_or_default(),
+                tags: meta.map(|m| m.tags.clone()).unwrap_or_default(),
+                has_source: meta
+                    .map(|m| !m.data_source.trim().is_empty())
+                    .unwrap_or(false),
+            }
+        })
+        .collect();
+    out.sort_by_key(|p| p.platform_id);
+    Ok(out)
 }
 
 // ========== 数字资产 CRUD ==========
@@ -840,6 +899,104 @@ pub fn set_heartbeat_config_db(enabled: bool, token: &str, endpoint: &str) -> Re
     Ok(())
 }
 
+/// SMTP 配置（不含密码明文）。
+///
+/// `has_password` 只表示库里有密文，不返回明文——界面只需要知道「已保存」。
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct SmtpConfig {
+    pub host: String,
+    pub port: i64,
+    pub from_addr: String,
+    pub username: String,
+    pub has_password: bool,
+    pub allow_insecure: bool,
+}
+
+pub fn get_smtp_config_db() -> Result<SmtpConfig, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let row = conn.query_row(
+        "SELECT COALESCE(host,''), port, COALESCE(from_addr,''), COALESCE(username,''), COALESCE(password_enc,''), allow_insecure FROM smtp_config WHERE id=1",
+        [],
+        |r| {
+            Ok(SmtpConfig {
+                host: r.get::<_, String>(0)?,
+                port: r.get::<_, i64>(1)?,
+                from_addr: r.get::<_, String>(2)?,
+                username: r.get::<_, String>(3)?,
+                has_password: !r.get::<_, String>(4)?.is_empty(),
+                allow_insecure: r.get::<_, i64>(5)? != 0,
+            })
+        },
+    );
+    match row {
+        Ok(v) => Ok(v),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(SmtpConfig {
+            port: 587,
+            ..Default::default()
+        }),
+        Err(e) => Err(format!("读取 SMTP 配置失败: {}", e)),
+    }
+}
+
+/// 保存 SMTP 配置。`password` 为 `None` 表示「保持现有密码不变」——
+/// 界面只回显 `has_password`，用户不重填时不能把已保存的密码清空。
+pub fn set_smtp_config_db(
+    host: &str,
+    port: i64,
+    from_addr: &str,
+    username: &str,
+    password: Option<&str>,
+    allow_insecure: bool,
+) -> Result<(), String> {
+    if !(1..=65535).contains(&port) {
+        return Err("SMTP 端口必须在 1 到 65535 之间".to_string());
+    }
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    ensure_vault_writable(conn)?;
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let password_enc = match password {
+        Some(p) if !p.is_empty() => crate::vault::encrypt_if_needed(p)?,
+        Some(_) => String::new(),
+        None => conn
+            .query_row(
+                "SELECT COALESCE(password_enc,'') FROM smtp_config WHERE id=1",
+                [],
+                |r| r.get::<_, String>(0),
+            )
+            .unwrap_or_default(),
+    };
+    conn.execute(
+        "INSERT INTO smtp_config (id, host, port, from_addr, username, password_enc, allow_insecure, updated_at)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(id) DO UPDATE SET host=?1, port=?2, from_addr=?3, username=?4, password_enc=?5, allow_insecure=?6, updated_at=?7",
+        params![host, port, from_addr, username, password_enc, allow_insecure as i64, now],
+    )
+    .map_err(|e| format!("保存 SMTP 配置失败: {}", e))?;
+    Ok(())
+}
+
+/// 取出解密后的 SMTP 明文密码（仅供投递使用，绝不回传前端）。
+pub fn get_smtp_password_plain() -> Result<Option<String>, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let enc: String = conn
+        .query_row(
+            "SELECT COALESCE(password_enc,'') FROM smtp_config WHERE id=1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or_default();
+    if enc.is_empty() {
+        return Ok(None);
+    }
+    if crate::vault::is_encrypted(&enc) && !crate::vault::is_unlocked() {
+        return Err("SMTP 密码已加密，请先解锁后重试".to_string());
+    }
+    crate::vault::decrypt_if_needed(&enc).map(Some)
+}
+
 pub fn set_security_config_db(kdf_salt: &str, verifier: &str) -> Result<(), String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
@@ -1284,8 +1441,40 @@ pub fn export_backup_json_db() -> Result<String, String> {
     serde_json::to_string_pretty(&backup).map_err(|e| format!("生成备份失败: {}", e))
 }
 
-/// 导入备份：覆盖用户数据与安全配置；导入后强制重新解锁
+/// 备份导入模式。
+///
+/// 覆盖是历史行为，会先清空资产/档案/签到记录；导入前没有快照时，
+/// 一次误操作就永久丢数据。默认改为合并，覆盖必须显式选择。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportMode {
+    /// 保留现有数据，只追加备份里的资产（id 冲突时分配新 id）。
+    Merge,
+    /// 清空资产/档案/签到后写入备份内容（原行为）。
+    Replace,
+}
+
+impl ImportMode {
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "replace" => Self::Replace,
+            _ => Self::Merge,
+        }
+    }
+}
+
+/// 导入备份：覆盖模式（历史行为，保留给既有调用方与回归测试）。
+///
+/// 新代码应使用 `import_backup_json_db_with_mode`，由命令层按用户选择决定模式。
+/// 生产路径已全部切到带模式的版本，这里只被测试与场景矩阵调用。
+#[allow(dead_code)]
 pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
+    import_backup_json_db_with_mode(content, ImportMode::Replace)
+}
+
+/// 导入备份：按 `mode` 合并或覆盖用户数据与安全配置；导入后强制重新解锁。
+///
+/// 调用方（命令层）负责在覆盖模式下先写一份当前数据快照。
+pub fn import_backup_json_db_with_mode(content: &str, mode: ImportMode) -> Result<i64, String> {
     use serde_json::Value;
 
     let v: Value = serde_json::from_str(content).map_err(|e| format!("备份文件解析失败: {}", e))?;
@@ -1358,12 +1547,14 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
     conn.execute_batch("BEGIN IMMEDIATE")
         .map_err(|e| format!("开启事务失败: {}", e))?;
     let result = (|| -> Result<i64, String> {
-        conn.execute("DELETE FROM digital_assets", [])
-            .map_err(|e| format!("清空资产失败: {}", e))?;
-        conn.execute("DELETE FROM user_profile", [])
-            .map_err(|e| format!("清空档案失败: {}", e))?;
-        conn.execute("DELETE FROM check_in_log", [])
-            .map_err(|e| format!("清空记录失败: {}", e))?;
+        if mode == ImportMode::Replace {
+            conn.execute("DELETE FROM digital_assets", [])
+                .map_err(|e| format!("清空资产失败: {}", e))?;
+            conn.execute("DELETE FROM user_profile", [])
+                .map_err(|e| format!("清空档案失败: {}", e))?;
+            conn.execute("DELETE FROM check_in_log", [])
+                .map_err(|e| format!("清空记录失败: {}", e))?;
+        }
 
         let mut count = 0i64;
         for (idx, a) in assets.iter().enumerate() {
@@ -1383,11 +1574,30 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
                     value
                 ));
             }
+            // 合并模式不能复用备份里的 id：本地可能已有同 id 资产，
+            // 直接 INSERT 会撞主键并把整个导入回滚。让 SQLite 分配新 id。
+            let backup_id = ival(a, "id");
+            let target_id = if mode == ImportMode::Replace {
+                backup_id
+            } else {
+                let taken: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM digital_assets WHERE id=?1",
+                        params![backup_id],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(0);
+                if taken == 0 && backup_id > 0 {
+                    backup_id
+                } else {
+                    0
+                }
+            };
             conn.execute(
                 "INSERT INTO digital_assets (id, platform_id, account_identifier, account_description, category, estimated_value, value_currency, disposal_method, heir_name, heir_contact, notes, credential_enc, is_confirmed, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                 params![
-                    ival(a, "id"),
+                    if target_id > 0 { Some(target_id) } else { None },
                     ival(a, "platform_id"),
                     protect(sval(a, "account_identifier"))?,
                     protect(sval(a, "account_description"))?,
@@ -1407,12 +1617,28 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
             count += 1;
         }
 
+        // 合并模式不清空档案/签到：只补「本地还没有」的档案行，
+        // 已有档案保持现状（否则一次合并导入会把当前联系人信息换掉）。
+        let profile_id = |p: &Value| ival(p, "id");
         for p in &profiles {
+            let pid = profile_id(p);
+            if mode == ImportMode::Merge {
+                let taken: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM user_profile WHERE id=?1",
+                        params![pid],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(0);
+                if taken > 0 {
+                    continue;
+                }
+            }
             conn.execute(
                 "INSERT INTO user_profile (id, full_name, phone, email, id_last4, emergency_contact_name, emergency_contact_phone, emergency_contact_relation, emergency_contact_email, heir_primary_name, heir_primary_phone, heir_primary_relation, heir_primary_email, check_in_interval_days, last_check_in, dms_enabled, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
                 params![
-                    ival(p, "id"),
+                    pid,
                     protect(sval(p, "full_name"))?,
                     protect(sval(p, "phone"))?,
                     protect(sval(p, "email"))?,
@@ -1434,11 +1660,26 @@ pub fn import_backup_json_db(content: &str) -> Result<i64, String> {
             ).map_err(|e| format!("写入档案失败: {}", e))?;
         }
 
+        // 合并模式只追加备份里比本地更新的确认记录（id 冲突跳过），
+        // 覆盖模式沿用原行为整表写入。
         for c in &check_ins {
+            let cid = ival(c, "id");
+            if mode == ImportMode::Merge {
+                let taken: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM check_in_log WHERE id=?1",
+                        params![cid],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(0);
+                if taken > 0 {
+                    continue;
+                }
+            }
             conn.execute(
                 "INSERT INTO check_in_log (id, checked_at, status, note) VALUES (?1, ?2, ?3, ?4)",
                 params![
-                    ival(c, "id"),
+                    cid,
                     sval(c, "checked_at"),
                     sval(c, "status"),
                     sval(c, "note")
@@ -1862,9 +2103,13 @@ pub fn get_inheritance_report_db() -> Result<InheritanceReport, String> {
         .count() as i64;
     let mixed_count = assets.iter().filter(|a| a.category == "mixed").count() as i64;
 
+    let platform_ids: Vec<i64> = assets.iter().map(|a| a.platform_id).collect();
+    let policies = get_policy_briefs_db(&platform_ids)?;
+
     Ok(InheritanceReport {
         user,
         assets,
+        policies,
         total_estimated_value: total_value,
         property_assets_count: property_count,
         personality_assets_count: personality_count,

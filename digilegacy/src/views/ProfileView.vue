@@ -149,11 +149,59 @@
       <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.backupDesc') }}</p>
       <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
         <button class="btn btn-secondary btn-sm" @click="exportBackup">{{ t('profile.exportBackup') }}</button>
-        <button class="btn btn-secondary btn-sm" @click="importBackup">{{ t('profile.importBackup') }}</button>
+        <!-- 默认合并：覆盖是破坏性操作，必须走独立的、带警告的入口 -->
+        <button class="btn btn-secondary btn-sm" @click="importBackup(false)">{{ t('profile.importBackup') }}</button>
+        <button class="btn btn-danger btn-sm" @click="importBackup(true)">{{ t('profile.importReplace') }}</button>
       </div>
       <p v-if="backupMessage" role="alert" style="font-size: 13px; margin-top: 8px;" :style="{ color: backupOk ? 'var(--success)' : 'var(--danger)' }">{{ backupMessage }}</p>
       <p v-if="!security.hasMasterPassword" class="form-hint">{{ t('profile.backupPlainHint') }}</p>
       <p class="form-hint" style="margin-top: 10px;" aria-live="polite">{{ autoBackupSummary }}</p>
+    </div>
+
+    <div class="card mt-24">
+      <div class="card-title mb-16">{{ t('profile.smtpTitle') }}</div>
+      <p style="font-size: 13px; color: var(--gray-600);">{{ t('profile.smtpDesc') }}</p>
+      <template v-if="!isTauri">
+        <p class="form-hint">{{ t('profile.browserUnsupported') }}</p>
+      </template>
+      <template v-else>
+        <div style="margin-top: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; max-width: 720px;">
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="smtp-host">{{ t('profile.smtpHost') }}</label>
+            <input class="form-input" id="smtp-host" v-model="smtp.host" placeholder="smtp.example.com" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="smtp-port">{{ t('profile.smtpPort') }}</label>
+            <input class="form-input" id="smtp-port" type="number" min="1" max="65535" v-model.number="smtp.port" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="smtp-from">{{ t('profile.smtpFrom') }}</label>
+            <input class="form-input" id="smtp-from" v-model="smtp.from_addr" placeholder="noreply@example.com" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="smtp-user">{{ t('profile.smtpUser') }}</label>
+            <input class="form-input" id="smtp-user" v-model="smtp.username" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="smtp-pass">{{ t('profile.smtpPass') }}</label>
+            <input class="form-input" id="smtp-pass" type="password" v-model="smtpPassword" :placeholder="smtp.has_password ? t('profile.tokenSaved') : t('profile.smtpPassPlaceholder')" autocomplete="new-password" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="smtp-test-to">{{ t('profile.smtpTestTo') }}</label>
+            <input class="form-input" id="smtp-test-to" v-model="smtpTestTo" :placeholder="profile.email || t('profile.smtpTestToPlaceholder')" autocomplete="off" />
+          </div>
+        </div>
+        <label class="flex items-center gap-8" style="cursor: pointer; margin-top: 8px;">
+          <input type="checkbox" v-model="smtp.allow_insecure" style="width: 18px; height: 18px;" />
+          <span style="font-size: 13px;">{{ t('profile.smtpAllowInsecure') }}</span>
+        </label>
+        <p class="form-hint">{{ t('profile.smtpHint') }}</p>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px;">
+          <button class="btn btn-primary btn-sm" :disabled="smtpBusy" @click="saveSmtp">{{ smtpBusy ? t('common.saving') : t('profile.smtpSave') }}</button>
+          <button class="btn btn-secondary btn-sm" :disabled="smtpBusy" @click="sendTestMail">{{ t('profile.smtpTest') }}</button>
+        </div>
+        <p v-if="smtpMsg" style="font-size: 12px; margin-top: 8px;" :style="{ color: smtpOk ? 'var(--success)' : 'var(--danger)' }" role="alert" aria-live="polite">{{ smtpMsg }}</p>
+      </template>
     </div>
 
     <div class="card mt-24">
@@ -257,6 +305,30 @@ const backupOk = ref(false);
 
 const isTauri = isTauriEnv();
 const recoveryExists = ref<boolean | null>(null);
+
+/** SMTP 配置：密码只回显「已保存」，不回传明文。 */
+interface SmtpForm {
+  host: string;
+  port: number;
+  from_addr: string;
+  username: string;
+  has_password: boolean;
+  allow_insecure: boolean;
+}
+const smtp = ref<SmtpForm>({
+  host: '',
+  port: 587,
+  from_addr: '',
+  username: '',
+  has_password: false,
+  allow_insecure: false,
+});
+const smtpPassword = ref('');
+const smtpTestTo = ref('');
+const smtpMsg = ref('');
+const smtpOk = ref(false);
+const smtpBusy = ref(false);
+
 const heartbeatMsg = ref('');
 const heartbeatTestMsg = ref('');
 const heartbeatEnabled = ref(false);
@@ -310,6 +382,61 @@ async function loadHeartbeatConfig() {
     }
   } catch {
     // 读取失败时保持默认空态，用户保存时会重新写入
+  }
+}
+
+async function loadSmtpConfig() {
+  if (!isTauri) return;
+  try {
+    const res = await invoke<ApiResponse<SmtpForm>>('get_smtp_config');
+    if (res.success && res.data) {
+      smtp.value = { ...res.data, port: res.data.port || 587 };
+    }
+  } catch (e) {
+    smtpMsg.value = String(e);
+  }
+}
+
+async function saveSmtp() {
+  smtpBusy.value = true;
+  smtpMsg.value = '';
+  try {
+    const res = await invoke<ApiResponse<null>>('set_smtp_config', {
+      host: smtp.value.host,
+      port: smtp.value.port,
+      fromAddr: smtp.value.from_addr,
+      username: smtp.value.username,
+      // 空串表示「不改密码」：后端用 None 保留原密文，避免误清空。
+      password: smtpPassword.value ? smtpPassword.value : null,
+      allowInsecure: smtp.value.allow_insecure,
+    });
+    smtpOk.value = res.success;
+    smtpMsg.value = res.message;
+    if (res.success) {
+      smtpPassword.value = '';
+      await loadSmtpConfig();
+    }
+  } catch (e) {
+    smtpOk.value = false;
+    smtpMsg.value = String(e);
+  } finally {
+    smtpBusy.value = false;
+  }
+}
+
+async function sendTestMail() {
+  smtpBusy.value = true;
+  smtpMsg.value = '';
+  try {
+    const to = smtpTestTo.value.trim() || profile.value.email.trim();
+    const res = await invoke<ApiResponse<string>>('send_test_email', { recipient: to });
+    smtpOk.value = res.success;
+    smtpMsg.value = res.success ? res.message : res.message;
+  } catch (e) {
+    smtpOk.value = false;
+    smtpMsg.value = String(e);
+  } finally {
+    smtpBusy.value = false;
   }
 }
 
@@ -412,7 +539,7 @@ async function exportBackup() {
   }
 }
 
-async function importBackup() {
+async function importBackup(replace = false) {
   backupMessage.value = '';
   if (!isTauri) {
     backupOk.value = false;
@@ -420,10 +547,10 @@ async function importBackup() {
     return;
   }
   const ok = await confirmDialog({
-    title: t('profile.importBackupTitle'),
-    message: t('profile.importBackupMessage'),
-    confirmText: t('profile.importBackupConfirm'),
-    danger: true,
+    title: replace ? t('profile.importReplaceTitle') : t('profile.importBackupTitle'),
+    message: replace ? t('profile.importReplaceMessage') : t('profile.importBackupMessage'),
+    confirmText: replace ? t('profile.importReplaceConfirm') : t('profile.importBackupConfirm'),
+    danger: replace,
   });
   if (!ok) return;
   try {
@@ -432,11 +559,14 @@ async function importBackup() {
     const selected = await open({ multiple: false, filters: [{ name: t('profile.backupFilterName'), extensions: ['json'] }] });
     if (!selected || typeof selected !== 'string') return;
     const content = await readTextFile(selected);
-    const res = await invoke<ApiResponse<string>>('import_backup', { content });
+    const res = await invoke<ApiResponse<string>>('import_backup', {
+      content,
+      mode: replace ? 'replace' : 'merge',
+    });
     backupOk.value = res.success;
     backupMessage.value = res.success ? `${res.message}：${res.data}` : res.message;
     if (res.success) {
-      // 备份已覆盖数据库：必须让所有数据视图重新拉取，
+      // 备份已写入数据库：必须让所有数据视图重新拉取，
       // 否则用户看到的是导入前的旧列表，会误判「恢复失败」并反复导入。
       await Promise.all([
         security.refresh(),
@@ -575,6 +705,7 @@ onMounted(async () => {
       recoveryExists.value = null;
     }
     await loadHeartbeatConfig();
+    await loadSmtpConfig();
     await loadPatchStatus();
     await loadAutoBackupStatus();
     try {
