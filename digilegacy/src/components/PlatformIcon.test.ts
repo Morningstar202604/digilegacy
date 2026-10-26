@@ -20,6 +20,15 @@ describe('PlatformIcon', () => {
     expect(w.find('svg').exists()).toBe(true);
   });
 
+  it('支付宝/微信支付/B站等主流平台命中专用图标，不退化为通用盾形', () => {
+    // 回归：旧映射表只覆盖 10 个名字，且与平台库真实 name 不一致
+    // （「微信支付」「B站(bilibili)」都不在表里），资产列表里大半图标是盾牌。
+    for (const name of ['支付宝', '微信支付', '微信', '微博', 'QQ', 'Steam', 'B站(bilibili)', '知乎', '网易云音乐']) {
+      const w = mount(PlatformIcon, { props: { name } });
+      expect(w.find('svg').exists(), `${name} 必须有图标`).toBe(true);
+    }
+  });
+
   it('支持自定义尺寸', () => {
     const w = mount(PlatformIcon, { props: { name: '微信', size: 32 } });
     expect(w.attributes('style')).toContain('32px');
