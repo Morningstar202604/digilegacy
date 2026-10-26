@@ -286,25 +286,31 @@ pub fn get_inheritance_report() -> Result<ApiResponse<InheritanceReport>, String
     db::get_inheritance_report_db().map(ApiResponse::ok)
 }
 
-/// 由后端渲染报告 HTML（单一事实源），前端不再抓 DOM。
+/// 渲染报告的核心策略（纯函数，便于脱离 Tauri 运行时回归测试）。
 ///
-/// 锁定态/密钥不匹配时直接拒绝：报告里的占位符若被导出，
-/// 继承人拿到的是一份写着「需解锁」的废纸，且用户会误以为数据已损毁。
-#[command]
-pub fn render_report(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
-    let report = db::get_inheritance_report_db()?;
-    if crate::report::contains_placeholder(&report) {
+/// 顺序是刻意的：先查占位符再渲染。占位符意味着「这些字段根本没被解密」，
+/// 渲染出来的报告会给继承人一份写着「需解锁」的废纸，且用户会误以为数据已损毁。
+pub(crate) fn render_report_response(
+    report: &crate::models::InheritanceReport,
+) -> Result<ApiResponse<String>, String> {
+    if crate::report::contains_placeholder(report) {
         return Ok(ApiResponse::fail(
             "报告中存在未解密字段，请先解锁后重新生成（本次未生成任何文件）",
         ));
     }
-    let html = crate::report::render_report_html(&report);
-    if let Err(e) = validate_report_html(&html) {
-        return Ok(ApiResponse::fail(&e));
-    }
+    let html = crate::report::render_report_html(report);
+    validate_report_html(&html)?;
+    Ok(ApiResponse::ok_with_msg(html, "报告已生成"))
+}
+
+/// 由后端渲染报告 HTML（单一事实源），前端不再抓 DOM。
+#[command]
+pub fn render_report(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
+    let report = db::get_inheritance_report_db()?;
+    let response = render_report_response(&report)?;
     // app_handle 仅为与其他导出命令保持一致的签名；这里不写盘。
     let _ = &app_handle;
-    Ok(ApiResponse::ok_with_msg(html, "报告已生成"))
+    Ok(response)
 }
 
 // ========== 继承报告 / 工具包 ==========
@@ -1104,6 +1110,86 @@ mod tests {
         assert!(!db::get_heartbeat_config_db().unwrap().0);
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// render_report 的策略层：占位符拒绝、合法报告出完整文档、超限拒绝。
+    ///
+    /// 命令本体需要 AppHandle（无法在单测构造），但真正会出错的判断都在
+    /// `render_report_response` 里，这里逐条锁定。
+    #[test]
+    fn render_report_response_refuses_placeholder_and_returns_full_document() {
+        use crate::models::{DigitalAsset, InheritanceReport, UserProfile};
+
+        let user = UserProfile {
+            id: None,
+            full_name: "张三".to_string(),
+            phone: "13800000000".to_string(),
+            email: "a@b.com".to_string(),
+            id_last4: String::new(),
+            emergency_contact_name: String::new(),
+            emergency_contact_phone: String::new(),
+            emergency_contact_relation: String::new(),
+            emergency_contact_email: String::new(),
+            heir_primary_name: "王五".to_string(),
+            heir_primary_phone: String::new(),
+            heir_primary_relation: "子女".to_string(),
+            heir_primary_email: String::new(),
+            check_in_interval_days: 30,
+            last_check_in: None,
+            dms_enabled: false,
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+        let asset = |identifier: &str| DigitalAsset {
+            id: Some(1),
+            platform_id: 1,
+            platform_name: "支付宝".to_string(),
+            account_identifier: identifier.to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(100.0),
+            value_currency: "CNY".to_string(),
+            disposal_method: "inherit".to_string(),
+            heir_name: Some("王五".to_string()),
+            heir_contact: None,
+            notes: String::new(),
+            has_credential: false,
+            is_confirmed: true,
+            created_at: "2026-01-01 00:00:00".to_string(),
+            updated_at: "2026-01-01 00:00:00".to_string(),
+        };
+        let mk = |identifier: &str| InheritanceReport {
+            user: user.clone(),
+            assets: vec![asset(identifier)],
+            total_estimated_value: 100.0,
+            property_assets_count: 1,
+            personality_assets_count: 0,
+            mixed_assets_count: 0,
+            generated_at: "2026-10-26 12:00:00".to_string(),
+        };
+
+        // 正常报告：成功，且是完整独立文档
+        let ok = render_report_response(&mk("real-account")).unwrap();
+        assert!(ok.success, "合法报告必须成功");
+        let html = ok.data.unwrap();
+        assert!(html.starts_with("<!DOCTYPE html>"));
+        assert!(html.contains("@media print"));
+        assert!(html.contains("real-account"));
+
+        // 占位符：必须拒绝，且不产出任何 HTML
+        let blocked = render_report_response(&mk(crate::vault::PLACEHOLDER_LOCKED)).unwrap();
+        assert!(!blocked.success, "含占位符的报告必须拒绝");
+        assert!(blocked.data.is_none(), "拒绝时不得返回半成品 HTML");
+        assert!(
+            blocked.message.contains("未解密"),
+            "实际: {}",
+            blocked.message
+        );
+        assert!(
+            blocked.message.contains("未生成"),
+            "必须明确说明没有生成文件: {}",
+            blocked.message
+        );
     }
 
     /// 密钥错配必须报「未解锁」：否则界面会把占位符当数据展示并写回（历史 P0）。
