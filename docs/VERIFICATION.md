@@ -9,8 +9,8 @@
 | `npx vue-tsc --noEmit` | exit 0 |
 | `npm run test:coverage` | **341 tests / 31 files**，statements 85.11%（branches 78.54 / functions 76.68 / lines 86.57，阈值 78/78/71/79） |
 | `npm run build` | PASS；`dist/assets` 无 `mock-*.js` 分块 |
-| `npx playwright test` | **37 passed**（27.0s） |
-| `cargo test --locked` | **95 passed, 0 failed, 1 ignored** |
+| `npx playwright test` | **76 passed**（52.2s，含场景矩阵 39 个） |
+| `cargo test --locked` | **103 passed, 0 failed, 1 ignored** |
 | `cargo clippy --all-targets -- -D warnings` | 0 warnings |
 | `cargo fmt --check` | PASS |
 | `node server/heartbeat-server.test.mjs` | all assertions passed |
@@ -33,6 +33,8 @@
 | 词典存在中英不对称、界面残留 emoji | P3 | `i18n/index.test.ts` 键集对齐 + emoji 门禁 |
 | 自动备份是静默功能，界面不可见 | P3 | `ProfileView.test.ts::自动备份状态可见`、`backup.rs::latest_summary_reports_newest_file_and_size` |
 | 通知历史只看本轮评估结果，刷新即消失 | P2 | `DMSView.test.ts::历史投递持久可见`、`notify.rs::outbox_history_reads_newest_first_and_skips_bad_lines` |
+| 签到日志只写不读，用户无法自查上次确认 | P3 | `DMSView.test.ts::显示最近几次确认记录`、`db.rs::check_in_history_is_newest_first_and_capped` |
+| `get_dms_status` 是界面唯一 DMS 数据源，若混入投递逻辑会重演 P0 | P1 | `commands.rs::get_dms_status_is_read_only_and_reports_stage`（含 dms_config 不被改动） |
 
 ## 2026-10-26 真实使用场景模拟（大规模）
 

@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - **备份格式 v3**: exports now carry the `recovery_seal`, so a recovery key still works after moving to a new machine. v1/v2 backups remain importable; importing a backup without a seal clears the stale local one.
 - **Read-only DMS status + notification history**: the dashboard and the Legacy Care page now call `get_dms_status` (no SMTP, no outbox write) and `get_dms_history` (latest 50 entries from the local outbox), so past notifications stay visible after a refresh.
 - **Auto-backup status** in Profile: snapshot count, latest file name and size, with an explicit "no snapshot yet" state and a visible error path.
+- **Check-in history** on the Legacy Care page: `CheckInStatus.recent_check_ins` returns the latest 5 confirmations (newest first) so users can verify whether they actually checked in, instead of only seeing the single last timestamp.
 - **English money formatting**: amounts now render as `123.5k` / `2.5M` in the English UI instead of reusing the Chinese 万 divisor.
 - **Per-user file permissions** for backups, reports and the temporary SMTP netrc (`0600` on Unix) via a shared `fsutil::write_private`.
 - **Bilingual UI is now real**: the header language switch drives the whole desktop UI, the dictionary key sets are asserted equal in tests, and `<html lang>` follows the selected locale.
@@ -42,7 +43,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
-- Frontend unit tests grew from 296 to **341**, branch coverage 76.82% → **78.54%**; Rust tests 86 → **102**; E2E 37 → **76**. README badges synced.
+- Frontend unit tests grew from 296 to **341**, branch coverage 76.82% → **78.54%**; Rust tests 86 → **103**; E2E 37 → **76**. README badges synced.
 
 ## [0.2.0] - 2026-10-24
 

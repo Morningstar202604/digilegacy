@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT 许可">
-  <img src="https://img.shields.io/badge/tests-102%20Rust%20%C2%B7%20341%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="测试">
+  <img src="https://img.shields.io/badge/tests-103%20Rust%20%C2%B7%20341%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="测试">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="无服务器">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="无遥测">
@@ -79,7 +79,7 @@
 
 | 检查项 | 结果 |
 |---|---|
-| Rust 测试 | **102 通过**（`cargo test --locked`） |
+| Rust 测试 | **103 通过**（`cargo test --locked`） |
 | 前端单元测试 | **341 通过**，30 个文件 |
 | 端到端测试 | **76 通过**，真实 Chromium |
 | 覆盖率 | **85.1% 语句**、86.6% 行，阈值写进 CI |

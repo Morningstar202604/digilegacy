@@ -1297,6 +1297,75 @@ mod tests {
         assert!(validate_report_html(&exact_report).is_ok());
     }
 
+    /// get_dms_status 是界面唯一的 DMS 数据源，必须是纯读：
+    /// 调用它不得写发件箱、不得触达 SMTP（旧实现调 evaluate_dms 会真发邮件）。
+    /// 注：get_dms_history / get_backup_status 需要 AppHandle，无法在单元测试中构造，
+    /// 其底层 outbox_history / latest_backup_summary 已分别由 notify 与 backup 的测试覆盖。
+    #[test]
+    fn get_dms_status_is_read_only_and_reports_stage() {
+        let _g = crate::vault::test_lock();
+        crate::db::init_database_at(std::env::temp_dir().join(format!(
+            "digilegacy_cmd_dmsstatus_{}.db",
+            std::process::id()
+        )))
+        .unwrap();
+
+        // 未启用：enabled=false, stage=0
+        let r = get_dms_status().unwrap();
+        assert!(r.success);
+        let data = r.data.unwrap();
+        assert!(!data.enabled, "默认应未启用 DMS");
+        assert_eq!(data.current_stage, 0);
+        assert!(!data.overdue);
+
+        // 启用且逾期：stage 必须与底层分级一致
+        {
+            let guard = crate::db::get_conn().unwrap();
+            let conn = guard.as_ref().unwrap();
+            let last = (chrono::Local::now() - chrono::Duration::days(60))
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string();
+            conn.execute(
+                "UPDATE dms_config SET enabled=1, check_in_interval_days=30, last_check_in=?1 WHERE id=1",
+                rusqlite::params![last],
+            )
+            .unwrap();
+        }
+        let data = get_dms_status().unwrap().data.unwrap();
+        assert!(data.enabled);
+        assert!(data.overdue, "逾期 30 天必须报告 overdue");
+        assert_eq!(data.current_stage, 3);
+        assert_eq!(data.days_overdue, 30);
+
+        // 纯读的硬证据：连续读取结果完全一致，且 dms_config 行未被改动。
+        // 该命令没有 AppHandle 参数，结构上也拿不到发件箱路径，因此无法投递；
+        // 真正的投递路径 evaluate_dms 需要 AppHandle，只有后台循环能调用。
+        let read_row = || -> (i64, Option<String>) {
+            let guard = crate::db::get_conn().unwrap();
+            guard
+                .as_ref()
+                .unwrap()
+                .query_row(
+                    "SELECT enabled, last_check_in FROM dms_config WHERE id=1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .unwrap()
+        };
+        let before_row = read_row();
+        for _ in 0..5 {
+            let again = get_dms_status().unwrap().data.unwrap();
+            assert_eq!(again.current_stage, 3, "重复读取不得改变分级");
+            assert_eq!(again.days_overdue, 30, "重复读取不得改变逾期天数");
+        }
+        assert_eq!(before_row, read_row(), "get_dms_status 不得改动 dms_config");
+
+        let _ = std::fs::remove_file(std::env::temp_dir().join(format!(
+            "digilegacy_cmd_dmsstatus_{}.db",
+            std::process::id()
+        )));
+    }
+
     /// DMS 间隔必须有界：0/负数会立刻触发三级通知，超大值等于永不提醒。
     #[test]
     fn dms_interval_must_be_within_range() {
