@@ -114,7 +114,7 @@ describe('资产 store × 类别 × 处置 × 金额 矩阵（168 场景）', ()
   });
 });
 
-describe('筛选/排序/搜索 矩阵（120 场景）', () => {
+describe('筛选/排序/搜索 矩阵（80 场景）', () => {
   function makeRows() {
     return [
       { id: 1, platform_name: '支付宝', account_identifier: 'a@x.com', account_description: '', notes: '工资卡', category: 'property', disposal_method: 'inherit', estimated_value: 1000, created_at: '2026-03-01', value_currency: 'CNY', platform_id: 1, has_credential: false, is_confirmed: true, heir_name: null, heir_contact: null, updated_at: '' },

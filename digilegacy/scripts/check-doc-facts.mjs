@@ -95,6 +95,9 @@ for (const file of ['README.md', 'README.zh-CN.md']) {
 }
 expectIn('docs/ARCHITECTURE.md', /Tauri IPC \((\d+) commands\)/, facts_.ipc, 'IPC 命令数');
 expectIn('docs/ARCHITECTURE.md', /built-in (\d+)-platform policy database/, facts_.platforms, '平台库条数');
+// 路线图是长期文档，同样不允许手抄这两个数字
+expectIn('docs/ROADMAP.md', /(\d+)\s*个 IPC 命令/, facts_.ipc, 'ROADMAP IPC 命令数');
+expectIn('docs/ROADMAP.md', /(\d+)\s*条平台库/, facts_.platforms, 'ROADMAP 平台库条数');
 
 if (process.argv.includes('--json')) {
   console.log(JSON.stringify({ facts: facts_, problems }, null, 2));

@@ -71,6 +71,13 @@ patch('docs/ARCHITECTURE.md', text =>
     .replace(/built-in \d+-platform policy database/g, `built-in ${f.platforms}-platform policy database`),
 );
 
+// 路线图：只回填受门禁保护的两个数字；其余数字是基线提交的快照，不自动改写。
+patch('docs/ROADMAP.md', text =>
+  text
+    .replace(/\d+ 个 IPC 命令/g, `${f.ipc} 个 IPC 命令`)
+    .replace(/\d+ 条平台库/g, `${f.platforms} 条平台库`),
+);
+
 console.log(`源码推导：Rust ${f.rustTests} · 前端 ${f.frontendCases}（${f.frontendFiles} 文件）· E2E ${e2e} · IPC ${f.ipc} · 表 ${f.tables} · 平台 ${f.platforms}`);
 if (changed.length === 0) {
   console.log('所有文档已是最新。');
