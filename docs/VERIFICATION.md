@@ -7,7 +7,7 @@
 | 命令 | 结果 |
 |---|---|
 | `npx vue-tsc --noEmit` | exit 0 |
-| `npm run test:coverage` | **329 tests / 30 files**，statements 85.07%（branches 78.43 / functions 76.57 / lines 86.53，阈值 78/78/71/79） |
+| `npm run test:coverage` | **330 tests / 30 files**，statements 85.07%（branches 78.43 / functions 76.57 / lines 86.53，阈值 78/78/71/79） |
 | `npm run build` | PASS；`dist/assets` 无 `mock-*.js` 分块 |
 | `npx playwright test` | **37 passed**（27.0s） |
 | `cargo test --locked` | **95 passed, 0 failed, 1 ignored** |

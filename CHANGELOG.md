@@ -30,7 +30,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
-- Frontend unit tests grew from 296 to **329**, branch coverage 76.82% → **78.43%**; README badges synced to 95 Rust · 329 frontend · 37 E2E.
+- Frontend unit tests grew from 296 to **330**, branch coverage 76.82% → **78.43%**; README badges synced to 95 Rust · 330 frontend · 37 E2E.
 
 ## [0.2.0] - 2026-10-24
 
