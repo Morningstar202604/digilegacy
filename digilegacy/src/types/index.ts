@@ -24,6 +24,8 @@ export interface PlatformExtended extends Platform {
   legal_template_ids: string;
   risk_warnings: string;
   tags: string;
+  /** 最后人工核对月份（YYYY-MM）；空 = 从未核对 */
+  last_reviewed: string;
 }
 
 export interface DigitalAsset {

@@ -26,7 +26,8 @@ function ext(id: number, name: string, category: string, over: Record<string, un
   return {
     ...p(id, name, category),
     name_en: name, data_source: '', inheritance_form_url: '',
-    monetization_path: '', legal_template_ids: '', risk_warnings: '', tags: '', ...over,
+    monetization_path: '', legal_template_ids: '', risk_warnings: '', tags: '',
+    last_reviewed: '', ...over,
   };
 }
 
@@ -163,5 +164,39 @@ describe('展开/收起全部', () => {
     await collapse!.trigger('click');
     await flushPromises();
     expect(w.findAll('.collapse-body').length).toBe(0);
+  });
+});
+
+describe('政策溯源状态（未核实不得冒充官方口径）', () => {
+  const base = (over: Record<string, unknown>) => ext(1, '支付宝', '支付金融', { monetization_path: '余额可继承', ...over });
+
+  it('未核实条目必须显示提示，而不是来源', async () => {
+    const w = await mountHeir(
+      [p(1, '支付宝', '支付金融')],
+      [base({ data_source: '未核实（待人工核对官方公告）', last_reviewed: '' })],
+    );
+    const tabs = w.findAll('[role="tab"]');
+    await tabs[1].trigger('click');
+    // 切 Tab 会触发 watch → 异步拉扩展列表，再渲染一轮
+    for (let i = 0; i < 3; i++) { await flushPromises(); await w.vm.$nextTick(); }
+    // 分组默认折叠，先展开才看得到卡片内容
+    const expand = w.findAll('button').find(b => b.text() === '展开全部');
+    if (expand) { await expand.trigger('click'); await flushPromises(); }
+    expect(w.text(), '未核实必须明说').toContain('尚未人工核对');
+  });
+
+  it('有出处且已核对时显示来源与核对月份', async () => {
+    const w = await mountHeir(
+      [p(1, '支付宝', '支付金融')],
+      [base({ data_source: '支付宝官方帮助中心', last_reviewed: '2026-10' })],
+    );
+    const tabs = w.findAll('[role="tab"]');
+    await tabs[1].trigger('click');
+    for (let i = 0; i < 3; i++) { await flushPromises(); await w.vm.$nextTick(); }
+    const expand = w.findAll('button').find(b => b.text() === '展开全部');
+    if (expand) { await expand.trigger('click'); await flushPromises(); }
+    expect(w.text()).toContain('支付宝官方帮助中心');
+    expect(w.text()).toContain('2026-10');
+    expect(w.text()).not.toContain('尚未人工核对');
   });
 });

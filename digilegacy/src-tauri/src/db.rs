@@ -414,6 +414,7 @@ pub fn get_policy_briefs_db(platform_ids: &[i64]) -> Result<Vec<PlatformPolicyBr
                 has_source: meta
                     .map(|m| !m.data_source.trim().is_empty())
                     .unwrap_or(false),
+                last_reviewed: meta.map(|m| m.last_reviewed.clone()).unwrap_or_default(),
             }
         })
         .collect();

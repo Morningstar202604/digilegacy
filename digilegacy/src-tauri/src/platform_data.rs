@@ -10,6 +10,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// 政策未经人工核实时使用的显式标注。门禁要求「不许为空」，
+/// 但也不允许编造出处——所以「未核实」本身是一个合法且必须被展示的状态。
+pub const UNVERIFIED_SOURCE: &str = "未核实（待人工核对官方公告）";
+
 /// 平台条目 - 中国数字资产平台完整清单
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlatformEntry {
@@ -34,6 +38,9 @@ pub struct PlatformEntry {
     pub legal_template_ids: String,   // 关联的法律文书模板 ID 列表（逗号分隔）
     pub risk_warnings: String,        // 风险提示
     pub tags: String,                 // 标签：如 "高价值" "需公证" "简易程序" "死亡循环风险"
+    /// 本条政策最后一次人工核对的日期（`YYYY-MM`）。
+    /// 空值表示「从未人工核实」——界面与报告必须如实标注，不能假装是官方口径。
+    pub last_reviewed: String,
 }
 
 impl PlatformEntry {
@@ -69,12 +76,15 @@ impl PlatformEntry {
             official_policy_url: official_policy_url.to_string(),
             estimated_time_days: estimated_time_days.to_string(),
             notes: notes.to_string(),
-            data_source: String::new(),
+            // 显式标注「未核实」，而不是留空。空值无法区分「漏填」与
+            // 「确实没有可引用的官方出处」，界面也就无法如实提示。
+            data_source: UNVERIFIED_SOURCE.to_string(),
             inheritance_form_url: String::new(),
             monetization_path: String::new(),
             legal_template_ids: String::new(),
             risk_warnings: String::new(),
             tags: String::new(),
+            last_reviewed: String::new(),
         }
     }
 
@@ -118,6 +128,7 @@ impl PlatformEntry {
             legal_template_ids: String::new(),
             risk_warnings: String::new(),
             tags: String::new(),
+            last_reviewed: String::new(),
         }
     }
 }

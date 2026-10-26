@@ -119,6 +119,8 @@ pub struct PlatformExtended {
     pub legal_template_ids: String,
     pub risk_warnings: String,
     pub tags: String,
+    /// 最后人工核对月份（`YYYY-MM`），空 = 从未核对。
+    pub last_reviewed: String,
 }
 
 /// 数字资产
@@ -214,6 +216,8 @@ pub struct PlatformPolicyBrief {
     /// 是否带来源标注（`platform_data.rs` 的 `data_source` 非空）。
     /// 这不等于「已核验官方原文」——那需要人工逐条比对；界面与报告都按此措辞。
     pub has_source: bool,
+    /// 最后人工核对月份（`YYYY-MM`）；空 = 从未核对。
+    pub last_reviewed: String,
 }
 
 /// 继承报告

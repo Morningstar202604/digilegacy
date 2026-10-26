@@ -360,9 +360,23 @@ fn policy_card(p: &PlatformPolicyBrief, locale: ReportLocale) -> String {
         ));
     }
     let source = if p.has_source {
+        let reviewed = if p.last_reviewed.trim().is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<span class=\"policy-badge\">{} {}</span>",
+                if locale == ReportLocale::Zh {
+                    "核对日期"
+                } else {
+                    "Reviewed"
+                },
+                escape_html(&p.last_reviewed)
+            )
+        };
         format!(
-            "<span class=\"policy-badge\">{}</span>",
-            escape_html(c.sourced)
+            "<span class=\"policy-badge\">{}</span>{}",
+            escape_html(c.sourced),
+            reviewed
         )
     } else {
         format!(
@@ -720,6 +734,7 @@ mod tests {
             risk_warnings: "大额需公证".to_string(),
             tags: "需公证,高价值".to_string(),
             has_source: false,
+            last_reviewed: String::new(),
         };
         over(&mut p);
         p

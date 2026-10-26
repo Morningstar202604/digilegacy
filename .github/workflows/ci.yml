@@ -65,6 +65,11 @@ jobs:
         # 这里从源码重新推导后与 README/官网/架构文档比对，不一致直接红。
         run: node scripts/check-doc-facts.mjs
 
+      - name: 政策库溯源门禁
+        # 内容型产品的信任来自可追溯：每条政策必须有真实出处或显式「未核实」，
+        # 且未核实条目数只能减少不能增加（棘轮）。绝不自动补写出处或核对日期。
+        run: node scripts/check-policy-provenance.mjs
+
       - name: 依赖漏洞扫描（npm）
         # 默认镜像的 audit 端点常不可用，显式指向官方 registry
         run: npm audit --audit-level=high --registry=https://registry.npmjs.org

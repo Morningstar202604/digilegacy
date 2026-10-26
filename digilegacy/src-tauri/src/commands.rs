@@ -69,6 +69,7 @@ pub fn get_all_platforms_extended() -> Result<ApiResponse<Vec<PlatformExtended>>
                 legal_template_ids: meta.legal_template_ids,
                 risk_warnings: meta.risk_warnings,
                 tags: meta.tags,
+                last_reviewed: meta.last_reviewed,
             }
         })
         .collect();

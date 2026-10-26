@@ -152,6 +152,13 @@
               <div class="text-muted" style="font-size: 11px; margin-top: 6px; word-break: break-all;">{{ platform.inheritance_form_url }}</div>
             </div>
 
+            <!-- 溯源状态：让家人知道这条政策是「有出处」还是「未核实」，
+                 而不是把所有条目都当成同等权威。 -->
+            <p class="mb-12" style="font-size: 12px;" :style="{ color: isUnverified(platform.data_source) ? 'var(--warning-strong)' : 'var(--gray-500)' }">
+              <span v-if="isUnverified(platform.data_source)">{{ t('heir.policyUnverified') }}</span>
+              <span v-else>{{ t('heir.policySource') }}{{ platform.data_source }}<span v-if="platform.last_reviewed"> · {{ t('heir.policyReviewed') }}{{ platform.last_reviewed }}</span></span>
+            </p>
+
             <!-- 风险提示 -->
             <div v-if="platform.risk_warnings" class="mb-12 p-12 heir-risk">
               <strong style="font-size: 13px;">{{ t('heir.riskTitle') }}：</strong>
@@ -247,6 +254,11 @@ import type { ApiResponse, PlatformExtended } from '../types';
 
 const { t } = useI18n();
 const platforms = usePlatformsStore();
+
+/** 与后端 `UNVERIFIED_SOURCE` 常量一致：把「未核实」当状态展示，而不是当出处。 */
+function isUnverified(source: string | undefined | null): boolean {
+  return !source || source.includes('未核实');
+}
 const activeTab = ref<'guide' | 'monetization'>('guide');
 const difficultyFilter = ref('all');
 const categoryFilter = ref('all');
