@@ -346,6 +346,18 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'get_dms_history':
       return ok([]) as T;
 
+    case 'render_report': {
+      // 演示环境用同一份结构的最小 HTML，保持与桌面版同一命令契约
+      const r = (await mockInvoke('get_inheritance_report')) as { data?: { assets?: unknown[] } };
+      const count = r.data?.assets?.length ?? 0;
+      return ok(
+        `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>数字遗产继承报告</title>` +
+        `<style>@media print{body{padding:0}}</style></head><body>` +
+        `<div class="doc-title">数字遗产继承报告</div><p>演示报告：共 ${count} 条资产。</p></body></html>`,
+        '报告已生成',
+      ) as T;
+    }
+
     case 'export_report_to_file': {
       download('继承报告.html', new Blob([String(a['content'] ?? '')], { type: 'text/html;charset=utf-8' }));
       return ok('（浏览器预览）已下载 继承报告.html', '报告已导出') as T;

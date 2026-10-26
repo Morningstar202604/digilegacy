@@ -54,6 +54,14 @@ async function mountReport(over: Record<string, unknown> = {}) {
     if (cmd in over) return over[cmd as keyof typeof over];
     if (cmd === 'get_inheritance_report') return { success: true, message: '', data: reportData() };
     if (cmd === 'get_all_platforms') return { success: true, message: '', data: [] };
+    // 报告 HTML 由后端渲染（与桌面版同一契约），测试里给等价的最小文档
+    if (cmd === 'render_report') {
+      return {
+        success: true,
+        message: '报告已生成',
+        data: '<!DOCTYPE html><html lang="zh-CN"><head><title>数字遗产继承报告</title><style>@media print{body{padding:0}}</style></head><body><div class="report-page"><div class="doc-title">数字遗产继承报告</div></div></body></html>',
+      };
+    }
     return { success: true, message: '', data: null };
   });
   const pinia = createPinia();
@@ -228,5 +236,38 @@ describe('工具包内容完整性', () => {
     expect(html.startsWith('<!DOCTYPE html>'), '报告必须是完整文档').toBe(true);
     expect(html).toContain('@media print');
     expect(html).toContain('report-page');
+  });
+});
+
+describe('报告 HTML 改由后端渲染', () => {
+  it('导出必须调用 render_report，不得回退到抓 DOM', async () => {
+    const w = await mountReport({
+      export_report_to_file: { success: true, message: 'ok', data: 'C:/app/r.html' },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('导出报告'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    const cmds = mockedInvoke.mock.calls.map(c => c[0]);
+    expect(cmds, '必须请求后端渲染').toContain('render_report');
+    const exportCall = mockedInvoke.mock.calls.find(c => c[0] === 'export_report_to_file');
+    expect(exportCall, '必须写出报告').toBeTruthy();
+    const html = (exportCall![1] as { content: string }).content;
+    expect(html.startsWith('<!DOCTYPE html>'), '导出内容必须是完整文档').toBe(true);
+  });
+
+  it('后端拒绝渲染（占位符）时必须显示原因，且不写文件', async () => {
+    const w = await mountReport({
+      render_report: { success: false, message: '报告中存在未解密字段，请先解锁后重新生成（本次未生成任何文件）', data: null },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('导出报告'))!;
+    await btn.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('未解密');
+    expect(
+      mockedInvoke.mock.calls.some(c => c[0] === 'export_report_to_file'),
+      '被拒绝时不得写文件',
+    ).toBe(false);
   });
 });

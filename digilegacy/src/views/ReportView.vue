@@ -201,40 +201,23 @@ async function loadReport() {
   }
 }
 
-/** 生成可脱离应用打开的独立 HTML 文档（单文件导出与 ZIP 工具包共用）。 */
-function buildStandaloneHtml(): string {
-  const htmlContent = document.querySelector('.report-page')?.outerHTML || '';
-  return `<!DOCTYPE html><html lang="${locale.value}"><head><meta charset="UTF-8"><title>${t('report.title')}</title><style>
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;max-width:800px;margin:0 auto;padding:44px 48px;color:#232019;background:#fff}
-h1,h2,h3{margin:0}
-table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{border-bottom:1px solid #e8e2d8;padding:10px 12px;text-align:left;vertical-align:middle;word-break:break-word}
-th{background:#f6f3ee;color:#6b6157;font-weight:600;font-size:13px;border-bottom:2px solid #e4ddd3}
-.text-muted{color:#6b6157}.text-center{text-align:center}
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}
-.stats-grid .text-center{padding:12px;border:1px solid #e4ddd3;border-radius:8px}
-.mt-16{margin-top:16px}
-.report-page{max-width:800px;margin:0 auto}
-.doc-header{display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid #e4ddd3;margin-bottom:40px}
-.doc-brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#6b6157;letter-spacing:.5px}
-.doc-no{text-align:right;font-size:11px;color:#a49a8d;letter-spacing:.5px}
-.report-title{text-align:center;font-size:25px;font-weight:700;margin-bottom:12px;letter-spacing:6px}
-.doc-meta{text-align:center;color:#8a8073;font-size:12px;margin-bottom:40px}
-.doc-meta-sep{margin:0 8px;color:#cfc6ba}
-.report-section{margin-bottom:28px}
-.report-section-title{font-size:15px;font-weight:600;padding-bottom:9px;border-bottom:2px solid #e4ddd3;margin-bottom:14px;letter-spacing:.5px}
-.doc-footer{display:flex;justify-content:space-between;margin-top:44px;padding-top:14px;border-top:1px solid #e4ddd3;font-size:11px;color:#a49a8d}
-@page{margin:18mm 16mm}
-@media print{body{padding:0}.report-page{max-width:none}.report-section{break-inside:avoid}}
-</style></head><body>${htmlContent}</body></html>`;
+/** 由后端渲染报告 HTML：唯一事实源，含转义/打印样式/占位符拦截。
+ *  前端不再用 `querySelector('.report-page').outerHTML` 抓 DOM——
+ *  那样会把界面占位符与 Naive UI 注入样式一起打进文件。 */
+async function fetchStandaloneHtml(): Promise<string> {
+  const res = await invoke<ApiResponse<string>>('render_report');
+  if (!res.success || !res.data) {
+    throw new Error(res.message || t('report.exportFailed'));
+  }
+  return res.data;
 }
 
 async function exportReport() {
   if (!report.value) return;
-  const fullHtml = buildStandaloneHtml();
   exportError.value = '';
   exportPath.value = '';
   try {
+    const fullHtml = await fetchStandaloneHtml();
     const res = await invoke<ApiResponse<string>>('export_report_to_file', { content: fullHtml });
     if (res.success && res.data) {
       exportPath.value = res.data;
@@ -268,9 +251,8 @@ async function buildAndSaveZip() {
   const j = new (await import('jszip').then(m => m.default || m));
   // @ts-ignore - 避免类型推断问题
   const zip: any = j;
-  // 添加报告 HTML：必须与单文件导出一致（独立 <!DOCTYPE html> + 打印样式）。
-  // 旧实现只把页内片段塞进 ZIP，家人打开工具包里的 HTML 会缺样式、像坏文件。
-  const htmlContent = buildStandaloneHtml();
+  // 报告 HTML 与单文件导出同源（后端渲染），ZIP 里不会出现裸片段。
+  const htmlContent = await fetchStandaloneHtml();
   zip.file('01-继承报告.html', htmlContent);
   // 添加资产清单 JSON
   zip.file('02-资产清单.json', JSON.stringify(report.value.assets, null, 2));

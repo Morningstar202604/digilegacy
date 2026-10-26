@@ -8,6 +8,7 @@ mod models;
 mod notify;
 mod platform_data;
 mod recovery;
+mod report;
 #[cfg(test)]
 mod scenarios;
 mod vault;
@@ -148,6 +149,7 @@ pub fn run() {
             commands::set_user_profile,
             commands::get_user_profile,
             commands::get_inheritance_report,
+            commands::render_report,
             commands::export_report_to_file,
             commands::export_zip_to_file,
             commands::update_check_in,

@@ -286,6 +286,27 @@ pub fn get_inheritance_report() -> Result<ApiResponse<InheritanceReport>, String
     db::get_inheritance_report_db().map(ApiResponse::ok)
 }
 
+/// 由后端渲染报告 HTML（单一事实源），前端不再抓 DOM。
+///
+/// 锁定态/密钥不匹配时直接拒绝：报告里的占位符若被导出，
+/// 继承人拿到的是一份写着「需解锁」的废纸，且用户会误以为数据已损毁。
+#[command]
+pub fn render_report(app_handle: AppHandle) -> Result<ApiResponse<String>, String> {
+    let report = db::get_inheritance_report_db()?;
+    if crate::report::contains_placeholder(&report) {
+        return Ok(ApiResponse::fail(
+            "报告中存在未解密字段，请先解锁后重新生成（本次未生成任何文件）",
+        ));
+    }
+    let html = crate::report::render_report_html(&report);
+    if let Err(e) = validate_report_html(&html) {
+        return Ok(ApiResponse::fail(&e));
+    }
+    // app_handle 仅为与其他导出命令保持一致的签名；这里不写盘。
+    let _ = &app_handle;
+    Ok(ApiResponse::ok_with_msg(html, "报告已生成"))
+}
+
 // ========== 继承报告 / 工具包 ==========
 
 /// 报告 HTML 的 IPC 入口上限（20MB）。
@@ -429,9 +450,20 @@ pub fn get_dashboard_stats() -> Result<ApiResponse<DashboardStats>, String> {
 #[command]
 pub fn security_status() -> Result<ApiResponse<SecurityStatus>, String> {
     let has = db::get_security_config_db()?.is_some();
+    // 「解锁」必须是可验证的状态，而不是「内存里有个 key」。
+    // 密钥与验证器不匹配时（例如恢复流程中途退出）继续宣称已解锁，
+    // 界面就会把占位符当数据展示、并把占位符写回（历史 P0）。
+    // 无主密码时如实返回「没有密钥」，是否可用由前端按 has_master_password 决定
+    // （security.ts: `unlocked = has ? data.unlocked : true`）。
+    let unlocked = if has {
+        let guard = db::get_conn()?;
+        db::vault_key_matches_config(guard.as_ref().unwrap())
+    } else {
+        false
+    };
     Ok(ApiResponse::ok(SecurityStatus {
         has_master_password: has,
-        unlocked: crate::vault::is_unlocked(),
+        unlocked,
     }))
 }
 
@@ -1071,6 +1103,60 @@ mod tests {
         assert!(r.success);
         assert!(!db::get_heartbeat_config_db().unwrap().0);
 
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// 密钥错配必须报「未解锁」：否则界面会把占位符当数据展示并写回（历史 P0）。
+    #[test]
+    fn security_status_is_false_when_key_does_not_match_verifier() {
+        let _g = crate::vault::test_lock();
+        use base64::{engine::general_purpose::STANDARD as b64, Engine as _};
+        crate::vault::clear_key();
+        let path =
+            std::env::temp_dir().join(format!("digilegacy_cmd_mismatch_{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        db::init_database_at(path.clone()).unwrap();
+
+        let salt = crate::crypto::generate_salt();
+        let key = crate::crypto::derive_key_bytes("right-pw", &salt);
+        db::set_security_config_db(
+            &b64.encode(salt),
+            &crate::vault::make_verifier(&key).unwrap(),
+        )
+        .unwrap();
+
+        // 正确密钥 → 已解锁
+        crate::vault::set_key(key);
+        let st = security_status().unwrap().data.unwrap();
+        assert!(st.has_master_password);
+        assert!(st.unlocked, "正确密钥必须报告已解锁");
+
+        // 错配密钥 → 必须报告未解锁，而不是「有 key 就算解锁」
+        crate::vault::set_key(crate::crypto::derive_key_bytes("wrong-pw", &salt));
+        let st = security_status().unwrap().data.unwrap();
+        assert!(st.has_master_password);
+        assert!(!st.unlocked, "密钥与验证器不匹配时必须报告未解锁");
+
+        // 且写路径必须拒绝（不是只把界面标红）
+        let err = db::add_asset_db(&AssetRequest {
+            platform_id: 1,
+            account_identifier: "x".to_string(),
+            account_description: String::new(),
+            category: "property".to_string(),
+            estimated_value: Some(1.0),
+            disposal_method: "inherit".to_string(),
+            heir_name: None,
+            heir_contact: None,
+            notes: String::new(),
+        })
+        .unwrap_err();
+        assert!(
+            err.contains("不匹配") || err.contains("解锁"),
+            "实际: {}",
+            err
+        );
+
+        crate::vault::clear_key();
         let _ = std::fs::remove_file(&path);
     }
 
