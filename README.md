@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-96%20Rust%20%C2%B7%20332%20frontend%20%C2%B7%2037%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-102%20Rust%20%C2%B7%20341%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -79,9 +79,9 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **96 passing** (`cargo test --locked`) |
-| Frontend unit tests | **332 passing** across 30 files |
-| End-to-end tests | **37 passing** in real Chromium |
+| Rust tests | **102 passing** (`cargo test --locked`) |
+| Frontend unit tests | **341 passing** across 30 files |
+| End-to-end tests | **76 passing** in real Chromium |
 | Coverage | **85.1% statements**, 86.6% lines — thresholds enforced in CI |
 | Type safety | `vue-tsc --noEmit` clean, Rust `clippy -D warnings` clean |
 | Supply chain | `cargo audit` and `npm audit`: 0 vulnerabilities |

@@ -28,9 +28,21 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Chinese dictionary no longer carries emoji in UI strings**, and the English dictionary no longer has keys the Chinese one lacks.
 - **DiscoverView step indicator** rendered raw dictionary keys (missing `t()`); route titles are resolved through the testable `resolveTitleKey`.
 
+### Scenario simulation (2026-10-26)
+
+- **Backend scenario suite** (`src-tauri/src/scenarios.rs`): 246 combinations / **2824 checkpoints** over real SQLite + real AES — asset lifecycle (3 categories × 7 disposals × 3 value shapes × encrypted/plaintext), backup round-trips (30 rounds incl. v1 compatibility and 4 malformed inputs), credential vault (20 assets × encrypted/plaintext), DMS timeline (7 intervals × 10 offsets) and policy patches (30 rounds).
+- **Frontend scenario suite** (`src/scenarios.test.ts`): ~300 combinations / **1692 checkpoints** across the asset store, filter/sort/search, money formatting × locale, locked-state write paths, mock lifecycle and platform cache invalidation.
+- **Browser scenario suite** (`e2e/scenarios.spec.ts`): **39 scenarios** — 8 routes × 2 locales × 2 themes, 20 platform-search keywords, 4 filters × 4 sorts, 6 legal categories, heir-guide tabs/difficulty/collapse, DMS idempotence, report actions and per-page language/theme round-trips.
+
+### Scenario-found defects
+
+- **Backup import accepted invalid asset fields.** A hand-edited backup could write an unknown category, an unknown disposal method, or a negative/absurd value straight into the asset table, poisoning statistics and reports. The import now validates every row inside the transaction and leaves existing data untouched on rejection.
+- **Total estimated value could go negative.** `assets.totalValue` used `|| 0`, so a negative `estimated_value` was added as-is; it now sums only finite, non-negative amounts, matching the backend.
+- **The web-demo mock accepted invalid assets**, so the demo behaved differently from the desktop build; it now enforces the same category/disposal/value bounds.
+
 ### Changed
 
-- Frontend unit tests grew from 296 to **332**, branch coverage 76.82% → **78.48%**; README badges synced to 96 Rust · 332 frontend · 37 E2E.
+- Frontend unit tests grew from 296 to **341**, branch coverage 76.82% → **78.54%**; Rust tests 86 → **102**; E2E 37 → **76**. README badges synced.
 
 ## [0.2.0] - 2026-10-24
 
