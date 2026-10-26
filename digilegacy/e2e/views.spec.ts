@@ -68,11 +68,13 @@ test.describe('继承报告', () => {
     await prepare(page);
     await page.goto('/report');
 
+    // 报告页先出骨架屏再渲染正文；并行跑全量时 mock 首访要落盘，给足等待，
+    // 否则后续断言会在骨架阶段抢跑（曾偶发全量失败、单跑通过）。
+    await expect(page.locator('.report-page')).toBeVisible({ timeout: 15000 });
     await expect(page.getByText('数字遗产继承报告')).toBeVisible();
     await expect(page.getByRole('button', { name: /导出报告/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /导出继承工具包/ })).toBeVisible();
     // 报告正文必须真的由数据渲染出来
-    await expect(page.locator('.report-page')).toBeVisible();
     await expect(page.getByText('数字遗产持有人信息')).toBeVisible();
   });
 
