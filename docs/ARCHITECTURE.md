@@ -100,6 +100,8 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 | `action_guide.rs` | the family's printable, platform-grouped action checklist |
 | `toolkit.rs` | action-guide assembly + family drill (metadata only, no credentials) |
 | `family_faq.rs` | 12 deterministic bilingual FAQ entries embedded in the guide (no LLM, no network) |
+| `db_heirs.rs` | multiple heirs + exactly one executor; whole-list replace in a transaction |
+| `ai_assist.rs` | optional bring-your-own-key assistant: whitelist-built outbound payload, Rust-side curl, no built-in service |
 | `notify.rs` | DMS staging, outbox, SMTP (UI config first, env vars as fallback); read-only status snapshot |
 | `report.rs` | report HTML rendering (escaping, print styles, placeholder refusal, bilingual) |
 
@@ -120,6 +122,6 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 ## Known limits
 
 - The desktop UI ships in Simplified Chinese and English; `src/i18n/index.ts` holds both dictionaries, `setLocale` also updates `<html lang>`, and a unit test asserts the two key sets are identical. Legal template bodies are Chinese-only by design (they are jurisdiction-specific documents).
-- Migrations are still additive `ALTER TABLE` checks; `PRAGMA user_version` now records the baseline (`SCHEMA_VERSION = 2`), so the first destructive migration should branch on it rather than on column presence.
+- Migrations are still additive `ALTER TABLE` checks; `PRAGMA user_version` now records the baseline (`SCHEMA_VERSION = 4`), so the first destructive migration should branch on it rather than on column presence.
 - `db.rs` is still the largest module (1882 lines): connection lifecycle, asset CRUD, profile, security, backup, and DMS live there. Platform patches already moved to `db_platforms.rs` (293 lines) and the regression suite to `db_tests.rs` (1722 lines). Splitting the remaining domains is the next step, but it is not urgent while the test suite covers the seams.
 - The public demo is a static build of the real UI over the mock backend. It is a showcase, not a security boundary: its data lives unencrypted in `localStorage` and the banner in the UI says so.

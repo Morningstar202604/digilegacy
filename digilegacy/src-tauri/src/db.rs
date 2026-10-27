@@ -17,10 +17,11 @@ static CONN: Lazy<Mutex<Option<Connection>>> = Lazy::new(|| Mutex::new(None));
 /// 当前 schema 版本，写入 `PRAGMA user_version`。
 /// 没有版本号时，未来任何一次加列/改表都无法判断「该不该迁移」，
 /// 只能靠 PRAGMA table_info 逐列猜；版本号是后续升级的安全阀。
-/// v3：新增 `smtp_config` 与 `custody_config` 两张表。
-/// 两张表都用 `CREATE TABLE IF NOT EXISTS` 建，因此存量库无需逐列迁移；
+/// v3：新增 `smtp_config` 与 `custody_config`。
+/// v4：新增 `heirs` 与 `assistant_config`。
+/// 这些表都用 `CREATE TABLE IF NOT EXISTS` 建，存量库无需逐列迁移；
 /// 版本号仍然递增，让未来任何破坏性迁移能按数字分支而不是靠猜。
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 /// 初始化数据库
 pub fn init_database(app_handle: &AppHandle) -> Result<(), String> {

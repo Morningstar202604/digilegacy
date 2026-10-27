@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Four-dimension completion metric**: the dashboard now reports disposal decided / heir named / identifier filled / trigger reachable separately instead of one percentage that counted "picked a disposal method" as done.
 - **Report export parity**: the exported report now carries the platform guidance, heir contact and bilingual copy that the on-screen preview always had, and the ZIP is written with owner-only permissions.
 
+- **Multiple heirs and an executor** (`db_heirs.rs`): the profile can now record several heirs, each with a relation, contact and allocation note, plus exactly one executor. The third-stage dead-man's-switch notification goes to the executor; the report and action guide list everyone and mark who coordinates. Whole-list replace runs in one transaction so a rejected save never leaves half a list.
+- **Optional bring-your-own-key assistant** (`ai_assist.rs`): off by default with no built-in endpoint — if you have an OpenAI-compatible service, enter its address, model and key. The outbound payload is built from a whitelist (platform name, category, disposal method, policy fields, your question) so accounts, names, contacts, amounts and credentials can never leave the machine; the UI shows a preview before the first request. Keys are field-encrypted, passed to curl through stdin (never argv), and answers are labelled AI-generated and unreviewed.
+- **Backup format v4**: carries heirs, SMTP settings, custody locations and assistant config, so a machine move no longer requires re-entering them.
+
 ### Fixed
 
 - **Exporting a report dropped the guidance** the preview showed: platform policy, required documents, difficulty, duration and the official link were in the preview but absent from the file. The heir received a shortened document.
