@@ -25,8 +25,14 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Four review scenes** on the one pipeline: platform policies, legal documents (strict), family notes, asset classification. Legal templates moved to `src/data/legal-templates.json` so the UI and the reviewer read the same bytes instead of two drifting copies.
 - **Reviewer sees what is being reviewed**: each item carries a truncated content preview, and rows collapse to a summary line by default (152 policies fully expanded ran to several thousand pixels).
 
+- **Authoritative source registry** (`src/data/authorities.json`, `scripts/verify-authorities.mjs`): eight references (Civil Code articles, PIPL, Supreme Court, PBC, CAC, MCA) embedded at compile time and shown in the inheritance report. The verifier probes every URL and records two separate facts — *reachable* and *content matched* — because a live page does not prove it contains the cited article. It also detects government error pages that still return HTTP 200.
+- **Demo data schema versioning**: the browser preview now discards stale `localStorage` when the seed structure changes, so fixes to demo content no longer stay invisible behind an old cache.
+
 ### Fixed
 
+- **Dashboard showed 100% while telling the user their family would receive nothing.** "Trigger channel ready" counted a heartbeat-only setup as complete, even though a heartbeat notifies nobody. It now requires an actual SMTP channel, and the checklist shows a warning state when DMS is on but unreachable.
+- **Profile's heir list, custody fields, SMTP and assistant settings only loaded in the desktop app**, leaving the browser demo permanently empty even though the mock implements all four. They now load in both environments.
+- **The DMS page still said SMTP must be configured through environment variables**, months after in-app configuration shipped.
 - **Review UI leaked raw i18n keys**: an item with no AI verdict rendered `review.ai.null` and unknown statuses rendered `review.status.<value>`. Both now fall back to an em dash, with the allowed value sets declared explicitly.
 - **Review UI fabricated an audit record**: the browser mock returned a synthetic "human approved" row for items nobody had reviewed, and stamped a review time on AI-skipped items. History now returns empty until something actually happened, and only a human verdict produces a `reviewed_at`.
 - **Human-only scenes still offered "Run AI pre-review"**, which implies the button does something. It is now hidden and the section is retitled "review scope" with an explicit "nothing leaves this machine".

@@ -569,6 +569,24 @@ pub fn set_heirs(heirs: Vec<Heir>) -> Result<ApiResponse<()>, String> {
     }
 }
 
+// ========== 权威来源 ==========
+
+/// 内置权威来源表。每条都带「可达 / 内容匹配」两个独立结论。
+#[command]
+pub fn list_authorities() -> Result<ApiResponse<Vec<Authority>>, String> {
+    Ok(ApiResponse::ok(crate::models::authorities()))
+}
+
+/// 某个资产类别相关的来源（报告与继承人向导用）。
+#[command]
+pub fn authorities_for(category: String) -> Result<ApiResponse<Vec<Authority>>, String> {
+    let list = crate::models::authorities()
+        .into_iter()
+        .filter(|a| a.applies_to.iter().any(|c| c == &category))
+        .collect();
+    Ok(ApiResponse::ok(list))
+}
+
 // ========== 通用审核管线（AI 初审 + 人工终审） ==========
 
 /// 已注册的审核场景。界面据此渲染场景切换，而不是写死「政策」一个。
@@ -1802,6 +1820,7 @@ mod tests {
             user: user.clone(),
             assets: vec![asset(identifier)],
             heirs: Vec::new(),
+            authorities: Vec::new(),
             policies: Vec::new(),
             total_estimated_value: 100.0,
             property_assets_count: 1,

@@ -40,6 +40,7 @@ if [ "$MODE" != "--rust-only" ]; then
   run "心跳服务器行为测试" bash -c "cd '$WEB' && node server/heartbeat-server.test.mjs"
   run "文档数字一致性" bash -c "cd '$WEB' && node scripts/check-doc-facts.mjs"
   run "政策库溯源" bash -c "cd '$WEB' && node scripts/check-policy-provenance.mjs"
+  run "权威来源核验（可选，需联网）" bash -c "cd '$WEB' && node scripts/verify-authorities.mjs"
   # E2E 默认跳过（需先 npx playwright install chromium）；--with-e2e 显式开启
   if [ "$MODE" = "--with-e2e" ]; then
     run "E2E（Playwright）" bash -c "cd '$WEB' && npx playwright test"

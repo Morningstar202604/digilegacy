@@ -163,6 +163,8 @@ pub fn run() {
             commands::set_custody_hints,
             commands::render_action_guide,
             commands::run_family_drill,
+            commands::list_authorities,
+            commands::authorities_for,
             commands::list_review_profiles,
             commands::list_review_items,
             commands::review_payload_fields,

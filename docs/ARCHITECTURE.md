@@ -7,7 +7,7 @@ DigiLegacy is a single-process Tauri 2 desktop application. There is no backend 
 │ WebView (Vue 3 + TypeScript + Pinia)                         │
 │   views/ ── stores/ ── api/invoke.ts ──┐                     │
 └───────────────────────────────────────┼──────────────────────┘
-                                        │ Tauri IPC (67 commands)
+                                        │ Tauri IPC (69 commands)
 ┌───────────────────────────────────────▼──────────────────────┐
 │ Rust core (src-tauri/src)                                    │
 │   commands.rs   thin command layer, input caps, envelopes    │
@@ -121,6 +121,21 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 ## Backup format
 
 `version: 3` adds `security_config.recovery_seal` to the export so a recovery code survives a machine move. Imports accept v1/v2/v3. A backup **without** `security_config` is treated as plaintext: importing it into an encrypted vault is rejected while locked and field-encrypted while unlocked — plaintext must never land in an `enc:v1:` column.
+
+## Authoritative sources
+
+`src/data/authorities.json` is the registry of external references (statutes, ministries, courts). It is embedded at compile time with `include_str!`, so the UI, the report and the reviewer all read the same bytes.
+
+The registry records **two independent facts** per entry, and the UI never merges them:
+
+| Field | Proves | Does not prove |
+|---|---|---|
+| `reachable` | the page exists and answered | that it contains the cited text |
+| `content_matched` | the page text contains the declared needles | that the citation is legally correct |
+
+`scripts/verify-authorities.mjs` fills both by probing each URL (with retries — government sites time out intermittently). It also rejects the common failure mode of a **200 response that is actually an error page** ("哎呀,出错了"), because those would otherwise be counted as reachable.
+
+One class of entry is deliberately marked `kind: "portal"` — the National Laws and Regulations Database. It is a search entry point, not an article page, and the report labels it as such so a reader does not assume the link opens the exact statute.
 
 ## Content review pipeline
 

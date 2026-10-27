@@ -41,6 +41,9 @@ pub struct PlatformEntry {
     /// 本条政策最后一次人工核对的日期（`YYYY-MM`）。
     /// 空值表示「从未人工核实」——界面与报告必须如实标注，不能假装是官方口径。
     pub last_reviewed: String,
+    /// 关联的权威来源 id（对应 `src/data/authorities.json`）。
+    /// 空表示只有文字说明、没有可核验的外部来源。
+    pub authority_ids: Vec<String>,
 }
 
 impl PlatformEntry {
@@ -85,6 +88,7 @@ impl PlatformEntry {
             risk_warnings: String::new(),
             tags: String::new(),
             last_reviewed: String::new(),
+            authority_ids: Vec::new(),
         }
     }
 
@@ -129,7 +133,22 @@ impl PlatformEntry {
             risk_warnings: String::new(),
             tags: String::new(),
             last_reviewed: String::new(),
+            authority_ids: Vec::new(),
         }
+    }
+}
+
+impl PlatformEntry {
+    /// 链式挂载权威来源 id（对应 `src/data/authorities.json`）。
+    pub fn with_authorities(mut self, ids: &[&str]) -> Self {
+        self.authority_ids = ids.iter().map(|s| s.to_string()).collect();
+        self
+    }
+
+    /// 链式标注人工核对月份。
+    pub fn reviewed(mut self, yyyy_mm: &str) -> Self {
+        self.last_reviewed = yyyy_mm.to_string();
+        self
     }
 }
 
@@ -143,14 +162,14 @@ pub fn get_all_platforms() -> Vec<PlatformEntry> {
             "中等", "https://help.alipay.com", "30-90天",
             "5万以下走简易继承程序（2025银行新规）",
             "2025《简化小额存款继承流程指导意见》：支付宝/微信余额参照银行存款管理；每年节省公证费用超10亿元（中国人民银行）"
-        ),
+        ).with_authorities(&["civil-code-1122", "pbc"]),
         PlatformEntry::with_source(2, "微信支付", "WeChat Pay", "支付金融", "移动支付", true, false, true,
             "死亡证明、继承公证书、继承人身份证",
             "独立于账号的余额权益可继承。资金账户与社交账号分开处理",
             "中等", "https://weixin.qq.com", "30-90天",
             "余额可依法继承；账号本身不可继承（用户仅有使用权）",
             "微信公众号'法律如何守护人格化的数字遗产'(2025)：陈晔父亲去世10年后微信被销号；《民法典》第127条；2025银行新规参照银行存款"
-        ),
+        ).with_authorities(&["civil-code-127", "pbc"]),
         PlatformEntry::new(3, "云闪付", "UnionPay云闪付", "支付金融", "移动支付", true, false, true,
             "死亡证明、继承公证书",
             "联系银联客服95516",
@@ -1080,5 +1099,40 @@ mod tests {
         println!("<<<PLATFORMS_JSON>>>");
         println!("{}", json);
         println!("<<<END_PLATFORMS_JSON>>>");
+    }
+}
+
+#[cfg(test)]
+mod authority_link_tests {
+    use super::*;
+
+    /// 挂到政策上的来源 id 必须真实存在于 authorities.json。
+    /// 这是防止「引用一个不存在的来源」的最后一道闸。
+    #[test]
+    fn every_authority_id_exists_in_registry() {
+        let known: std::collections::HashSet<String> = crate::models::authorities()
+            .into_iter()
+            .map(|a| a.id)
+            .collect();
+        for p in get_all_platforms() {
+            for id in &p.authority_ids {
+                assert!(
+                    known.contains(id),
+                    "平台「{}」引用了不存在的来源 id: {}",
+                    p.name,
+                    id
+                );
+            }
+        }
+    }
+
+    /// 至少有平台挂了权威来源——否则整条引用体系是空转。
+    #[test]
+    fn some_platforms_carry_authorities() {
+        let with_auth = get_all_platforms()
+            .into_iter()
+            .filter(|p| !p.authority_ids.is_empty())
+            .count();
+        assert!(with_auth >= 2, "只有 {} 条平台挂了来源", with_auth);
     }
 }

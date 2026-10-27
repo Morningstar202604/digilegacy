@@ -85,6 +85,11 @@ struct Copy {
     sec_assets: &'static str,
     sec_disposal: &'static str,
     sec_policies: &'static str,
+    sec_authorities: &'static str,
+    authority_reachable: &'static str,
+    authority_matched: &'static str,
+    authority_portal: &'static str,
+    authority_checked: &'static str,
     sec_statement: &'static str,
     name: &'static str,
     phone: &'static str,
@@ -132,7 +137,12 @@ const ZH: Copy = Copy {
     sec_assets: "三、资产清单",
     sec_disposal: "四、处置安排",
     sec_policies: "五、平台办理指引",
-    sec_statement: "六、声明",
+    sec_authorities: "六、权威来源",
+    authority_reachable: "入口可达",
+    authority_matched: "内容已核对",
+    authority_portal: "检索入口（非条文页）",
+    authority_checked: "核验日期",
+    sec_statement: "七、声明",
     name: "姓名",
     phone: "联系电话",
     email: "邮箱",
@@ -179,7 +189,12 @@ const EN: Copy = Copy {
     sec_assets: "3. Asset list",
     sec_disposal: "4. Disposal arrangements",
     sec_policies: "5. Platform-by-platform instructions",
-    sec_statement: "6. Statement",
+    sec_authorities: "6. Authoritative sources",
+    authority_reachable: "Page reachable",
+    authority_matched: "Content verified",
+    authority_portal: "Search portal (not the article page)",
+    authority_checked: "Checked",
+    sec_statement: "7. Statement",
     name: "Name",
     phone: "Phone",
     email: "Email",
@@ -530,6 +545,77 @@ pub fn render_report_html(report: &InheritanceReport, locale: ReportLocale) -> S
             .join("")
     };
 
+    let authorities = if report.authorities.is_empty() {
+        String::new()
+    } else {
+        report
+            .authorities
+            .iter()
+            .map(|a| {
+                let title = if locale == ReportLocale::Zh {
+                    &a.title_zh
+                } else {
+                    &a.title_en
+                };
+                let note = if locale == ReportLocale::Zh {
+                    &a.note_zh
+                } else {
+                    &a.note_en
+                };
+                let portal = if a.kind == "portal" {
+                    if locale == ReportLocale::Zh {
+                        &a.portal_note_zh
+                    } else {
+                        &a.portal_note_en
+                    }
+                } else {
+                    ""
+                };
+                // 两件事分开写：可达 ≠ 内容已核对
+                let badges = format!(
+                    "<span class=\"policy-badge\">{}</span><span class=\"policy-badge{}\">{}</span>",
+                    escape_html(c.authority_reachable),
+                    if a.content_matched { "" } else { " unverified" },
+                    escape_html(if a.content_matched {
+                        c.authority_matched
+                    } else {
+                        c.unsourced
+                    })
+                );
+                let checked = if a.last_checked.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<span class=\"policy-badge\">{} {}</span>",
+                        escape_html(c.authority_checked),
+                        escape_html(&a.last_checked)
+                    )
+                };
+                let portal_line = if portal.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "<div class=\"policy-row\"><span class=\"policy-label\">{}</span>{}</div>",
+                        escape_html(c.authority_portal),
+                        escape_html(portal)
+                    )
+                };
+                format!(
+                    "<div class=\"policy\"><div class=\"policy-head\"><span class=\"policy-name\">{}</span><span class=\"policy-badges\">{}{}</span></div><div class=\"policy-row\"><span class=\"policy-label\">{}</span>{}</div>{}<div class=\"policy-row\"><span class=\"policy-label\">{}</span><span class=\"policy-link\">{}</span></div></div>",
+                    escape_html(title),
+                    badges,
+                    checked,
+                    escape_html(c.process),
+                    escape_html(note),
+                    portal_line,
+                    escape_html(c.official),
+                    escape_html(&a.url),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    };
+
     let policies = if report.policies.is_empty() {
         format!("<p class=\"muted\">{}</p>", c.no_policy)
     } else {
@@ -635,6 +721,11 @@ pub fn render_report_html(report: &InheritanceReport, locale: ReportLocale) -> S
 </div>
 
 <div class="section">
+  <div class="section-title">{sec_authorities}</div>
+  {authorities}
+</div>
+
+<div class="section">
   <div class="section-title">{sec_statement}</div>
   <p>{statement_1}</p>
   <p>{statement_2}</p>
@@ -706,6 +797,8 @@ pub fn render_report_html(report: &InheritanceReport, locale: ReportLocale) -> S
         rows = rows,
         inheritable = inheritable,
         policies = policies,
+        authorities = authorities,
+        sec_authorities = c.sec_authorities,
         statement_1 = c.statement_1,
         statement_2 = c.statement_2,
         statement_3 = c.statement_3,
@@ -791,6 +884,7 @@ mod tests {
             user: user(),
             assets,
             heirs: Vec::new(),
+            authorities: Vec::new(),
             policies: vec![policy(|_| {})],
             total_estimated_value: 100.0,
             property_assets_count: 1,
@@ -950,5 +1044,107 @@ mod tests {
         assert_eq!(ReportLocale::parse("zh-CN"), ReportLocale::Zh);
         assert_eq!(ReportLocale::parse(""), ReportLocale::Zh);
         assert_eq!(ReportLocale::parse("fr"), ReportLocale::Zh);
+    }
+}
+
+#[cfg(test)]
+mod authority_tests {
+    use super::*;
+    use crate::models::{Authority, DigitalAsset, PlatformPolicyBrief, UserProfile};
+
+    fn report_with(authorities: Vec<Authority>) -> InheritanceReport {
+        InheritanceReport {
+            user: UserProfile::default(),
+            assets: vec![DigitalAsset {
+                id: Some(1),
+                platform_id: 1,
+                platform_name: "支付宝".to_string(),
+                account_identifier: "acc".to_string(),
+                account_description: String::new(),
+                category: "property".to_string(),
+                estimated_value: Some(1.0),
+                value_currency: "CNY".to_string(),
+                disposal_method: "inherit".to_string(),
+                heir_name: Some("王五".to_string()),
+                heir_contact: None,
+                notes: String::new(),
+                has_credential: false,
+                is_confirmed: true,
+                created_at: String::new(),
+                updated_at: String::new(),
+            }],
+            heirs: Vec::new(),
+            policies: vec![PlatformPolicyBrief::default()],
+            authorities,
+            total_estimated_value: 1.0,
+            property_assets_count: 1,
+            personality_assets_count: 0,
+            mixed_assets_count: 0,
+            generated_at: "2026-10-26 12:00:00".to_string(),
+        }
+    }
+
+    fn authority(matched: bool, kind: &str) -> Authority {
+        Authority {
+            id: "a".to_string(),
+            kind: kind.to_string(),
+            title_zh: "《民法典》".to_string(),
+            title_en: "Civil Code".to_string(),
+            publisher: "全国人大".to_string(),
+            url: "https://flk.npc.gov.cn/".to_string(),
+            note_zh: "数据与网络虚拟财产受法律保护".to_string(),
+            note_en: "Data is protected".to_string(),
+            applies_to: vec!["property".to_string()],
+            reachable: true,
+            content_matched: matched,
+            last_checked: "2026-10-27".to_string(),
+            http_status: 200,
+            observed_title: "国家法律法规数据库".to_string(),
+            portal_note_zh: "检索入口".to_string(),
+            portal_note_en: "portal".to_string(),
+        }
+    }
+
+    /// 报告必须列出权威来源，且「可达」与「内容已核对」分开写。
+    #[test]
+    fn report_lists_authorities_with_two_separate_facts() {
+        let html = render_report_html(
+            &report_with(vec![authority(true, "portal")]),
+            ReportLocale::Zh,
+        );
+        assert!(html.contains("权威来源"));
+        assert!(html.contains("入口可达"));
+        assert!(html.contains("内容已核对"));
+        assert!(html.contains("《民法典》"));
+    }
+
+    /// 内容未核对的来源必须显式标注，不能和已核对的长得一样。
+    #[test]
+    fn unmatched_authority_is_marked() {
+        let html = render_report_html(
+            &report_with(vec![authority(false, "institution")]),
+            ReportLocale::Zh,
+        );
+        assert!(html.contains("入口可达"));
+        assert!(!html.contains("内容已核对"), "未匹配不得显示为已核对");
+    }
+
+    /// 检索入口要写明「不是条文页」，避免读者以为点开就是法条。
+    #[test]
+    fn portal_is_labelled_as_portal() {
+        let html = render_report_html(
+            &report_with(vec![authority(true, "portal")]),
+            ReportLocale::Zh,
+        );
+        assert!(html.contains("检索入口（非条文页）"));
+    }
+
+    #[test]
+    fn authorities_are_escaped() {
+        let mut a = authority(true, "portal");
+        a.title_zh = "<script>alert(1)</script>".to_string();
+        let html = render_report_html(&report_with(vec![a]), ReportLocale::Zh);
+        assert!(!html.contains("<script>alert"));
+        assert!(html.contains("&lt;script&gt;"));
     }
 }

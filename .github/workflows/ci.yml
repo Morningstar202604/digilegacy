@@ -70,6 +70,13 @@ jobs:
         # 且未核实条目数只能减少不能增加（棘轮）。绝不自动补写出处或核对日期。
         run: node scripts/check-policy-provenance.mjs
 
+      - name: 权威来源核验
+        # 外部链接会腐烂。这里实测每个来源的 HTTP 状态与页面内容，
+        # 区分「可达」与「内容匹配」两件不同的事实。
+        # 只在 allow-failure 模式下跑：政务站点偶发超时不应阻塞构建。
+        continue-on-error: true
+        run: node scripts/verify-authorities.mjs
+
       - name: 依赖漏洞扫描（npm）
         # 默认镜像的 audit 端点常不可用，显式指向官方 registry
         run: npm audit --audit-level=high --registry=https://registry.npmjs.org

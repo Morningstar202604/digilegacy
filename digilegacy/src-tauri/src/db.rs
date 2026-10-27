@@ -2512,7 +2512,9 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
     } else {
         "none".to_string()
     };
-    let trigger_ready = dms_enabled && trigger_channel != "none";
+    // 「触发链就绪」= DMS 启用 **且** 家人真的能收到（当前只有 SMTP 能做到）。
+    // 心跳只证明「设备还在联网」，它不通知任何家人，因此不能算就绪。
+    let trigger_ready = dms_enabled && trigger_channel == "smtp";
 
     // 四项各 25%。任何一项为 0，整体就不会虚高到「完成」。
     let ratio = |n: i64| -> i64 {
@@ -2522,6 +2524,9 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
             0
         }
     };
+    // 只有「家人真的能收到」才算这一项达标。
+    // 仅心跳可用时，家人收不到邮件——这不算触发链可用，否则完成度会虚高到 100%
+    // 同时界面提示「家人收不到邮件」，自相矛盾。
     let trigger_score = if trigger_ready { 100 } else { 0 };
     let completion = if total > 0 {
         (ratio(disposal_planned) + ratio(heir_assigned) + ratio(identifier_ready) + trigger_score)
@@ -2561,6 +2566,17 @@ pub struct CheckInStatus {
 }
 
 // ========== 继承报告 ==========
+
+/// 报告里出现的资产类别（去重）。
+fn report_categories(assets: &[DigitalAsset]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for a in assets {
+        if !out.contains(&a.category) {
+            out.push(a.category.clone());
+        }
+    }
+    out
+}
 
 pub fn get_inheritance_report_db() -> Result<InheritanceReport, String> {
     let user = get_user_profile_db()?.unwrap_or(UserProfile {
@@ -2603,12 +2619,19 @@ pub fn get_inheritance_report_db() -> Result<InheritanceReport, String> {
     let policies = get_policy_briefs_db(&platform_ids)?;
     // 多继承人名单；为空时报告与执行清单回退到 user.heir_primary_*。
     let heirs = get_heirs_db()?;
+    // 只挑与本次资产类别相关的来源：全部塞进去会让报告变成法规清单。
+    let categories: Vec<String> = report_categories(&assets);
+    let authorities = crate::models::authorities()
+        .into_iter()
+        .filter(|a| a.applies_to.iter().any(|c| categories.contains(c)))
+        .collect();
 
     Ok(InheritanceReport {
         user,
         assets,
         heirs,
         policies,
+        authorities,
         total_estimated_value: total_value,
         property_assets_count: property_count,
         personality_assets_count: personality_count,

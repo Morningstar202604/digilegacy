@@ -215,6 +215,43 @@ pub struct Heir {
     pub sort_order: i64,
 }
 
+/// 权威来源登记（来自 `src/data/authorities.json`，由 `verify-authorities.mjs` 实测）。
+///
+/// `reachable` 与 `content_matched` 是两件独立的事实：可达只证明页面存在，
+/// 只有内容匹配才证明「这条链接支持这条引用」。界面必须分别展示，
+/// 不能合并成一个「已验证」。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Authority {
+    pub id: String,
+    pub kind: String,
+    pub title_zh: String,
+    pub title_en: String,
+    pub publisher: String,
+    pub url: String,
+    pub note_zh: String,
+    pub note_en: String,
+    pub applies_to: Vec<String>,
+    #[serde(default)]
+    pub reachable: bool,
+    #[serde(default)]
+    pub content_matched: bool,
+    #[serde(default)]
+    pub last_checked: String,
+    #[serde(default)]
+    pub http_status: i64,
+    #[serde(default)]
+    pub observed_title: String,
+    #[serde(default)]
+    pub portal_note_zh: String,
+    #[serde(default)]
+    pub portal_note_en: String,
+}
+
+/// 内置权威来源表（编译期嵌入，与前端读同一份 JSON）。
+pub fn authorities() -> Vec<Authority> {
+    serde_json::from_str(include_str!("../../src/data/authorities.json")).unwrap_or_default()
+}
+
 /// 报告用平台政策摘要。
 ///
 /// 为什么单独建结构：导出物必须与界面预览同源。旧实现的导出只有平台名与
@@ -249,6 +286,8 @@ pub struct InheritanceReport {
     /// 继承人名单（含执行人标记）。空时回退到 `user.heir_primary_*`。
     pub heirs: Vec<Heir>,
     pub policies: Vec<PlatformPolicyBrief>,
+    /// 供家人与审核员查阅的权威来源（只包含与本次资产类别相关的条目）。
+    pub authorities: Vec<Authority>,
     pub total_estimated_value: f64,
     pub property_assets_count: i64,
     pub personality_assets_count: i64,

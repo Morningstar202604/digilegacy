@@ -168,3 +168,46 @@ describe('完成度四维分解（旧口径会虚高）', () => {
     expect(w.text()).toContain('邮件通道可用');
   });
 });
+
+describe('触发链达标口径（仅心跳不算家人可达）', () => {
+  it('仅心跳可用时，触发链项为警告态而非完成态', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 1,
+        disposal_planned_count: 1,
+        heir_assigned_count: 1,
+        identifier_ready_count: 1,
+        trigger_ready: false,
+        trigger_channel: 'heartbeat',
+        dms_enabled: true,
+        completion_percentage: 75,
+        total_estimated_value: 0,
+      },
+    });
+    const items = w.findAll('.check-item');
+    const trigger = items[items.length - 1];
+    expect(trigger.classes(), '仅心跳不得显示为已完成').not.toContain('done');
+    expect(trigger.classes(), '应显示为警告（已开启但家人收不到）').toContain('warn');
+    expect(trigger.text()).toContain('!');
+  });
+
+  it('邮件通道可用时才是完成态', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 1,
+        disposal_planned_count: 1,
+        heir_assigned_count: 1,
+        identifier_ready_count: 1,
+        trigger_ready: true,
+        trigger_channel: 'smtp',
+        dms_enabled: true,
+        completion_percentage: 100,
+        total_estimated_value: 0,
+      },
+    });
+    const items = w.findAll('.check-item');
+    const trigger = items[items.length - 1];
+    expect(trigger.classes()).toContain('done');
+    expect(trigger.text()).toContain('邮件通道可用');
+  });
+});

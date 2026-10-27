@@ -546,7 +546,6 @@ async function loadHeartbeatConfig() {
 }
 
 async function loadAssistant() {
-  if (!isTauri) return;
   try {
     const res = await invoke<ApiResponse<AssistantConfig>>('get_assistant_config');
     if (res.success && res.data) assistant.value = res.data;
@@ -581,7 +580,6 @@ async function saveAssistant() {
 }
 
 async function loadCustody() {
-  if (!isTauri) return;
   try {
     const res = await invoke<ApiResponse<CustodyHints>>('get_custody_hints');
     if (res.success && res.data) custody.value = res.data;
@@ -606,7 +604,6 @@ async function saveCustody() {
 }
 
 async function loadSmtpConfig() {
-  if (!isTauri) return;
   try {
     const res = await invoke<ApiResponse<SmtpForm>>('get_smtp_config');
     if (res.success && res.data) {
@@ -917,6 +914,13 @@ onMounted(async () => {
       profile.value.check_in_interval_days = dashboard.checkInStatus.interval_days;
     }
   }
+  // 四块配置在浏览器演示模式下同样有 mock 实现，且界面会渲染它们；
+  // 只在桌面版加载会让演示页显示「尚未登记继承人」等空态。
+  await loadCustody();
+  await loadAssistant();
+  await loadHeirs();
+  await loadSmtpConfig();
+
   if (isTauri) {
     try {
       const res = await invoke<ApiResponse<boolean>>('get_recovery_seal_exists');
@@ -925,10 +929,6 @@ onMounted(async () => {
       recoveryExists.value = null;
     }
     await loadHeartbeatConfig();
-    await loadSmtpConfig();
-    await loadCustody();
-    await loadAssistant();
-    await loadHeirs();
     await loadPatchStatus();
     await loadAutoBackupStatus();
     try {
@@ -938,6 +938,7 @@ onMounted(async () => {
       autostartEnabled.value = false;
     }
   }
+
 });
 
 const PROFILE_PLACEHOLDER = '【加密数据 · 需解锁】';

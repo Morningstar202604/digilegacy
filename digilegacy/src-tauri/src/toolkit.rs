@@ -184,6 +184,7 @@ mod tests {
             assets,
             heirs: Vec::new(),
             policies,
+            authorities: Vec::new(),
             total_estimated_value: 0.0,
             property_assets_count: 0,
             personality_assets_count: 0,

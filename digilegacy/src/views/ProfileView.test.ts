@@ -42,6 +42,11 @@ function defaultImpl(over: Record<string, (args?: Record<string, unknown>) => un
     }
     if (cmd === 'get_recovery_seal_exists') return { success: true, message: '', data: false };
     if (cmd === 'get_all_platforms') return { success: true, message: '', data: [] };
+    // 新增的四块配置：默认给空结构，避免 undefined 让加载器抛错
+    if (cmd === 'get_custody_hints') return { success: true, message: '', data: { backup_location: '', recovery_code_location: '' } };
+    if (cmd === 'get_assistant_config') return { success: true, message: '', data: { enabled: false, endpoint: '', model: '', has_key: false } };
+    if (cmd === 'get_heirs') return { success: true, message: '', data: [] };
+    if (cmd === 'get_smtp_config') return { success: true, message: '', data: { host: '', port: 587, from_addr: '', username: '', has_password: false, allow_insecure: false } };
     return { success: true, message: '', data: null };
   };
 }
@@ -59,7 +64,9 @@ async function mountProfile(over?: Record<string, (args?: Record<string, unknown
   });
   // onMounted 里有多条 await（loadUser / get_recovery_seal_exists / heartbeat / patch），
   // 单次 flushPromises 不够，需要多轮让 security.refresh 落地后 DOM 才切到已加密分支。
-  for (let i = 0; i < 3; i++) {
+  // onMounted 现在还会加载保管位置 / 助手 / 继承人 / SMTP 四块，
+  // 每块都是独立 await，3 轮 flush 不够，会把「尚未回显」误判成缺陷。
+  for (let i = 0; i < 8; i++) {
     await flushPromises();
     await w.vm.$nextTick();
   }

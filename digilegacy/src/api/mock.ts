@@ -7,6 +7,9 @@ import type {
 import platformsSeed from './mock-platforms.json';
 
 const LS_KEY = 'digilegacy-web-preview-v1';
+// 演示数据的结构版本。改了种子数据（新增字段/修正示例）就 +1：
+// 否则老访客的 localStorage 会一直盖住新种子，界面上永远看不到修复。
+const DEMO_SCHEMA = 2;
 const SS_UNLOCK = 'digilegacy-web-preview-unlocked';
 
 interface MockDms {
@@ -23,6 +26,7 @@ interface MockState {
   masterPassword: string | null;
   credentials: Record<string, string>;
   nextAssetId: number;
+  __schema?: number;
   custody?: { backup_location: string; recovery_code_location: string };
   reviews?: Record<string, Array<{
     key: string; title: string; preview?: string; status: string;
@@ -76,7 +80,7 @@ function defaultState(): MockState {
   const assets = [
     demo(platformIdByName('支付宝'), '138****0000（演示）', 'property', 12000, 'inherit', '演示继承人'),
     demo(platformIdByName('B站') , 'demo@example.com', 'mixed', 3000, 'memorialize'),
-    demo(platformIdByName('微信'), '138****0000', 'personality', 500, 'delete', undefined, '聊天记录选择彻底删除'),
+    demo(platformIdByName('微信支付'), '138****0000', 'property', 500, 'inherit', '演示继承人', '仅处理零钱余额；微信社交账号本身不可继承'),
     demo(platformIdByName('Steam'), 'demo_user', 'property', 800, 'liquidate'),
   ];
   let id = 1;
@@ -106,6 +110,13 @@ function defaultState(): MockState {
       updated_at: now(),
     },
     checkIns: [],
+    heirs: [
+      {
+        id: 1, name: '演示继承人', relation: '子女',
+        phone: '137****0000', email: 'heir@example.com',
+        share_note: '负责金融账户与主要资产', is_executor: true, sort_order: 0,
+      },
+    ],
     dms: { enabled: true, interval: 30, lastCheckIn: null },
     masterPassword: null,
     credentials: {},
@@ -117,7 +128,11 @@ function defaultState(): MockState {
 function loadState(): MockState {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw) as MockState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as MockState & { __schema?: number };
+      // 结构版本不同 → 丢弃旧缓存并重建，避免演示页显示过时/矛盾的数据
+      if ((parsed.__schema ?? 1) === DEMO_SCHEMA) return parsed;
+    }
   } catch {
     // 忽略损坏的预览数据
   }
@@ -127,7 +142,7 @@ function loadState(): MockState {
 }
 
 function saveState(state: MockState) {
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  localStorage.setItem(LS_KEY, JSON.stringify({ ...state, __schema: DEMO_SCHEMA }));
 }
 
 /** 按场景生成演示审核条目（结构与桌面版一致）。 */
@@ -382,7 +397,9 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       const identifierReady = assets.filter(
         x => x.account_identifier && x.account_identifier.trim() && !x.account_identifier.includes('需解锁'),
       ).length;
-      const triggerReady = state.dms.enabled;
+      // 与桌面版同口径：只有邮件通道可用才算触发链达标；
+      // 仅心跳时家人收不到邮件，不能算完成。
+      const triggerReady = state.dms.enabled && false;
       const ratio = (n: number) => (assets.length > 0 ? Math.round((n * 100) / assets.length) : 0);
       const completion = assets.length > 0
         ? Math.round((ratio(planned) + ratio(heirAssigned) + ratio(identifierReady) + (triggerReady ? 100 : 0)) / 4)
@@ -396,7 +413,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
         heir_assigned_count: heirAssigned,
         identifier_ready_count: identifierReady,
         trigger_ready: triggerReady,
-        trigger_channel: triggerReady ? 'heartbeat' : 'none',
+        trigger_channel: state.dms.enabled ? 'heartbeat' : 'none',
         total_estimated_value: assets.reduce((sum, x) => sum + (x.estimated_value || 0), 0),
         last_check_in: state.dms.lastCheckIn,
         dms_enabled: state.dms.enabled,

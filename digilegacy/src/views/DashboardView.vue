@@ -79,8 +79,8 @@
           <span class="check-mark" aria-hidden="true">{{ isDone(stats?.identifier_ready_count) ? '✓' : '·' }}</span>
           <span>{{ t('dashboard.checkIdentifier', { done: stats?.identifier_ready_count ?? 0, total: stats?.total_assets ?? 0 }) }}</span>
         </div>
-        <div class="check-item" :class="{ done: stats?.trigger_ready }">
-          <span class="check-mark" aria-hidden="true">{{ stats?.trigger_ready ? '✓' : '·' }}</span>
+        <div class="check-item" :class="{ done: stats?.trigger_ready, warn: !stats?.trigger_ready && stats?.dms_enabled }">
+          <span class="check-mark" aria-hidden="true">{{ stats?.trigger_ready ? '✓' : (stats?.dms_enabled ? '!' : '·') }}</span>
           <span>{{ triggerText }}</span>
         </div>
       </div>
@@ -219,6 +219,11 @@ onMounted(async () => {
   border-radius: 8px;
   font-size: 13px;
   color: var(--gray-600);
+}
+.check-item.warn {
+  border-color: var(--warning);
+  background: var(--warning-light);
+  color: var(--gray-800, #3a352d);
 }
 .check-item.done {
   border-color: var(--success);

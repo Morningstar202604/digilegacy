@@ -311,6 +311,7 @@ mod tests {
             user,
             assets: vec![asset],
             heirs: Vec::new(),
+            authorities: Vec::new(),
             policies: vec![policy],
             total_estimated_value: 12345.0,
             property_assets_count: 1,

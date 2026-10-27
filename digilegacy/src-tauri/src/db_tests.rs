@@ -1810,3 +1810,25 @@ fn dashboard_completion_counts_four_dimensions() {
         stats.completion_percentage
     );
 }
+
+/// 仅心跳可用时，触发链不算达标：家人收不到邮件，不能显示 100%。
+#[test]
+fn heartbeat_only_does_not_count_as_reachable_trigger() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = fresh_db_path("trigger_channel");
+    init_database_at(path.clone()).unwrap();
+
+    // 启用 DMS + 心跳，但完全没配 SMTP
+    set_dms_config_db(true, 30).unwrap();
+    set_heartbeat_config_db(true, "tok", "https://hb.example.org").unwrap();
+
+    let stats = get_dashboard_stats_db().unwrap();
+    assert!(!stats.trigger_ready, "仅心跳不得算作家人可达");
+    assert_eq!(stats.trigger_channel, "heartbeat");
+    assert!(
+        stats.completion_percentage < 100,
+        "触发链未达标时完成度不得为 100%，实际 {}",
+        stats.completion_percentage
+    );
+}
