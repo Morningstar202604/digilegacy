@@ -100,6 +100,42 @@ export interface PlatformPolicyBrief {
   has_source: boolean;
 }
 
+/** 通用审核场景声明（后端注册表下发，界面不写死业务名）。 */
+export interface ReviewProfile {
+  id: string;
+  title_key: string;
+  criteria: string;
+  use_ai: boolean;
+}
+
+/** 条目当前审核状态。approved 只能由人工终审产生。 */
+export type ReviewStatus = 'pending' | 'awaiting_human' | 'approved' | 'rejected' | 'needs_edit';
+export type AiVerdict = 'pass' | 'flag' | 'unknown' | 'skipped';
+export type HumanVerdict = 'approved' | 'rejected' | 'needs_edit';
+
+export interface ReviewItemState {
+  key: string;
+  title: string;
+  status: ReviewStatus;
+  ai_verdict: AiVerdict | null;
+  ai_note: string;
+  human_note: string;
+  reviewed_at: string | null;
+  stale: boolean;
+}
+
+export interface ReviewRecord {
+  profile_id: string;
+  item_key: string;
+  fingerprint: string;
+  ai_verdict: AiVerdict;
+  ai_note: string;
+  human_verdict: HumanVerdict | null;
+  human_note: string;
+  decided_by: string;
+  created_at: string;
+}
+
 /** 一位继承人 / 执行人。 */
 export interface Heir {
   id?: number;

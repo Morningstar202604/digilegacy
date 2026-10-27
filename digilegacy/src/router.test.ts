@@ -61,3 +61,18 @@ describe('router', () => {
     expect(behavior!({} as never, {} as never, { left: 0, top: 240 })).toEqual({ left: 0, top: 240 });
   });
 });
+
+describe('审核路由', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal('scrollTo', vi.fn());
+    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+  });
+
+  it('/review 解析到审核页，且标题走 i18n 键', async () => {
+    const router = await import('./router').then(m => m.default);
+    const resolved = router.resolve('/review');
+    expect(resolved.name).toBe('Review');
+    expect(resolved.meta.titleKey).toBe('nav.review');
+  });
+});

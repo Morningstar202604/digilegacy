@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT 许可">
-  <img src="https://img.shields.io/badge/tests-158%20Rust%20%C2%B7%20381%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="测试">
+  <img src="https://img.shields.io/badge/tests-175%20Rust%20%C2%B7%20393%20frontend%20%C2%B7%2080%20E2E-brightgreen.svg" alt="测试">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="无服务器">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="无遥测">
@@ -34,7 +34,7 @@
 
 | | |
 |---|---|
-| 内置 **152** 个平台、**16** 个分类的继承政策库 | **60** 个 IPC 命令，Rust 内核 + Vue 前端 |
+| 内置 **152** 个平台、**16** 个分类的继承政策库 | **67** 个 IPC 命令，Rust 内核 + Vue 前端 |
 | **AES-256-GCM** 字段级加密，PBKDF2-SHA256 60 万次迭代 | **0** 服务器、**0** 遥测、**0** 云端调用 |
 
 ## 走一遍界面
@@ -80,8 +80,8 @@
 | 检查项 | 结果 |
 |---|---|
 | Rust 测试 | **118 通过**，1 ignored（`cargo test --locked`；源码声明 120，含 1 条仅 Unix 编译） |
-| 前端单元测试 | **381 通过**，31 个文件 |
-| 端到端测试 | **76 通过**，真实 Chromium |
+| 前端单元测试 | **393 通过**，32 个文件 |
+| 端到端测试 | **80 通过**，真实 Chromium |
 | 覆盖率 | **85.4% 语句**、86.9% 行，阈值写进 CI |
 | 类型安全 | `vue-tsc --noEmit` 无错误，Rust `clippy -D warnings` 无警告 |
 | 供应链 | `cargo audit` 与 `npm audit`：0 漏洞 |

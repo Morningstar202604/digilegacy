@@ -7,7 +7,7 @@ DigiLegacy is a single-process Tauri 2 desktop application. There is no backend 
 │ WebView (Vue 3 + TypeScript + Pinia)                         │
 │   views/ ── stores/ ── api/invoke.ts ──┐                     │
 └───────────────────────────────────────┼──────────────────────┘
-                                        │ Tauri IPC (60 commands)
+                                        │ Tauri IPC (67 commands)
 ┌───────────────────────────────────────▼──────────────────────┐
 │ Rust core (src-tauri/src)                                    │
 │   commands.rs   thin command layer, input caps, envelopes    │
@@ -102,6 +102,9 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 | `family_faq.rs` | 12 deterministic bilingual FAQ entries embedded in the guide (no LLM, no network) |
 | `db_heirs.rs` | multiple heirs + exactly one executor; whole-list replace in a transaction |
 | `ai_assist.rs` | optional bring-your-own-key assistant: whitelist-built outbound payload, Rust-side curl, no built-in service |
+| `review.rs` | generic review state machine: AI can only advance to `AwaitingHuman`, `Approved` requires a human verdict |
+| `review_profiles.rs` | the scene registry — adding a scene is data, not pipeline code |
+| `db_review.rs` | append-only review audit trail; stale detection by content fingerprint |
 | `notify.rs` | DMS staging, outbox, SMTP (UI config first, env vars as fallback); read-only status snapshot |
 | `report.rs` | report HTML rendering (escaping, print styles, placeholder refusal, bilingual) |
 
@@ -118,6 +121,18 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 ## Backup format
 
 `version: 3` adds `security_config.recovery_seal` to the export so a recovery code survives a machine move. Imports accept v1/v2/v3. A backup **without** `security_config` is treated as plaintext: importing it into an encrypted vault is rejected while locked and field-encrypted while unlocked — plaintext must never land in an `enc:v1:` column.
+
+## Content review pipeline
+
+The review pipeline is deliberately **scene-agnostic**. A scene is a `ReviewProfile` (id, title key, criteria, whether AI participates); the pipeline itself contains no business nouns. Today only `platform-policy` is registered — not because the pipeline is policy-specific, but because other candidate scenes (legal templates, family notes, asset classification) each need a product decision about *what* to send and *by which criteria* to judge. Registering one is a function plus a line in `all_profiles()`.
+
+Three invariants are enforced by types rather than comments:
+
+1. **AI never approves.** `ReviewStatus::from_verdicts` takes `Option<&HumanVerdict>`; `AiVerdict::Pass` can only reach `AwaitingHuman`. There is no code path where an AI verdict yields `Approved`.
+2. **Graceful degradation.** With no endpoint configured, `run_ai_review` records `Skipped` and leaves items in the human queue — it does not error, and it does not fabricate a verdict.
+3. **Append-only trail.** Every AI run and every human decision appends a `review_records` row carrying the content fingerprint, both verdicts and the actor. Records are never updated, only added.
+
+Content changes invalidate prior decisions: `summarise_states_db` compares each item's current fingerprint against its latest record and reports the item as `stale` (back to pending) when they differ, so a review can never apply to text it did not see.
 
 ## Known limits
 

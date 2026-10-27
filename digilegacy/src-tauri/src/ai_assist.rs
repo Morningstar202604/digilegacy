@@ -137,7 +137,7 @@ Rules: 1) never invent platform policies, links or statutes; 2) if the answer is
 ///
 /// 用系统 curl 而不是 Rust HTTP 依赖：与我们「不引入新网络栈」的既有选择一致，
 /// 并且可以复用同一套超时/协议校验习惯（见 `heartbeat.rs`）。
-fn call_chat_api(
+pub(crate) fn call_chat_api(
     endpoint: &str,
     api_key: &str,
     model: &str,

@@ -411,6 +411,7 @@ const navRoutes: NavRoute[] = [
   { path: '/dms', titleKey: 'nav.dms', icon: TimeOutline },
   { path: '/report', titleKey: 'nav.report', icon: DocumentTextOutline },
   { path: '/heir', titleKey: 'nav.heir', icon: PeopleOutline },
+  { path: '/review', titleKey: 'nav.review', icon: CheckmarkOutline },
   { path: '/legal', titleKey: 'nav.legal', icon: BookOutline },
 ];
 

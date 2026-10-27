@@ -12,6 +12,8 @@ mod notify;
 mod platform_data;
 mod recovery;
 mod report;
+mod review;
+mod review_profiles;
 #[cfg(test)]
 mod scenarios;
 mod toolkit;
@@ -161,6 +163,13 @@ pub fn run() {
             commands::set_custody_hints,
             commands::render_action_guide,
             commands::run_family_drill,
+            commands::list_review_profiles,
+            commands::list_review_items,
+            commands::review_payload_fields,
+            commands::review_progress,
+            commands::run_ai_review,
+            commands::submit_human_review,
+            commands::review_history,
             commands::get_heirs,
             commands::set_heirs,
             commands::get_assistant_config,

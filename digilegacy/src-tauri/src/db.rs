@@ -166,6 +166,22 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
         -- SMTP 配置：此前只能通过环境变量设置，普通用户根本配不起来，
         -- 结果「安心传承」的通知永远只落本地发件箱，家人一封邮件也收不到。
         -- 密码走 vault 字段级加密（与凭据同一条路径），不明文落库。
+        -- 通用审核留痕：任何场景（政策库、法律文书、家人说明…）共用一张表。
+        -- 只追加、不改写：审核历史本身就是证据，修改会毁掉可追溯性。
+        CREATE TABLE IF NOT EXISTS review_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            profile_id TEXT NOT NULL,
+            item_key TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            ai_verdict TEXT NOT NULL,
+            ai_note TEXT DEFAULT '',
+            human_verdict TEXT,
+            human_note TEXT DEFAULT '',
+            decided_by TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_review_item ON review_records(profile_id, item_key, id DESC);
+
         -- 继承人名单：支持多继承人 + 独立执行人。
         -- 旧模型只有 user_profile 里的一组 heir_primary_* 字段，
         -- 第二个孩子、配偶、律师都没有位置，报告只能写一个人。
@@ -2616,3 +2632,7 @@ pub use custody::*;
 #[path = "db_heirs.rs"]
 mod heirs;
 pub use heirs::*;
+
+#[path = "db_review.rs"]
+mod review_store;
+pub use review_store::*;

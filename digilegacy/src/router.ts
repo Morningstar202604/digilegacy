@@ -62,6 +62,12 @@ const router = createRouter({
       meta: { titleKey: 'nav.heir' }
     },
     {
+      path: '/review',
+      name: 'Review',
+      component: () => import('./views/ReviewView.vue'),
+      meta: { titleKey: 'nav.review' }
+    },
+    {
       path: '/legal',
       name: 'LegalTemplates',
       component: () => import('./views/LegalTemplates.vue'),

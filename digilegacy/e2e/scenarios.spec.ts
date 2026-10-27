@@ -16,6 +16,7 @@ const ROUTES = [
   { path: '/dms', zh: '安心传承', en: 'Legacy Care' },
   { path: '/report', zh: '继承报告', en: 'Inheritance Report' },
   { path: '/heir', zh: '继承人向导', en: 'Heir Guide' },
+  { path: '/review', zh: '内容审核', en: 'Review' },
   { path: '/legal', zh: '法律模板', en: 'Legal Templates' },
 ];
 

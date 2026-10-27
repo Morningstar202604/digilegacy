@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT">
-  <img src="https://img.shields.io/badge/tests-158%20Rust%20%C2%B7%20381%20frontend%20%C2%B7%2076%20E2E-brightgreen.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-175%20Rust%20%C2%B7%20393%20frontend%20%C2%B7%2080%20E2E-brightgreen.svg" alt="Tests">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="No servers">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="No telemetry">
@@ -34,7 +34,7 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | | |
 |---|---|
-| **152** platforms in the built-in inheritance policy database, 16 categories | **60** IPC commands across a Rust core and a Vue frontend |
+| **152** platforms in the built-in inheritance policy database, 16 categories | **67** IPC commands across a Rust core and a Vue frontend |
 | **AES-256-GCM** field-level encryption, PBKDF2-SHA256 at 600k iterations | **0** servers, **0** telemetry, **0** cloud calls |
 
 ## A guided tour
@@ -79,9 +79,9 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **118 passing**, 1 ignored (`cargo test --locked`; 158 declared incl. 1 Unix-only) |
-| Frontend unit tests | **381 passing** across 31 files |
-| End-to-end tests | **76 passing** in real Chromium |
+| Rust tests | **118 passing**, 1 ignored (`cargo test --locked`; 175 declared incl. 1 Unix-only) |
+| Frontend unit tests | **393 passing** across 32 files |
+| End-to-end tests | **80 passing** in real Chromium |
 | Coverage | **85.4% statements**, 86.9% lines — thresholds enforced in CI |
 | Type safety | `vue-tsc --noEmit` clean, Rust `clippy -D warnings` clean |
 | Supply chain | `cargo audit` and `npm audit`: 0 vulnerabilities |

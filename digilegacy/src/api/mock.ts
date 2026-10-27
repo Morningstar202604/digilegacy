@@ -24,6 +24,11 @@ interface MockState {
   credentials: Record<string, string>;
   nextAssetId: number;
   custody?: { backup_location: string; recovery_code_location: string };
+  reviews?: Record<string, Array<{
+    key: string; title: string; status: string;
+    ai_verdict: string; ai_note: string; human_note: string;
+    reviewed_at: string | null; stale: boolean;
+  }>>;
   heirs?: Array<{
     id?: number; name: string; relation: string; phone: string; email: string;
     share_note: string; is_executor: boolean; sort_order: number;
@@ -542,6 +547,80 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     case 'set_smtp_config':
       return ok(null, '演示模式不会真的保存 SMTP 配置') as T;
+
+    // 审核场景：演示环境只暴露一个「平台政策」场景，结构与桌面版一致。
+    case 'list_review_profiles':
+      return ok([{
+        id: 'platform-policy',
+        title_key: 'review.profile.policy',
+        criteria: '演示场景：检查来源标注与材料一致性',
+        use_ai: true,
+      }]) as T;
+
+    case 'review_progress': {
+      const key = String(a['profileId'] ?? 'platform-policy');
+      const list = state.reviews?.[key] || [];
+      return ok({
+        total: list.length,
+        approved: list.filter(x => x.status === 'approved').length,
+        awaiting_human: list.filter(x => x.status === 'awaiting_human').length,
+        pending: list.filter(x => x.status === 'pending').length,
+      }) as T;
+    }
+
+    case 'review_payload_fields':
+      return ok(['平台名称', '类别', '所需材料', '办理流程', '官方链接', '来源标注']) as T;
+
+    case 'list_review_items': {
+      if (!state.reviews) state.reviews = {};
+      const key = String(a['profileId'] ?? 'platform-policy');
+      const list = state.reviews[key] || [];
+      return ok(list) as T;
+    }
+
+    case 'run_ai_review': {
+      // 演示环境没有 AI 端点 → 与桌面版一致地降级为纯人工，不伪造结论。
+      if (!state.reviews) state.reviews = {};
+      const key = String(a['profileId'] ?? 'platform-policy');
+      const existing = state.reviews[key] || [];
+      if (existing.length === 0) {
+        state.reviews[key] = [
+          { key: '1', title: '支付宝', status: 'pending', ai_verdict: 'skipped', ai_note: '未配置 AI 端点，已转为纯人工审核', human_note: '', reviewed_at: now(), stale: false },
+          { key: '2', title: '微信支付', status: 'pending', ai_verdict: 'skipped', ai_note: '未配置 AI 端点，已转为纯人工审核', human_note: '', reviewed_at: now(), stale: false },
+        ];
+        saveState(state);
+      }
+      return ok(state.reviews[key], '未配置 AI 端点，已转为纯人工审核') as T;
+    }
+
+    case 'submit_human_review': {
+      if (!state.reviews) state.reviews = {};
+      const key = String(a['profileId'] ?? 'platform-policy');
+      const itemKey = String(a['itemKey'] ?? '');
+      const verdict = String(a['verdict'] ?? '');
+      const list = state.reviews[key] || [];
+      const target = list.find(x => x.key === itemKey);
+      if (target) {
+        target.status = verdict as typeof target.status;
+        target.human_note = String(a['note'] ?? '');
+        target.reviewed_at = now();
+        saveState(state);
+      }
+      return ok(null, '审核结论已记录（预览模式）') as T;
+    }
+
+    case 'review_history': {
+      const key = String(a['profileId'] ?? 'platform-policy');
+      const itemKey = String(a['itemKey'] ?? '');
+      const list = state.reviews?.[key] || [];
+      const target = list.find(x => x.key === itemKey);
+      return ok(target ? [{
+        profile_id: key, item_key: itemKey, fingerprint: 'demo',
+        ai_verdict: target.ai_verdict, ai_note: target.ai_note,
+        human_verdict: target.status === 'approved' ? 'approved' : null,
+        human_note: target.human_note, decided_by: 'human', created_at: target.reviewed_at || now(),
+      }] : []) as T;
+    }
 
     case 'get_heirs': {
       if (!state.heirs) {

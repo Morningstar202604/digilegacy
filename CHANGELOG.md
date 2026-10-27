@@ -19,6 +19,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Optional bring-your-own-key assistant** (`ai_assist.rs`): off by default with no built-in endpoint — if you have an OpenAI-compatible service, enter its address, model and key. The outbound payload is built from a whitelist (platform name, category, disposal method, policy fields, your question) so accounts, names, contacts, amounts and credentials can never leave the machine; the UI shows a preview before the first request. Keys are field-encrypted, passed to curl through stdin (never argv), and answers are labelled AI-generated and unreviewed.
 - **Backup format v4**: carries heirs, SMTP settings, custody locations and assistant config, so a machine move no longer requires re-entering them.
 
+- **Generic review pipeline with AI pre-review and human sign-off** (`review.rs`, `review_profiles.rs`, `db_review.rs`, `ReviewView`): scenes are data — a scene declares its id, criteria and whether AI participates, and the pipeline contains no business nouns. Only `platform-policy` is registered today; adding legal templates or family notes is a profile plus one registry line. AI can only advance an item to *awaiting human*: `Approved` is reachable only through a human verdict, enforced by the state machine's type signature. Every run and decision appends an immutable audit row; content changes invalidate the prior decision by fingerprint. With no endpoint configured the pipeline degrades to human-only review instead of failing.
+
 ### Fixed
 
 - **Exporting a report dropped the guidance** the preview showed: platform policy, required documents, difficulty, duration and the official link were in the preview but absent from the file. The heir received a shortened document.
