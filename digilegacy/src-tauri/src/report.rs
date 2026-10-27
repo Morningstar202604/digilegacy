@@ -541,11 +541,43 @@ pub fn render_report_html(report: &InheritanceReport, locale: ReportLocale) -> S
             .join("")
     };
 
-    let heir_label = format!(
-        "{}（{}）",
-        escape_html(&report.user.heir_primary_name),
-        escape_html(&report.user.heir_primary_relation)
-    );
+    // 有多继承人名单时优先展示名单（执行人加标记），否则回退旧字段。
+    let heir_label = if report.heirs.is_empty() {
+        format!(
+            "{}（{}）",
+            escape_html(&report.user.heir_primary_name),
+            escape_html(&report.user.heir_primary_relation)
+        )
+    } else {
+        report
+            .heirs
+            .iter()
+            .map(|h| {
+                let mark = if h.is_executor {
+                    if locale == ReportLocale::Zh {
+                        "（执行人）"
+                    } else {
+                        " (executor)"
+                    }
+                } else {
+                    ""
+                };
+                let share = if h.share_note.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!("－{}", escape_html(&h.share_note))
+                };
+                format!(
+                    "{}（{}）{}{}",
+                    escape_html(&h.name),
+                    escape_html(&h.relation),
+                    mark,
+                    share
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("；")
+    };
     let emergency_label = format!(
         "{}（{}）",
         escape_html(&report.user.emergency_contact_name),
@@ -758,6 +790,7 @@ mod tests {
         InheritanceReport {
             user: user(),
             assets,
+            heirs: Vec::new(),
             policies: vec![policy(|_| {})],
             total_estimated_value: 100.0,
             property_assets_count: 1,

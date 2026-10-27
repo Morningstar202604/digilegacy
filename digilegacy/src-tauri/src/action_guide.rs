@@ -199,6 +199,63 @@ pub fn render_action_guide_html(
         );
     }
 
+    // 继承人名单：家人需要知道「谁负责哪一块」以及「有问题找谁」。
+    let heirs_block = if report.heirs.is_empty() {
+        let name = report.user.heir_primary_name.trim();
+        if name.is_empty() {
+            format!(
+                "<p class=\"meta warn\">{}</p>",
+                escape_html(t(
+                    "尚未登记继承人。家人将无法确定由谁出面办理。",
+                    "No heir recorded. Your family will not know who is authorised to act.",
+                ))
+            )
+        } else {
+            format!(
+                "<p class=\"meta\">{}{}</p>",
+                escape_html(name),
+                escape_html(&format!("（{}）", report.user.heir_primary_relation))
+            )
+        }
+    } else {
+        let mut s = String::new();
+        for h in &report.heirs {
+            let mark = if h.is_executor {
+                t(
+                    "（执行人，负责统筹）",
+                    " (executor, coordinates everything)",
+                )
+            } else {
+                ""
+            };
+            let share = if h.share_note.trim().is_empty() {
+                String::new()
+            } else {
+                format!("－{}", escape_html(&h.share_note))
+            };
+            let contact = [h.phone.trim(), h.email.trim()]
+                .iter()
+                .filter(|v| !v.is_empty())
+                .map(|v| escape_html(v))
+                .collect::<Vec<_>>()
+                .join(" / ");
+            let contact_note = if contact.is_empty() {
+                String::new()
+            } else {
+                format!("　{}", contact)
+            };
+            s.push_str(&format!(
+                "<p class=\"meta\"><strong>{}</strong>（{}）{}{}{}</p>",
+                escape_html(&h.name),
+                escape_html(&h.relation),
+                escape_html(mark),
+                share,
+                contact_note
+            ));
+        }
+        s
+    };
+
     let backup_block = if backup_hint.trim().is_empty() {
         format!(
             "<p class=\"meta warn\">{}</p>",
@@ -237,6 +294,11 @@ pub fn render_action_guide_html(
 <div class="doc-meta">{meta}</div>
 
 <div class="intro">{intro}</div>
+
+<div class="section">
+  <div class="section-title">{heirs_title}</div>
+  {heirs_block}
+</div>
 
 <div class="section">
   <div class="section-title">{first_title}</div>
@@ -282,6 +344,8 @@ pub fn render_action_guide_html(
             "这份清单是给家人的行动指引，不含任何密码。它按平台排列：先做第 1 步，做完再做第 2 步。",
             "This guide is an action checklist for the family and contains no passwords. Steps are ordered by platform: finish step 1 before starting step 2.",
         ),
+        heirs_title = t("由谁负责", "Who handles this"),
+        heirs_block = heirs_block,
         first_title = t("开始之前：先找到两样东西", "Before you start: find two things"),
         backup_block = backup_block,
         recovery_block = recovery_block,
@@ -363,6 +427,7 @@ mod tests {
         InheritanceReport {
             user: UserProfile::default(),
             assets,
+            heirs: Vec::new(),
             policies,
             total_estimated_value: 0.0,
             property_assets_count: 0,

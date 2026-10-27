@@ -182,6 +182,7 @@ mod tests {
         InheritanceReport {
             user: UserProfile::default(),
             assets,
+            heirs: Vec::new(),
             policies,
             total_estimated_value: 0.0,
             property_assets_count: 0,

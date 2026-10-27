@@ -607,7 +607,10 @@ fn backup_v2_covers_heartbeat_and_platform_overrides() {
 
     let json = export_backup_json_db().unwrap();
     let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-    assert_eq!(v["version"], 3, "新增表/封印后必须升版本号");
+    assert_eq!(
+        v["version"], 4,
+        "新增表（heirs/smtp/custody/assistant）后必须升版本号"
+    );
     assert_eq!(
         v["tables"]["heartbeat_config"]["token"], "hb-token-123",
         "心跳令牌必须进备份"

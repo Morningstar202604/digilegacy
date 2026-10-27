@@ -100,6 +100,33 @@ export interface PlatformPolicyBrief {
   has_source: boolean;
 }
 
+/** 一位继承人 / 执行人。 */
+export interface Heir {
+  id?: number;
+  name: string;
+  relation: string;
+  phone: string;
+  email: string;
+  share_note: string;
+  is_executor: boolean;
+  sort_order: number;
+}
+
+/** AI 助手配置。默认关闭；不内置任何端点，用户自填。 */
+export interface AssistantConfig {
+  enabled: boolean;
+  endpoint: string;
+  model: string;
+  has_key: boolean;
+}
+
+/** 出境预览：提问前逐项展示将发送的非身份字段。 */
+export interface OutboundPreview {
+  fields: string[];
+  payload: string;
+  chars: number;
+}
+
 /** 保管位置：备份文件与恢复码放在哪里。 */
 export interface CustodyHints {
   backup_location: string;

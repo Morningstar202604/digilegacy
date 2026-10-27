@@ -196,6 +196,25 @@ pub struct UserProfile {
     pub updated_at: String,
 }
 
+/// 一位继承人 / 执行人。
+///
+/// 为什么需要多名：真实家庭很少只有一个人接手。旧模型只有一组
+/// `heir_primary_*` 字段，第二个孩子、配偶、律师都没有位置，
+/// 报告里也只能写一个名字，家人拿到后无法判断谁负责哪一部分。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Heir {
+    pub id: Option<i64>,
+    pub name: String,
+    pub relation: String,
+    pub phone: String,
+    pub email: String,
+    /// 分配说明（如「房产类资产」「仅处理金融账户」）。自由文本，可空。
+    pub share_note: String,
+    /// 是否为遗产执行人（负责统筹，DMS 第三级通知优先发给他）。
+    pub is_executor: bool,
+    pub sort_order: i64,
+}
+
 /// 报告用平台政策摘要。
 ///
 /// 为什么单独建结构：导出物必须与界面预览同源。旧实现的导出只有平台名与
@@ -227,6 +246,8 @@ pub struct PlatformPolicyBrief {
 pub struct InheritanceReport {
     pub user: UserProfile,
     pub assets: Vec<DigitalAsset>,
+    /// 继承人名单（含执行人标记）。空时回退到 `user.heir_primary_*`。
+    pub heirs: Vec<Heir>,
     pub policies: Vec<PlatformPolicyBrief>,
     pub total_estimated_value: f64,
     pub property_assets_count: i64,

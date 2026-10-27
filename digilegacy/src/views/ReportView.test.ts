@@ -356,3 +356,65 @@ describe('家人演练', () => {
     expect(w.text()).toContain('演练通过');
   });
 });
+
+describe('AI 助手（默认关闭，不内置服务）', () => {
+  it('未启用时不显示提问面板，避免暗示内置 AI', async () => {
+    const w = await mountReport({
+      get_assistant_config: { success: true, message: '', data: { enabled: false, endpoint: '', model: '', has_key: false } },
+    });
+    await flushPromises();
+    expect(w.text()).not.toContain('向助手提问');
+  });
+
+  it('启用后可见，且必须先预览才能提问', async () => {
+    const w = await mountReport({
+      get_assistant_config: { success: true, message: '', data: { enabled: true, endpoint: 'https://api.example.com/v1', model: 'm', has_key: true } },
+      preview_assistant_payload: {
+        success: true, message: '',
+        data: { fields: ['平台名称', '处置方式'], payload: '{}', chars: 42 },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain('向助手提问');
+
+    const askBtn = () => w.findAll('button').find(b => b.text() === '提问')!;
+    expect(askBtn().attributes('disabled'), '未预览前不能提问').toBeDefined();
+
+    await w.findAll('button').find(b => b.text().includes('查看将发送的内容'))!.trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('将发送以下非身份字段');
+    expect(w.text()).toContain('42');
+    expect(askBtn().attributes('disabled'), '预览后可以提问').toBeUndefined();
+  });
+
+  it('提问结果必须标注「AI 生成 · 未核对」', async () => {
+    const w = await mountReport({
+      get_assistant_config: { success: true, message: '', data: { enabled: true, endpoint: 'https://x/v1', model: 'm', has_key: true } },
+      preview_assistant_payload: { success: true, message: '', data: { fields: ['平台名称'], payload: '{}', chars: 10 } },
+      ask_assistant: { success: true, message: '', data: '1. 先办支付宝。' },
+    });
+    await flushPromises();
+    await w.findAll('button').find(b => b.text().includes('查看将发送的内容'))!.trigger('click');
+    await flushPromises();
+    await w.findAll('button').find(b => b.text() === '提问')!.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('先办支付宝');
+    expect(w.text(), '必须标注未核对').toContain('未经人工核对');
+  });
+
+  it('提问必须带当前语言', async () => {
+    const w = await mountReport({
+      get_assistant_config: { success: true, message: '', data: { enabled: true, endpoint: 'https://x/v1', model: 'm', has_key: true } },
+      preview_assistant_payload: { success: true, message: '', data: { fields: ['平台名称'], payload: '{}', chars: 10 } },
+      ask_assistant: { success: true, message: '', data: 'ok' },
+    });
+    await flushPromises();
+    await w.findAll('button').find(b => b.text().includes('查看将发送的内容'))!.trigger('click');
+    await flushPromises();
+    await w.findAll('button').find(b => b.text() === '提问')!.trigger('click');
+    await flushPromises();
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'ask_assistant');
+    expect((call![1] as Record<string, unknown>).locale).toBeTruthy();
+  });
+});

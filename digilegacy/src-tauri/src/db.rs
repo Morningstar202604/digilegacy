@@ -165,6 +165,33 @@ fn create_tables(conn: &Connection) -> rusqlite::Result<()> {
         -- SMTP 配置：此前只能通过环境变量设置，普通用户根本配不起来，
         -- 结果「安心传承」的通知永远只落本地发件箱，家人一封邮件也收不到。
         -- 密码走 vault 字段级加密（与凭据同一条路径），不明文落库。
+        -- 继承人名单：支持多继承人 + 独立执行人。
+        -- 旧模型只有 user_profile 里的一组 heir_primary_* 字段，
+        -- 第二个孩子、配偶、律师都没有位置，报告只能写一个人。
+        CREATE TABLE IF NOT EXISTS heirs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            relation TEXT DEFAULT '',
+            phone TEXT DEFAULT '',
+            email TEXT DEFAULT '',
+            share_note TEXT DEFAULT '',
+            is_executor INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        -- AI 助手配置：**不内置任何端点**。用户自己有 OpenAI 兼容服务时
+        -- 填地址与 Key；没有就保持关闭。Key 走字段级加密，永不明文落库。
+        CREATE TABLE IF NOT EXISTS assistant_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            enabled INTEGER DEFAULT 0,
+            endpoint TEXT DEFAULT '',
+            model TEXT DEFAULT '',
+            api_key_enc TEXT DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
+
         -- 保管位置：备份文件放在哪、恢复码抄在哪。
         -- 这两个信息决定了「家人能不能真正拿到凭据」，此前完全没有字段可填。
         -- 属于敏感元数据（泄露即等于指出攻击目标），因此同样走字段级加密。
@@ -442,6 +469,48 @@ pub fn get_policy_briefs_db(platform_ids: &[i64]) -> Result<Vec<PlatformPolicyBr
 /// 此时 vault::encrypt_if_needed 会静默明文直通，用户以为已加密实则明文落库——
 /// 这是历史缺陷，必须在此处拦截。尚未启用加密（无 security_config）时放行：
 /// 存量明文模式由 encrypt_existing_data_db 在启用加密后统一收编。
+/// 把 heirs 表的敏感列用新密钥重加密（改密 / 恢复重设）。
+fn reencrypt_heirs(
+    conn: &Connection,
+    old_key: &[u8; 32],
+    new_key: &[u8; 32],
+) -> Result<(), String> {
+    let rows: Vec<(i64, String, String, String, String, String)> = conn
+        .prepare(
+            "SELECT id, COALESCE(name,''), COALESCE(relation,''), COALESCE(phone,''),
+                    COALESCE(email,''), COALESCE(share_note,'') FROM heirs",
+        )
+        .map_err(|e| format!("查询继承人失败: {}", e))?
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        })
+        .map_err(|e| format!("读取继承人失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("收集继承人失败: {}", e))?;
+    for (id, name, relation, phone, email, share_note) in rows {
+        conn.execute(
+            "UPDATE heirs SET name=?1, relation=?2, phone=?3, email=?4, share_note=?5 WHERE id=?6",
+            params![
+                crate::vault::rekey_value(&name, old_key, new_key)?,
+                crate::vault::rekey_value(&relation, old_key, new_key)?,
+                crate::vault::rekey_value(&phone, old_key, new_key)?,
+                crate::vault::rekey_value(&email, old_key, new_key)?,
+                crate::vault::rekey_value(&share_note, old_key, new_key)?,
+                id,
+            ],
+        )
+        .map_err(|e| format!("重加密继承人失败: {}", e))?;
+    }
+    Ok(())
+}
+
 /// 供其他 db 子模块复用的写入门禁（锁定态一律拒绝）。
 pub(crate) fn ensure_vault_writable_pub(conn: &Connection) -> Result<(), String> {
     ensure_vault_writable(conn)
@@ -934,6 +1003,81 @@ pub struct SmtpConfig {
     pub allow_insecure: bool,
 }
 
+/// AI 助手配置（不含 Key 明文）。默认关闭、无内置端点。
+pub fn get_assistant_config_db() -> Result<crate::ai_assist::AssistantConfig, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let row = conn.query_row(
+        "SELECT enabled, COALESCE(endpoint,''), COALESCE(model,''), COALESCE(api_key_enc,'') FROM assistant_config WHERE id=1",
+        [],
+        |r| {
+            Ok(crate::ai_assist::AssistantConfig {
+                enabled: r.get::<_, i64>(0)? != 0,
+                endpoint: r.get::<_, String>(1)?,
+                model: r.get::<_, String>(2)?,
+                has_key: !r.get::<_, String>(3)?.is_empty(),
+            })
+        },
+    );
+    match row {
+        Ok(v) => Ok(v),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(Default::default()),
+        Err(e) => Err(format!("读取助手配置失败: {}", e)),
+    }
+}
+
+/// 保存助手配置。`api_key` 为 `None` 表示保持现有 Key 不变。
+pub fn set_assistant_config_db(
+    enabled: bool,
+    endpoint: &str,
+    model: &str,
+    api_key: Option<&str>,
+) -> Result<(), String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    ensure_vault_writable(conn)?;
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let key_enc = match api_key {
+        Some(k) if !k.is_empty() => crate::vault::encrypt_if_needed(k)?,
+        Some(_) => String::new(),
+        None => conn
+            .query_row(
+                "SELECT COALESCE(api_key_enc,'') FROM assistant_config WHERE id=1",
+                [],
+                |r| r.get::<_, String>(0),
+            )
+            .unwrap_or_default(),
+    };
+    conn.execute(
+        "INSERT INTO assistant_config (id, enabled, endpoint, model, api_key_enc, updated_at)
+         VALUES (1, ?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(id) DO UPDATE SET enabled=?1, endpoint=?2, model=?3, api_key_enc=?4, updated_at=?5",
+        params![enabled as i64, endpoint, model, key_enc, now],
+    )
+    .map_err(|e| format!("保存助手配置失败: {}", e))?;
+    Ok(())
+}
+
+/// 取出解密后的 API Key（仅供请求使用，绝不回传前端）。
+pub fn get_assistant_key_plain() -> Result<Option<String>, String> {
+    let guard = get_conn()?;
+    let conn = guard.as_ref().unwrap();
+    let enc: String = conn
+        .query_row(
+            "SELECT COALESCE(api_key_enc,'') FROM assistant_config WHERE id=1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or_default();
+    if enc.is_empty() {
+        return Ok(None);
+    }
+    if crate::vault::is_encrypted(&enc) && !crate::vault::is_unlocked() {
+        return Err("API Key 已加密，请先解锁后重试".to_string());
+    }
+    crate::vault::decrypt_if_needed(&enc).map(Some)
+}
+
 pub fn get_smtp_config_db() -> Result<SmtpConfig, String> {
     let guard = get_conn()?;
     let conn = guard.as_ref().unwrap();
@@ -1143,6 +1287,9 @@ pub fn change_master_password_db(
                     ],
                 ).map_err(|e| format!("重加密资产失败: {}", e))?;
             }
+
+            // 继承人名单同样是加密数据：漏掉这一块，改密后名单会永久读不出来。
+            reencrypt_heirs(conn, &key_old, &key_new)?;
 
             if let Some((pid, vals)) = select_profile_sensitive(conn)? {
                 let mut new_vals = Vec::with_capacity(vals.len());
@@ -1445,22 +1592,123 @@ pub fn export_backup_json_db() -> Result<String, String> {
         }
     }
 
+    // v4：新增继承人名单、SMTP、保管位置、助手配置。
+    // 都是「换机后必须带走」的配置，否则用户在新机器上要重新配一遍。
+    let heirs = export_heirs_json(conn)?;
+    let smtp = export_smtp_json(conn)?;
+    let custody = export_custody_json(conn)?;
+    let assistant = export_assistant_json(conn)?;
+
     let backup = json!({
         "app": "digilegacy",
-        "version": 3,
+        "version": 4,
         "created_at": Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         "tables": {
             "digital_assets": assets,
             "user_profile": profiles,
+            "heirs": heirs,
             "check_in_log": check_ins,
             "dms_config": dms,
             "security_config": security,
             "heartbeat_config": heartbeat,
             "platform_overrides": platform_overrides,
+            "smtp_config": smtp,
+            "custody_config": custody,
+            "assistant_config": assistant,
         }
     });
 
     serde_json::to_string_pretty(&backup).map_err(|e| format!("生成备份失败: {}", e))
+}
+
+/// 导出辅助：继承人名单（含密文原样导出，导入方用同一主密码即可解密）。
+fn export_heirs_json(conn: &Connection) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let mut out = Vec::new();
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, COALESCE(name,''), COALESCE(relation,''), COALESCE(phone,''),
+                    COALESCE(email,''), COALESCE(share_note,''), is_executor, sort_order FROM heirs ORDER BY sort_order, id",
+        )
+        .map_err(|e| format!("查询继承人失败: {}", e))?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(json!({
+                "id": r.get::<_, i64>(0)?,
+                "name": r.get::<_, String>(1)?,
+                "relation": r.get::<_, String>(2)?,
+                "phone": r.get::<_, String>(3)?,
+                "email": r.get::<_, String>(4)?,
+                "share_note": r.get::<_, String>(5)?,
+                "is_executor": r.get::<_, i64>(6)?,
+                "sort_order": r.get::<_, i64>(7)?,
+            }))
+        })
+        .map_err(|e| format!("读取继承人失败: {}", e))?;
+    for r in rows {
+        out.push(r.map_err(|e| format!("继承人解析失败: {}", e))?);
+    }
+    Ok(serde_json::Value::Array(out))
+}
+
+fn export_smtp_json(conn: &Connection) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    conn.query_row(
+        "SELECT COALESCE(host,''), port, COALESCE(from_addr,''), COALESCE(username,''), COALESCE(password_enc,''), allow_insecure FROM smtp_config WHERE id=1",
+        [],
+        |r| {
+            Ok(json!({
+                "host": r.get::<_, String>(0)?,
+                "port": r.get::<_, i64>(1)?,
+                "from_addr": r.get::<_, String>(2)?,
+                "username": r.get::<_, String>(3)?,
+                "password_enc": r.get::<_, String>(4)?,
+                "allow_insecure": r.get::<_, i64>(5)?,
+            }))
+        },
+    )
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(serde_json::Value::Null),
+        other => Err(format!("读取 SMTP 配置失败: {}", other)),
+    })
+}
+
+fn export_custody_json(conn: &Connection) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    conn.query_row(
+        "SELECT COALESCE(backup_location_enc,''), COALESCE(recovery_code_location_enc,'') FROM custody_config WHERE id=1",
+        [],
+        |r| {
+            Ok(json!({
+                "backup_location_enc": r.get::<_, String>(0)?,
+                "recovery_code_location_enc": r.get::<_, String>(1)?,
+            }))
+        },
+    )
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(serde_json::Value::Null),
+        other => Err(format!("读取保管位置失败: {}", other)),
+    })
+}
+
+fn export_assistant_json(conn: &Connection) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    conn.query_row(
+        "SELECT enabled, COALESCE(endpoint,''), COALESCE(model,''), COALESCE(api_key_enc,'') FROM assistant_config WHERE id=1",
+        [],
+        |r| {
+            Ok(json!({
+                "enabled": r.get::<_, i64>(0)?,
+                "endpoint": r.get::<_, String>(1)?,
+                "model": r.get::<_, String>(2)?,
+                "api_key_enc": r.get::<_, String>(3)?,
+            }))
+        },
+    )
+    .or_else(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => Ok(serde_json::Value::Null),
+        other => Err(format!("读取助手配置失败: {}", other)),
+    })
 }
 
 /// 备份导入模式。
@@ -1506,7 +1754,7 @@ pub fn import_backup_json_db_with_mode(content: &str, mode: ImportMode) -> Resul
     // v1 备份仍然可导入（向后兼容）：新表缺失时保持本地现状，
     // 旧备份里没有的 heartbeat/platform_overrides 按「未提供」处理。
     let version = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
-    if !(1..=3).contains(&version) {
+    if !(1..=4).contains(&version) {
         return Err("备份版本不受支持".to_string());
     }
     let tables = v.get("tables").ok_or("备份缺少数据表")?;
@@ -1753,6 +2001,98 @@ pub fn import_backup_json_db_with_mode(content: &str, mode: ImportMode) -> Resul
             .map_err(|e| format!("写入心跳配置失败: {}", e))?;
         }
 
+        // v4：继承人名单。Merge 模式下只追加「本地还没有的」那几条
+        // （按 name+relation 判重），Replace 模式整表替换。
+        if let Some(heirs) = tables.get("heirs") {
+            if !heirs.is_array() && !heirs.is_null() {
+                return Err("备份字段 heirs 必须是数组".to_string());
+            }
+            if let Some(list) = heirs.as_array() {
+                if mode == ImportMode::Replace {
+                    conn.execute("DELETE FROM heirs", [])
+                        .map_err(|e| format!("清空继承人失败: {}", e))?;
+                }
+                for (idx, h) in list.iter().enumerate() {
+                    let name = protect(sval(h, "name"))?;
+                    if name.trim().is_empty() {
+                        continue;
+                    }
+                    if mode == ImportMode::Merge {
+                        // 简单判重：同名同关系视为同一个人（密文比较不可用，
+                        // 因此比较解密后的明文；锁定态下 protect 已拒绝明文备份）
+                        let existing = get_heirs_db()?;
+                        if existing.iter().any(|e| e.name == name) {
+                            continue;
+                        }
+                    }
+                    conn.execute(
+                        "INSERT INTO heirs (name, relation, phone, email, share_note, is_executor, sort_order, created_at, updated_at)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                        params![
+                            name,
+                            protect(sval(h, "relation"))?,
+                            protect(sval(h, "phone"))?,
+                            protect(sval(h, "email"))?,
+                            protect(sval(h, "share_note"))?,
+                            ival(h, "is_executor"),
+                            idx as i64,
+                            Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                        ],
+                    )
+                    .map_err(|e| format!("写入继承人失败: {}", e))?;
+                }
+            }
+        }
+
+        // v4：SMTP / 保管位置 / 助手配置。旧备份没有这些块 → 保持本地现状。
+        if let Some(smtp) = tables.get("smtp_config").filter(|x| x.is_object()) {
+            conn.execute(
+                "INSERT INTO smtp_config (id, host, port, from_addr, username, password_enc, allow_insecure, updated_at)
+                 VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(id) DO UPDATE SET host=?1, port=?2, from_addr=?3, username=?4, password_enc=?5, allow_insecure=?6, updated_at=?7",
+                params![
+                    sval(smtp, "host"),
+                    ival(smtp, "port"),
+                    sval(smtp, "from_addr"),
+                    sval(smtp, "username"),
+                    protect(sval(smtp, "password_enc"))?,
+                    ival(smtp, "allow_insecure"),
+                    Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                ],
+            )
+            .map_err(|e| format!("写入 SMTP 配置失败: {}", e))?;
+        }
+
+        if let Some(c) = tables.get("custody_config").filter(|x| x.is_object()) {
+            conn.execute(
+                "INSERT INTO custody_config (id, backup_location_enc, recovery_code_location_enc, updated_at)
+                 VALUES (1, ?1, ?2, ?3)
+                 ON CONFLICT(id) DO UPDATE SET backup_location_enc=?1, recovery_code_location_enc=?2, updated_at=?3",
+                params![
+                    protect(sval(c, "backup_location_enc"))?,
+                    protect(sval(c, "recovery_code_location_enc"))?,
+                    Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                ],
+            )
+            .map_err(|e| format!("写入保管位置失败: {}", e))?;
+        }
+
+        if let Some(a) = tables.get("assistant_config").filter(|x| x.is_object()) {
+            conn.execute(
+                "INSERT INTO assistant_config (id, enabled, endpoint, model, api_key_enc, updated_at)
+                 VALUES (1, ?1, ?2, ?3, ?4, ?5)
+                 ON CONFLICT(id) DO UPDATE SET enabled=?1, endpoint=?2, model=?3, api_key_enc=?4, updated_at=?5",
+                params![
+                    ival(a, "enabled"),
+                    sval(a, "endpoint"),
+                    sval(a, "model"),
+                    protect(sval(a, "api_key_enc"))?,
+                    Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                ],
+            )
+            .map_err(|e| format!("写入助手配置失败: {}", e))?;
+        }
+
         if let Some(overrides) = tables.get("platform_overrides").and_then(|x| x.as_array()) {
             conn.execute("DELETE FROM platform_overrides", [])
                 .map_err(|e| format!("清空政策补丁失败: {}", e))?;
@@ -1859,7 +2199,57 @@ pub fn encrypt_existing_data_db() -> Result<i64, String> {
         }
     }
 
+    // 继承人名单同样必须收编：否则开启加密后它仍是明文落库。
+    if encrypt_existing_heirs(conn)? {
+        changed += 1;
+    }
+
     Ok(changed)
+}
+
+/// 把 heirs 表的明文值就地加密（启用加密时的存量收编）。
+fn encrypt_existing_heirs(conn: &Connection) -> Result<bool, String> {
+    let rows: Vec<(i64, String, String, String, String, String)> = conn
+        .prepare(
+            "SELECT id, COALESCE(name,''), COALESCE(relation,''), COALESCE(phone,''),
+                    COALESCE(email,''), COALESCE(share_note,'') FROM heirs",
+        )
+        .map_err(|e| format!("查询继承人失败: {}", e))?
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        })
+        .map_err(|e| format!("读取继承人失败: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("收集继承人失败: {}", e))?;
+    let mut dirty = false;
+    for (id, name, relation, phone, email, share_note) in rows {
+        let n_name = crate::vault::encrypt_if_needed(&name)?;
+        let n_rel = crate::vault::encrypt_if_needed(&relation)?;
+        let n_phone = crate::vault::encrypt_if_needed(&phone)?;
+        let n_email = crate::vault::encrypt_if_needed(&email)?;
+        let n_share = crate::vault::encrypt_if_needed(&share_note)?;
+        if n_name != name
+            || n_rel != relation
+            || n_phone != phone
+            || n_email != email
+            || n_share != share_note
+        {
+            conn.execute(
+                "UPDATE heirs SET name=?1, relation=?2, phone=?3, email=?4, share_note=?5 WHERE id=?6",
+                params![n_name, n_rel, n_phone, n_email, n_share, id],
+            )
+            .map_err(|e| format!("加密存量继承人失败: {}", e))?;
+            dirty = true;
+        }
+    }
+    Ok(dirty)
 }
 
 // ========== Check-in / Dead Man's Switch ==========
@@ -2194,10 +2584,13 @@ pub fn get_inheritance_report_db() -> Result<InheritanceReport, String> {
 
     let platform_ids: Vec<i64> = assets.iter().map(|a| a.platform_id).collect();
     let policies = get_policy_briefs_db(&platform_ids)?;
+    // 多继承人名单；为空时报告与执行清单回退到 user.heir_primary_*。
+    let heirs = get_heirs_db()?;
 
     Ok(InheritanceReport {
         user,
         assets,
+        heirs,
         policies,
         total_estimated_value: total_value,
         property_assets_count: property_count,
@@ -2218,3 +2611,7 @@ pub use platforms::*;
 #[path = "db_custody.rs"]
 mod custody;
 pub use custody::*;
+
+#[path = "db_heirs.rs"]
+mod heirs;
+pub use heirs::*;

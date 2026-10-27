@@ -651,3 +651,88 @@ describe('保管位置（家人能否找到凭据的前提）', () => {
     expect(w.text()).toContain('请先解锁');
   });
 });
+
+describe('AI 助手配置（默认关闭、不内置端点）', () => {
+  it('默认未启用时展示「没有服务就保持关闭」的说明', async () => {
+    const w = await mountProfile({
+      get_assistant_config: () => ({ success: true, message: '', data: { enabled: false, endpoint: '', model: '', has_key: false } }),
+    });
+    expect(w.find('#ai-enabled').element).toBeTruthy();
+    expect((w.find('#ai-enabled').element as HTMLInputElement).checked).toBe(false);
+    expect(w.text()).toContain('没有端点时保持关闭');
+  });
+
+  it('保存时不填 Key 则传 null，避免清空已保存的 Key', async () => {
+    const w = await mountProfile({
+      get_assistant_config: () => ({ success: true, message: '', data: { enabled: true, endpoint: 'https://api.example.com/v1', model: 'm', has_key: true } }),
+      set_assistant_config: () => ({ success: true, message: '助手配置已保存', data: null }),
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('保存助手配置'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'set_assistant_config');
+    expect((call![1] as Record<string, unknown>).apiKey, '未填 Key 必须传 null').toBeNull();
+  });
+
+  it('启用但缺端点时显示后端拒绝原因', async () => {
+    const w = await mountProfile({
+      get_assistant_config: () => ({ success: true, message: '', data: { enabled: false, endpoint: '', model: '', has_key: false } }),
+      set_assistant_config: () => ({ success: false, message: '启用助手需要填写端点与模型名；没有服务时请保持关闭', data: null }),
+    });
+    await w.find('#ai-enabled').setValue(true);
+    const btn = w.findAll('button').find(b => b.text().includes('保存助手配置'))!;
+    await btn.trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('没有服务时请保持关闭');
+  });
+});
+
+describe('继承人名单（多继承人 + 执行人）', () => {
+  const h = (name: string, executor = false) => ({
+    name, relation: '子女', phone: '', email: '', share_note: '',
+    is_executor: executor, sort_order: 0,
+  });
+
+  it('加载后展示全部继承人', async () => {
+    const w = await mountProfile({
+      get_heirs: () => ({ success: true, message: '', data: [h('王五', true), h('王六')] }),
+    });
+    expect((w.find('#heir-name-0').element as HTMLInputElement).value).toBe('王五');
+    expect((w.find('#heir-name-1').element as HTMLInputElement).value).toBe('王六');
+  });
+
+  it('添加与删除继承人', async () => {
+    const w = await mountProfile({ get_heirs: () => ({ success: true, message: '', data: [] }) });
+    await w.findAll('button').find(b => b.text().includes('添加继承人'))!.trigger('click');
+    await flushPromises();
+    expect(w.find('#heir-name-0').exists()).toBe(true);
+    await w.findAll('button').find(b => b.text() === '删除')!.trigger('click');
+    await flushPromises();
+    expect(w.find('#heir-name-0').exists()).toBe(false);
+  });
+
+  it('保存时提交整组名单', async () => {
+    const w = await mountProfile({
+      get_heirs: () => ({ success: true, message: '', data: [h('王五', true)] }),
+      set_heirs: () => ({ success: true, message: '继承人名单已保存', data: null }),
+    });
+    await w.findAll('button').find(b => b.text().includes('保存继承人名单'))!.trigger('click');
+    await flushPromises();
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'set_heirs');
+    expect(call).toBeTruthy();
+    const list = (call![1] as { heirs: Array<Record<string, unknown>> }).heirs;
+    expect(list.length).toBe(1);
+    expect(list[0].name).toBe('王五');
+    expect(list[0].is_executor).toBe(true);
+  });
+
+  it('后端拒绝（无执行人）时必须显示原因', async () => {
+    const w = await mountProfile({
+      get_heirs: () => ({ success: true, message: '', data: [h('王五', false)] }),
+      set_heirs: () => ({ success: false, message: '必须恰好指定一位遗产执行人（当前 0 位）', data: null }),
+    });
+    await w.findAll('button').find(b => b.text().includes('保存继承人名单'))!.trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('恰好指定一位遗产执行人');
+  });
+});

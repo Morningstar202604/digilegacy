@@ -228,8 +228,8 @@ fn backup_roundtrip_matrix_60_scenarios() {
 
         let json = crate::db::export_backup_json_db().unwrap();
         let v: serde_json::Value = serde_json::from_str(&json).unwrap();
-        c.ok(v["version"] == 3, || {
-            format!("备份版本应为 3，实际 {}", v["version"])
+        c.ok(v["version"] == 4, || {
+            format!("备份版本应为 4，实际 {}", v["version"])
         });
         c.ok(
             v["tables"]["digital_assets"].as_array().unwrap().len() == n,

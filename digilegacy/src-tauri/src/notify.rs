@@ -664,10 +664,28 @@ pub fn evaluate_dms(app_handle: AppHandle) -> Result<DmsEvaluation, String> {
         } else {
             user.emergency_contact_email.clone()
         };
-        let stage3_recipient = if user.heir_primary_email.is_empty() {
-            user.heir_primary_phone.clone()
-        } else {
-            user.heir_primary_email.clone()
+        // 第三级优先发给「执行人」：多继承人时只有执行人负责统筹，
+        // 发给某一位继承人不合适（其他人会以为与自己无关）。
+        // 名单为空时回退旧的 heir_primary_*，保证既有数据继续可用。
+        let heirs = db::get_heirs_db().unwrap_or_default();
+        let executor = heirs.iter().find(|h| h.is_executor);
+        let (stage3_recipient, stage3_name) = match executor {
+            Some(h) => (
+                if h.email.trim().is_empty() {
+                    h.phone.clone()
+                } else {
+                    h.email.clone()
+                },
+                h.name.clone(),
+            ),
+            None => (
+                if user.heir_primary_email.is_empty() {
+                    user.heir_primary_phone.clone()
+                } else {
+                    user.heir_primary_email.clone()
+                },
+                user.heir_primary_name.clone(),
+            ),
         };
 
         if current_stage >= 1 {
@@ -709,7 +727,7 @@ pub fn evaluate_dms(app_handle: AppHandle) -> Result<DmsEvaluation, String> {
                 &format!("【归零】{} 的数字遗产继承指引", name),
                 &format!(
                     "你好 {}，\n\n{} 已长时间未确认安全状态。\n请备齐死亡证明与继承公证材料（或法院判决书），\n在「归零」应用的继承人向导页面按平台逐一办理继承手续。\n本邮件不含任何账号凭据；账号信息请通过继承人本机的加密备份取得。\n\n—— 归零 DigiLegacy",
-                    user.heir_primary_name, name
+                    stage3_name, name
                 ),
             ) {
                 notifications.push(n);

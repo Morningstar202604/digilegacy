@@ -118,6 +118,10 @@ test.describe('资产列表：4 类别 × 4 排序（16 场景）', () => {
     await page.goto('/discover');
     for (let i = 0; i < 4; i++) {
       await page.getByRole('button', { name: /继续/ }).click();
+      // 问卷会预选大类；本用例要按索引精确挑一个，先清空再点，
+      // 否则点到的卡片可能已被选中→反而取消，导致下一步按钮禁用。
+      const clear = page.getByRole('button', { name: /清空选择/ });
+      if (await clear.isVisible()) await clear.click();
       await page.locator('.category-card').nth(i).click();
       await page.getByRole('button', { name: /下一步：勾选平台/ }).click();
       const card = page.locator('.platform-card').first();

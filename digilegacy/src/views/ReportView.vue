@@ -174,6 +174,33 @@
       <button class="btn btn-secondary btn-lg ml-12" @click="handlePrint"><PrintOutline /> {{ t('report.print') }}</button>
     </div>
 
+    <!-- AI 助手（可选）：默认关闭，不内置任何端点。提问前必须先看「将发送什么」。 -->
+    <div class="card mt-24" v-if="assistantAvailable">
+      <div class="card-title mb-8">{{ t('ai.askTitle') }}</div>
+      <p class="text-muted" style="font-size: 13px;">{{ t('ai.askDesc') }}</p>
+      <div class="form-group" style="margin-top: 12px;">
+        <label class="form-label" for="ai-question">{{ t('ai.question') }}</label>
+        <textarea class="form-textarea" id="ai-question" v-model="aiQuestion" :placeholder="t('ai.questionPlaceholder')"></textarea>
+      </div>
+      <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <button class="btn btn-secondary btn-sm" :disabled="aiBusy" @click="previewAi">{{ t('ai.preview') }}</button>
+        <button class="btn btn-primary btn-sm" :disabled="aiBusy || !aiPreview" @click="askAi">{{ aiBusy ? t('ai.asking') : t('ai.ask') }}</button>
+      </div>
+      <div v-if="aiPreview" style="margin-top: 12px; padding: 12px; background: var(--gray-50); border-radius: 8px;">
+        <strong style="font-size: 13px;">{{ t('ai.previewTitle') }}</strong>
+        <p style="font-size: 12px; color: var(--gray-600); margin-top: 6px;">{{ t('ai.previewNote', { chars: aiPreview.chars }) }}</p>
+        <ul style="font-size: 12px; color: var(--gray-600); margin: 6px 0 0 20px;">
+          <li v-for="f in aiPreview.fields" :key="f">{{ f }}</li>
+        </ul>
+      </div>
+      <div v-if="aiAnswer" style="margin-top: 12px; padding: 12px; background: var(--primary-light); border-radius: 8px;">
+        <strong style="font-size: 13px;">{{ t('ai.answerTitle') }}</strong>
+        <pre style="white-space: pre-wrap; font-size: 13px; margin-top: 6px; font-family: inherit;">{{ aiAnswer }}</pre>
+        <p class="form-hint">{{ t('ai.unreviewed') }}</p>
+      </div>
+      <p v-if="aiError" role="alert" style="font-size: 13px; color: var(--danger-strong); margin-top: 8px;">{{ aiError }}</p>
+    </div>
+
     <!-- 家人演练：只用元数据检查「家人拿到后会卡在哪」，不读取任何凭据 -->
     <div class="card mt-24">
       <div class="card-title mb-8">{{ t('drill.title') }}</div>
@@ -213,7 +240,9 @@ import DownloadOutline from '@vicons/ionicons5/es/DownloadOutline';
 import PrintOutline from '@vicons/ionicons5/es/PrintOutline';
 import ListOutline from '@vicons/ionicons5/es/ListOutline';
 import { toast } from '../composables/feedback';
-import type { ApiResponse, DigitalAsset, DrillReport, PlatformPolicyBrief } from '../types';
+import type {
+  ApiResponse, AssistantConfig, DigitalAsset, DrillReport, OutboundPreview, PlatformPolicyBrief,
+} from '../types';
 
 interface InheritanceReportData {
   user: {
@@ -235,6 +264,13 @@ const { t, locale } = useI18n();
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
 const exportError = ref('');
+const assistantAvailable = ref(false);
+const aiQuestion = ref('');
+const aiPreview = ref<OutboundPreview | null>(null);
+const aiAnswer = ref('');
+const aiError = ref('');
+const aiBusy = ref(false);
+
 const drill = ref<DrillReport | null>(null);
 const drillBusy = ref(false);
 const drillError = ref('');
@@ -297,6 +333,55 @@ async function exportActionGuide() {
     }
   } catch (e) {
     exportError.value = t('report.actionGuideFailed') + '：' + String(e);
+  }
+}
+
+/** 读助手配置：未启用时不显示提问面板，避免给人「有内置 AI」的错觉。 */
+async function loadAssistantState() {
+  try {
+    const res = await invoke<ApiResponse<AssistantConfig>>('get_assistant_config');
+    assistantAvailable.value = Boolean(res.success && res.data?.enabled);
+  } catch {
+    assistantAvailable.value = false;
+  }
+}
+
+/** 提问前必须先预览：让用户看见「哪些字段会发出去」。 */
+async function previewAi() {
+  aiError.value = '';
+  aiAnswer.value = '';
+  aiBusy.value = true;
+  try {
+    const res = await invoke<ApiResponse<OutboundPreview>>('preview_assistant_payload', {
+      question: aiQuestion.value,
+    });
+    if (res.success && res.data) aiPreview.value = res.data;
+    else {
+      aiPreview.value = null;
+      aiError.value = res.message;
+    }
+  } catch (e) {
+    aiError.value = String(e);
+  } finally {
+    aiBusy.value = false;
+  }
+}
+
+async function askAi() {
+  if (!aiPreview.value) return;
+  aiBusy.value = true;
+  aiError.value = '';
+  try {
+    const res = await invoke<ApiResponse<string>>('ask_assistant', {
+      question: aiQuestion.value,
+      locale: locale.value,
+    });
+    if (res.success && res.data) aiAnswer.value = res.data;
+    else aiError.value = res.message;
+  } catch (e) {
+    aiError.value = String(e);
+  } finally {
+    aiBusy.value = false;
   }
 }
 
@@ -449,7 +534,7 @@ function handlePrint() { window.print(); }
 onMounted(async () => {
   // 报告页不再依赖前端平台库：政策文案由后端 `report.policies` 提供，
   // 预览与导出读同一份，避免两处各拼一条政策而漂移。
-  await loadReport();
+  await Promise.all([loadReport(), loadAssistantState()]);
 });
 </script>
 

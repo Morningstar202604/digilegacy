@@ -547,6 +547,126 @@ pub fn run_family_drill() -> Result<ApiResponse<crate::toolkit::DrillReport>, St
     )))
 }
 
+// ========== 继承人名单（多继承人 + 执行人） ==========
+
+#[command]
+pub fn get_heirs() -> Result<ApiResponse<Vec<Heir>>, String> {
+    db::get_heirs_db().map(ApiResponse::ok)
+}
+
+/// 整组替换：家庭成员是一个整体，逐条增删会短暂留下「两个执行人」的非法状态。
+#[command]
+pub fn set_heirs(heirs: Vec<Heir>) -> Result<ApiResponse<()>, String> {
+    if heirs.len() > db::MAX_HEIRS {
+        return Ok(ApiResponse::fail(&format!(
+            "继承人最多 {} 位",
+            db::MAX_HEIRS
+        )));
+    }
+    match db::replace_heirs_db(&heirs) {
+        Ok(()) => Ok(ApiResponse::ok_with_msg((), "继承人名单已保存")),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+// ========== AI 助手（可选 · 用户自配端点） ==========
+
+#[command]
+pub fn get_assistant_config() -> Result<ApiResponse<crate::ai_assist::AssistantConfig>, String> {
+    db::get_assistant_config_db().map(ApiResponse::ok)
+}
+
+#[command]
+pub fn set_assistant_config(
+    enabled: bool,
+    endpoint: String,
+    model: String,
+    api_key: Option<String>,
+) -> Result<ApiResponse<()>, String> {
+    if endpoint.len() > 300 {
+        return Ok(ApiResponse::fail("端点地址过长"));
+    }
+    if !endpoint.trim().is_empty() {
+        let ep = endpoint.trim();
+        if !(ep.starts_with("https://") || ep.starts_with("http://")) {
+            return Ok(ApiResponse::fail("端点必须以 https:// 或 http:// 开头"));
+        }
+    }
+    if model.len() > 120 {
+        return Ok(ApiResponse::fail("模型名过长"));
+    }
+    if let Some(k) = api_key.as_deref() {
+        if k.len() > 512 {
+            return Ok(ApiResponse::fail("API Key 过长"));
+        }
+    }
+    // 开启时必须有端点与模型；否则给一个明确提示，而不是等到提问时才失败。
+    if enabled && (endpoint.trim().is_empty() || model.trim().is_empty()) {
+        return Ok(ApiResponse::fail(
+            "启用助手需要填写端点与模型名；没有服务时请保持关闭",
+        ));
+    }
+    match db::set_assistant_config_db(enabled, endpoint.trim(), model.trim(), api_key.as_deref()) {
+        Ok(()) => Ok(ApiResponse::ok_with_msg(
+            (),
+            "助手配置已保存（Key 已加密存储，不会回传）",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
+/// 发送前预览：逐项列出将出境的非身份字段，让用户在点「提问」前看见全貌。
+#[command]
+pub fn preview_assistant_payload(
+    question: String,
+) -> Result<ApiResponse<crate::ai_assist::OutboundPreview>, String> {
+    let report = db::get_inheritance_report_db()?;
+    if crate::report::contains_placeholder(&report) {
+        return Ok(ApiResponse::fail(
+            "当前数据处于加密锁定状态，请先解锁后再使用助手",
+        ));
+    }
+    Ok(ApiResponse::ok(crate::ai_assist::preview_outbound(
+        &report, &question,
+    )))
+}
+
+/// 提问。**只读**：产出的文本不会写库，用户确认后由前端拼进工具包。
+#[command]
+pub fn ask_assistant(
+    question: String,
+    locale: Option<String>,
+) -> Result<ApiResponse<String>, String> {
+    let cfg = db::get_assistant_config_db()?;
+    if !cfg.enabled {
+        return Ok(ApiResponse::fail(
+            "助手未启用。本应用不内置任何 AI 服务；如你有 OpenAI 兼容端点，可在「我的档案 → AI 助手」填写地址与 Key",
+        ));
+    }
+    if cfg.endpoint.trim().is_empty() || cfg.model.trim().is_empty() {
+        return Ok(ApiResponse::fail("助手配置不完整（缺端点或模型名）"));
+    }
+    let key = match db::get_assistant_key_plain()? {
+        Some(k) => k,
+        None => return Ok(ApiResponse::fail("尚未填写 API Key")),
+    };
+    let report = db::get_inheritance_report_db()?;
+    match crate::ai_assist::ask(
+        &report,
+        &question,
+        &cfg.endpoint,
+        &key,
+        &cfg.model,
+        crate::report::ReportLocale::parse(locale.as_deref().unwrap_or("zh-CN")),
+    ) {
+        Ok(answer) => Ok(ApiResponse::ok_with_msg(
+            answer,
+            "助手已回答（未写入任何数据）",
+        )),
+        Err(e) => Ok(ApiResponse::fail(&e)),
+    }
+}
+
 // ========== 检查记录 / Dead Man's Switch ==========
 
 #[command]
@@ -1439,6 +1559,7 @@ mod tests {
         let mk = |identifier: &str| InheritanceReport {
             user: user.clone(),
             assets: vec![asset(identifier)],
+            heirs: Vec::new(),
             policies: Vec::new(),
             total_estimated_value: 100.0,
             property_assets_count: 1,

@@ -46,23 +46,45 @@
       </div>
 
       <div class="card">
-        <div class="card-title mb-16">{{ t('profile.heirTitle') }}</div>
-        <div class="form-group">
-          <label class="form-label" for="pf-heir-name">{{ t('profile.fullName') }}</label>
-          <input class="form-input" id="pf-heir-name" v-model="profile.heir_primary_name" :placeholder="t('profile.heirNamePlaceholder')" />
+        <div class="card-title mb-8">{{ t('heirs.title') }}</div>
+        <p class="form-hint" style="margin-bottom: 12px;">{{ t('heirs.desc') }}</p>
+        <div v-for="(h, idx) in heirs" :key="idx" class="heir-row">
+          <div class="grid grid-2" style="gap: 8px;">
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" :for="'heir-name-' + idx">{{ t('profile.fullName') }}</label>
+              <input class="form-input" :id="'heir-name-' + idx" v-model="h.name" />
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" :for="'heir-rel-' + idx">{{ t('profile.relation') }}</label>
+              <input class="form-input" :id="'heir-rel-' + idx" v-model="h.relation" :placeholder="t('profile.relationPlaceholder2')" />
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" :for="'heir-phone-' + idx">{{ t('profile.phone') }}</label>
+              <input class="form-input" :id="'heir-phone-' + idx" v-model="h.phone" />
+            </div>
+            <div class="form-group" style="margin: 0;">
+              <label class="form-label" :for="'heir-email-' + idx">{{ t('profile.email') }}</label>
+              <input class="form-input" :id="'heir-email-' + idx" v-model="h.email" />
+            </div>
+          </div>
+          <div class="form-group" style="margin: 8px 0 0;">
+            <label class="form-label" :for="'heir-share-' + idx">{{ t('heirs.shareNote') }}</label>
+            <input class="form-input" :id="'heir-share-' + idx" v-model="h.share_note" :placeholder="t('heirs.shareNotePlaceholder')" />
+          </div>
+          <div class="flex items-center gap-12" style="margin-top: 8px; flex-wrap: wrap;">
+            <label class="flex items-center gap-8" style="cursor: pointer; font-size: 13px;">
+              <input type="radio" :name="'executor'" :value="idx" :checked="h.is_executor" @change="setExecutor(idx)" />
+              {{ t('heirs.executor') }}
+            </label>
+            <button class="btn btn-danger btn-sm ml-auto" @click="removeHeir(idx)">{{ t('common.delete') }}</button>
+          </div>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="pf-heir-phone">{{ t('profile.phone') }}</label>
-          <input class="form-input" id="pf-heir-phone" v-model="profile.heir_primary_phone" :placeholder="t('profile.contactPhonePlaceholder')" />
+        <p v-if="heirs.length === 0" class="form-hint">{{ t('heirs.empty') }}</p>
+        <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" :disabled="heirs.length >= 20" @click="addHeir">{{ t('heirs.add') }}</button>
+          <button class="btn btn-primary btn-sm" :disabled="heirsBusy" @click="saveHeirs">{{ heirsBusy ? t('common.saving') : t('heirs.save') }}</button>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="pf-heir-email">{{ t('profile.email') }}</label>
-          <input class="form-input" id="pf-heir-email" v-model="profile.heir_primary_email" :placeholder="t('profile.heirEmailPlaceholder')" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="pf-heir-relation">{{ t('profile.relation') }}</label>
-          <input class="form-input" id="pf-heir-relation" v-model="profile.heir_primary_relation" :placeholder="t('profile.relationPlaceholder2')" />
-        </div>
+        <p v-if="heirsMsg" style="font-size: 12px; margin-top: 8px;" :style="{ color: heirsOk ? 'var(--success)' : 'var(--danger)' }" role="alert" aria-live="polite">{{ heirsMsg }}</p>
       </div>
 
       <div class="card">
@@ -180,6 +202,41 @@
           <button class="btn btn-primary btn-sm" :disabled="custodyBusy" @click="saveCustody">{{ custodyBusy ? t('common.saving') : t('profile.custodySave') }}</button>
         </div>
         <p v-if="custodyMsg" style="font-size: 12px; margin-top: 8px;" :style="{ color: custodyOk ? 'var(--success)' : 'var(--danger)' }" role="alert" aria-live="polite">{{ custodyMsg }}</p>
+      </template>
+    </div>
+
+    <div class="card mt-24">
+      <div class="card-title mb-16">{{ t('ai.title') }}</div>
+      <p style="font-size: 13px; color: var(--gray-600);">{{ t('ai.desc') }}</p>
+      <p class="form-hint" style="margin-top: 8px;">{{ t('ai.noService') }}</p>
+      <template v-if="!isTauri">
+        <p class="form-hint">{{ t('profile.browserUnsupported') }}</p>
+      </template>
+      <template v-else>
+        <label class="flex items-center gap-8" style="cursor: pointer; margin-top: 12px;">
+          <input type="checkbox" id="ai-enabled" v-model="assistant.enabled" style="width: 18px; height: 18px;" />
+          <span style="font-weight: 500; font-size: 14px;">{{ t('ai.enable') }}</span>
+        </label>
+        <div style="margin-top: 10px; display: grid; gap: 10px; max-width: 640px;">
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="ai-endpoint">{{ t('ai.endpoint') }}</label>
+            <input class="form-input" id="ai-endpoint" v-model="assistant.endpoint" placeholder="https://api.example.com/v1" autocomplete="off" />
+            <p class="form-hint">{{ t('ai.endpointHint') }}</p>
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="ai-model">{{ t('ai.model') }}</label>
+            <input class="form-input" id="ai-model" v-model="assistant.model" placeholder="gpt-4o-mini / deepseek-chat / qwen-plus" autocomplete="off" />
+          </div>
+          <div class="form-group" style="margin: 0;">
+            <label class="form-label" for="ai-key">{{ t('ai.key') }}</label>
+            <input class="form-input" id="ai-key" type="password" v-model="assistantKey" :placeholder="assistant.has_key ? t('profile.tokenSaved') : t('ai.keyPlaceholder')" autocomplete="new-password" />
+            <p class="form-hint">{{ t('ai.keyHint') }}</p>
+          </div>
+        </div>
+        <div style="margin-top: 12px;">
+          <button class="btn btn-primary btn-sm" :disabled="assistantBusy" @click="saveAssistant">{{ assistantBusy ? t('common.saving') : t('ai.save') }}</button>
+        </div>
+        <p v-if="assistantMsg" style="font-size: 12px; margin-top: 8px;" :style="{ color: assistantOk ? 'var(--success)' : 'var(--danger)' }" role="alert" aria-live="polite">{{ assistantMsg }}</p>
       </template>
     </div>
 
@@ -306,7 +363,7 @@ import { usePlatformsStore } from '../stores/platforms';
 import { useAssetsStore } from '../stores/assets';
 import { toast, confirmDialog } from '../composables/feedback';
 import { invoke, isTauriEnv } from '../api/invoke';
-import type { ApiResponse, CustodyHints, UserProfile } from '../types';
+import type { ApiResponse, AssistantConfig, CustodyHints, Heir, UserProfile } from '../types';
 
 const { t } = useI18n();
 const dashboard = useDashboardStore();
@@ -350,6 +407,78 @@ const smtp = ref<SmtpForm>({
 });
 const smtpPassword = ref('');
 const smtpTestTo = ref('');
+/** 继承人名单：整组保存，必须恰好一位执行人（后端也会校验）。 */
+const heirs = ref<Heir[]>([]);
+const heirsMsg = ref('');
+const heirsOk = ref(false);
+const heirsBusy = ref(false);
+
+function addHeir() {
+  heirs.value.push({
+    name: '',
+    relation: '',
+    phone: '',
+    email: '',
+    share_note: '',
+    is_executor: heirs.value.length === 0,
+    sort_order: heirs.value.length,
+  });
+}
+
+function removeHeir(idx: number) {
+  const wasExecutor = heirs.value[idx]?.is_executor;
+  heirs.value.splice(idx, 1);
+  // 删掉执行人后自动把第一位设为执行人，避免保存时才报错
+  if (wasExecutor && heirs.value.length > 0) {
+    heirs.value.forEach((h, i) => { h.is_executor = i === 0; });
+  }
+}
+
+function setExecutor(idx: number) {
+  heirs.value.forEach((h, i) => { h.is_executor = i === idx; });
+}
+
+async function loadHeirs() {
+  try {
+    const res = await invoke<ApiResponse<Heir[]>>('get_heirs');
+    if (res.success && res.data) heirs.value = res.data;
+  } catch (e) {
+    heirsMsg.value = String(e);
+  }
+}
+
+async function saveHeirs() {
+  heirsBusy.value = true;
+  heirsMsg.value = '';
+  try {
+    const payload = heirs.value.map((h, i) => ({
+      ...h,
+      name: h.name.trim(),
+      relation: h.relation.trim(),
+      phone: h.phone.trim(),
+      email: h.email.trim(),
+      share_note: h.share_note.trim(),
+      sort_order: i,
+    }));
+    const res = await invoke<ApiResponse<null>>('set_heirs', { heirs: payload });
+    heirsOk.value = res.success;
+    heirsMsg.value = res.message;
+    if (res.success) await loadHeirs();
+  } catch (e) {
+    heirsOk.value = false;
+    heirsMsg.value = String(e);
+  } finally {
+    heirsBusy.value = false;
+  }
+}
+
+/** AI 助手：默认关闭、无内置端点，用户自填。Key 只回显「已保存」。 */
+const assistant = ref<AssistantConfig>({ enabled: false, endpoint: '', model: '', has_key: false });
+const assistantKey = ref('');
+const assistantMsg = ref('');
+const assistantOk = ref(false);
+const assistantBusy = ref(false);
+
 /** 保管位置：备份文件与恢复码放在哪。 */
 const custody = ref<CustodyHints>({ backup_location: '', recovery_code_location: '' });
 const custodyMsg = ref('');
@@ -416,6 +545,41 @@ async function loadHeartbeatConfig() {
   }
 }
 
+async function loadAssistant() {
+  if (!isTauri) return;
+  try {
+    const res = await invoke<ApiResponse<AssistantConfig>>('get_assistant_config');
+    if (res.success && res.data) assistant.value = res.data;
+  } catch (e) {
+    assistantMsg.value = String(e);
+  }
+}
+
+async function saveAssistant() {
+  assistantBusy.value = true;
+  assistantMsg.value = '';
+  try {
+    const res = await invoke<ApiResponse<null>>('set_assistant_config', {
+      enabled: assistant.value.enabled,
+      endpoint: assistant.value.endpoint,
+      model: assistant.value.model,
+      // 空串表示「不改 Key」：后端用 None 保留原密文
+      apiKey: assistantKey.value ? assistantKey.value : null,
+    });
+    assistantOk.value = res.success;
+    assistantMsg.value = res.message;
+    if (res.success) {
+      assistantKey.value = '';
+      await loadAssistant();
+    }
+  } catch (e) {
+    assistantOk.value = false;
+    assistantMsg.value = String(e);
+  } finally {
+    assistantBusy.value = false;
+  }
+}
+
 async function loadCustody() {
   if (!isTauri) return;
   try {
@@ -471,7 +635,6 @@ async function saveSmtp() {
     if (res.success) {
       smtpPassword.value = '';
       await loadSmtpConfig();
-    await loadCustody();
     }
   } catch (e) {
     smtpOk.value = false;
@@ -763,6 +926,9 @@ onMounted(async () => {
     }
     await loadHeartbeatConfig();
     await loadSmtpConfig();
+    await loadCustody();
+    await loadAssistant();
+    await loadHeirs();
     await loadPatchStatus();
     await loadAutoBackupStatus();
     try {

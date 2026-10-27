@@ -24,6 +24,10 @@ interface MockState {
   credentials: Record<string, string>;
   nextAssetId: number;
   custody?: { backup_location: string; recovery_code_location: string };
+  heirs?: Array<{
+    id?: number; name: string; relation: string; phone: string; email: string;
+    share_note: string; is_executor: boolean; sort_order: number;
+  }>;
 }
 
 const seedPlatforms = platformsSeed as unknown as Array<Record<string, unknown>>;
@@ -538,6 +542,53 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     case 'set_smtp_config':
       return ok(null, '演示模式不会真的保存 SMTP 配置') as T;
+
+    case 'get_heirs': {
+      if (!state.heirs) {
+        // 从旧档案字段派一名执行人，保持演示界面的报告结构完整
+        state.heirs = state.profile?.heir_primary_name
+          ? [{
+              id: 1, name: state.profile.heir_primary_name, relation: state.profile.heir_primary_relation,
+              phone: state.profile.heir_primary_phone, email: state.profile.heir_primary_email,
+              share_note: '', is_executor: true, sort_order: 0,
+            }]
+          : [];
+      }
+      return ok(state.heirs) as T;
+    }
+
+    case 'set_heirs': {
+      const list = (a['heirs'] as Array<Record<string, unknown>>) || [];
+      // 与后端同一校验：恰好一位执行人
+      if (list.length > 0 && list.filter(h => Boolean(h.is_executor)).length !== 1) {
+        return fail<null>('必须恰好指定一位遗产执行人') as T;
+      }
+      state.heirs = list.map((h, i) => ({
+        id: i + 1,
+        name: String(h.name ?? ''),
+        relation: String(h.relation ?? ''),
+        phone: String(h.phone ?? ''),
+        email: String(h.email ?? ''),
+        share_note: String(h.share_note ?? ''),
+        is_executor: Boolean(h.is_executor),
+        sort_order: i,
+      }));
+      saveState(state);
+      return ok(null, '继承人名单已保存（预览模式）') as T;
+    }
+
+    // 演示环境没有 AI 服务：配置恒为「关闭且无端点」，提问明确失败。
+    case 'get_assistant_config':
+      return ok({ enabled: false, endpoint: '', model: '', has_key: false }) as T;
+
+    case 'set_assistant_config':
+      return ok(null, '演示模式不会真的保存助手配置') as T;
+
+    case 'preview_assistant_payload':
+      return fail<null>('演示模式没有 AI 端点，无法预览出境内容') as T;
+
+    case 'ask_assistant':
+      return fail<null>('演示模式没有 AI 端点。本应用不内置任何 AI 服务') as T;
 
     case 'get_custody_hints':
       return ok({ backup_location: '', recovery_code_location: '' }) as T;

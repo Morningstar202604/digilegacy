@@ -1,4 +1,5 @@
 mod action_guide;
+mod ai_assist;
 mod backup;
 mod commands;
 mod crypto;
@@ -160,6 +161,12 @@ pub fn run() {
             commands::set_custody_hints,
             commands::render_action_guide,
             commands::run_family_drill,
+            commands::get_heirs,
+            commands::set_heirs,
+            commands::get_assistant_config,
+            commands::set_assistant_config,
+            commands::preview_assistant_payload,
+            commands::ask_assistant,
             commands::update_check_in,
             commands::get_check_in_status,
             commands::get_dms_status,
