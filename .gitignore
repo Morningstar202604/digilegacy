@@ -77,3 +77,6 @@ digilegacy/e2e/.coverage/
 docs/screenshots/audit/
 # 宣传片原始素材与切分中间件
 digilegacy/.tmp/
+
+# 挑战杯参赛材料（参赛用途，与开源项目本身分开，不入库）
+挑战杯参赛材料/
