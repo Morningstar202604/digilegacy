@@ -19,6 +19,8 @@ const PROFILE = {
   title_key: 'review.profile.policy',
   criteria: '检查来源与材料一致性',
   use_ai: true,
+  strictness: 'standard',
+  strict_checks: [],
 };
 
 function state(over: Partial<Record<string, unknown>> = {}) {
@@ -83,7 +85,7 @@ describe('审核场景与送审字段', () => {
         success: true, message: '',
         data: [
           { ...PROFILE },
-          { id: 'legal-template', title_key: 'review.profile.legal', criteria: '人工核对', use_ai: false },
+          { id: 'legal-template', title_key: 'review.profile.legal', criteria: '逐项检查', use_ai: true, strictness: 'strict', strict_checks: [] },
           { id: 'family-note', title_key: 'review.profile.familyNote', criteria: '检查可执行性', use_ai: true },
           { id: 'asset-classification', title_key: 'review.profile.asset', criteria: '检查类别', use_ai: true },
         ],
@@ -100,19 +102,28 @@ describe('审核场景与送审字段', () => {
     expect((calls[calls.length - 1][1] as Record<string, unknown>).profileId).toBe('legal-template');
   });
 
-  it('法律文书场景必须提示 AI 不参与', async () => {
+  it('严格场景显示严格模式说明与必检项', async () => {
     const w = await mountReview({
       list_review_profiles: {
         success: true, message: '',
         data: [
           { ...PROFILE },
-          { id: 'legal-template', title_key: 'review.profile.legal', criteria: '人工核对', use_ai: false },
+          {
+            id: 'legal-template', title_key: 'review.profile.legal', criteria: '逐项检查',
+            use_ai: true, strictness: 'strict',
+            strict_checks: [
+              { id: 'signer', label: '签署主体已填写' },
+              { id: 'blanks', label: '应填空白项已填完' },
+            ],
+          },
         ],
       },
     });
     await w.findAll('[role="tab"]')[1].trigger('click');
     await flushPromises();
-    expect(w.text()).toContain('纯人工审核');
+    expect(w.text()).toContain('严格模式');
+    expect(w.text()).toContain('签署主体已填写');
+    expect(w.text()).toContain('缺项本次初审作废');
   });
 
   it('展示审核进度，避免用户一条条数', async () => {
@@ -304,5 +315,69 @@ describe('条目折叠', () => {
     await head.trigger('click');
     await flushPromises();
     expect(w.findAll('button').some(b => b.text() === '通过')).toBe(false);
+  });
+});
+
+describe('严格模式：疑点必须写理由才能放行', () => {
+  const strictProfile = {
+    id: 'legal-template',
+    title_key: 'review.profile.legal',
+    criteria: '逐项检查',
+    use_ai: true,
+    strictness: 'strict',
+    strict_checks: [{ id: 'blanks', label: '应填空白项已填完' }],
+  };
+
+  const flaggedItem = state({
+    key: '1',
+    title: '数字资产遗嘱',
+    ai_verdict: 'flag',
+    ai_note: '第 3 段仍有未填空白',
+    status: 'awaiting_human',
+    preview: '正文：立遗嘱人：____',
+  });
+
+  it('AI 报过疑点时，空备注点「通过」被前端拦下并给出原因', async () => {
+    const w = await mountReview({
+      list_review_profiles: { success: true, message: '', data: [strictProfile] },
+      list_review_items: { success: true, message: '', data: [flaggedItem] },
+    });
+    await expandFirst(w);
+    await w.findAll('button').find(b => b.text() === '通过')!.trigger('click');
+    await flushPromises();
+
+    expect(w.text()).toContain('请先填写通过理由');
+    expect(
+      mockedInvoke.mock.calls.some(c => c[0] === 'submit_human_review'),
+      '被拦下时不得调用后端',
+    ).toBe(false);
+  });
+
+  it('写明理由后可以提交', async () => {
+    const w = await mountReview({
+      list_review_profiles: { success: true, message: '', data: [strictProfile] },
+      list_review_items: { success: true, message: '', data: [flaggedItem] },
+      submit_human_review: { success: true, message: '审核结论已记录', data: null },
+    });
+    await expandFirst(w);
+    await w.find('input.form-input').setValue('空白项为无需填写，已核对');
+    await w.findAll('button').find(b => b.text() === '通过')!.trigger('click');
+    await flushPromises();
+
+    const call = mockedInvoke.mock.calls.find(c => c[0] === 'submit_human_review');
+    expect(call).toBeTruthy();
+    expect((call![1] as Record<string, unknown>).note).toBe('空白项为无需填写，已核对');
+  });
+
+  it('标准场景下同样情形不强制写理由', async () => {
+    const w = await mountReview({
+      list_review_profiles: { success: true, message: '', data: [{ ...PROFILE, strictness: 'standard', strict_checks: [] }] },
+      list_review_items: { success: true, message: '', data: [{ ...flaggedItem, ai_verdict: 'flag' }] },
+      submit_human_review: { success: true, message: 'ok', data: null },
+    });
+    await expandFirst(w);
+    await w.findAll('button').find(b => b.text() === '通过')!.trigger('click');
+    await flushPromises();
+    expect(mockedInvoke.mock.calls.some(c => c[0] === 'submit_human_review')).toBe(true);
   });
 });

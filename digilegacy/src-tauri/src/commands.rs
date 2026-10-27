@@ -686,7 +686,30 @@ pub fn run_ai_review(
             "你是内容初审员，只输出 PASS/FLAG/UNKNOWN 加依据。你不是最终决策者。",
             &prompt,
         ) {
-            Ok(raw) => crate::review::parse_ai_verdict(&raw),
+            Ok(raw) => {
+                let (v, n) = crate::review::parse_ai_verdict(&raw);
+                // 严格模式：逐项作答缺任何一项，整条降级为 Unknown。
+                // 模型跳过某一项往往说明它没看，而不是「没问题」。
+                let (missing, flagged) = crate::review::validate_strict_answer(&profile, &raw);
+                if !missing.is_empty() {
+                    (
+                        crate::review::AiVerdict::Unknown,
+                        format!(
+                            "{}\n\n[严格模式] 缺少以下必检项作答，本次初审作废：{}",
+                            n,
+                            missing.join(", ")
+                        ),
+                    )
+                } else if !flagged.is_empty() && v == crate::review::AiVerdict::Pass {
+                    // 逐项检查报了问题却给 PASS：以逐项结论为准，改为 FLAG
+                    (
+                        crate::review::AiVerdict::Flag,
+                        format!("{}\n\n[严格模式] 逐项检查发现：{}", n, flagged.join(", ")),
+                    )
+                } else {
+                    (v, n)
+                }
+            }
             Err(e) => (
                 crate::review::AiVerdict::Unknown,
                 format!("AI 调用失败：{}", e),
@@ -735,6 +758,29 @@ pub fn submit_human_review(
     let note = note.unwrap_or_default();
     if note.chars().count() > 2_000 {
         return Ok(ApiResponse::fail("审核备注过长（上限 2000 字符）"));
+    }
+    // 严格场景：AI 提过疑点却要「通过」时，必须写明理由。
+    // 这不是流程洁癖——空白放行会让留痕无法回答「当初为什么认为可以」。
+    if human == crate::review::HumanVerdict::Approved {
+        if let Some(profile) = crate::review_profiles::profile_by_id(&profile_id) {
+            if profile.strictness == crate::review::ReviewStrictness::Strict {
+                let history = crate::db::list_review_records_db(&profile_id, &item_key)?;
+                let ai_flagged = history
+                    .first()
+                    .map(|r| {
+                        matches!(
+                            r.ai_verdict,
+                            crate::review::AiVerdict::Flag | crate::review::AiVerdict::Unknown
+                        )
+                    })
+                    .unwrap_or(false);
+                if ai_flagged && note.trim().is_empty() {
+                    return Ok(ApiResponse::fail(
+                        "AI 初审对本条提出了疑点，通过时必须填写理由（用于留痕）",
+                    ));
+                }
+            }
+        }
     }
     // 沿用最近一次的 AI 结论一起留痕，便于回看「当时 AI 说了什么」。
     let history = crate::db::list_review_records_db(&profile_id, &item.key)?;
@@ -2275,6 +2321,129 @@ mod tests {
 
         let _ = std::fs::remove_file(
             std::env::temp_dir().join(format!("digilegacy_cmd_drill_{}.db", std::process::id())),
+        );
+    }
+
+    /// 严格场景：AI 提过疑点后，人工「通过」必须写理由。
+    /// 这是「严格」在流程上的第二个落点（第一个是逐项作答校验）。
+    #[test]
+    fn strict_scene_requires_reason_before_approving_flagged_item() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_strict_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        // 法律文书场景是严格模式，取它的一条真实条目
+        let items =
+            crate::review_profiles::items_for(crate::review_profiles::LEGAL_REVIEW).unwrap();
+        let item = items.first().expect("法律文书场景应有条目").clone();
+
+        // 先写一条 AI FLAG 记录（模拟初审提了疑点）
+        db::append_review_record_db(&crate::review::ReviewRecord {
+            profile_id: crate::review_profiles::LEGAL_REVIEW.to_string(),
+            item_key: item.key.clone(),
+            fingerprint: item.fingerprint.clone(),
+            ai_verdict: crate::review::AiVerdict::Flag,
+            ai_note: "第 3 段仍有未填空白".to_string(),
+            human_verdict: None,
+            human_note: String::new(),
+            decided_by: "ai".to_string(),
+            created_at: String::new(),
+        })
+        .unwrap();
+
+        // 空备注通过 → 拒绝
+        let r = submit_human_review(
+            crate::review_profiles::LEGAL_REVIEW.to_string(),
+            item.key.clone(),
+            "approved".to_string(),
+            None,
+        )
+        .unwrap();
+        assert!(!r.success, "AI 报过疑点时不得空备注放行");
+        assert!(r.message.contains("理由"), "实际: {}", r.message);
+
+        // 只有空白也算空
+        let r = submit_human_review(
+            crate::review_profiles::LEGAL_REVIEW.to_string(),
+            item.key.clone(),
+            "approved".to_string(),
+            Some("   ".to_string()),
+        )
+        .unwrap();
+        assert!(!r.success, "空白理由不得放行");
+
+        // 写了理由 → 允许，且状态变 Approved
+        let r = submit_human_review(
+            crate::review_profiles::LEGAL_REVIEW.to_string(),
+            item.key.clone(),
+            "approved".to_string(),
+            Some("已核对官方模板，空白项为无需填写".to_string()),
+        )
+        .unwrap();
+        assert!(r.success, "写明理由后应允许通过: {}", r.message);
+
+        let states = db::summarise_states_db(
+            crate::review_profiles::LEGAL_REVIEW,
+            std::slice::from_ref(&item),
+        )
+        .unwrap();
+        assert_eq!(states[0].status, crate::review::ReviewStatus::Approved);
+
+        // 拒绝不需要理由（拒绝本身是保守动作）
+        let r = submit_human_review(
+            crate::review_profiles::LEGAL_REVIEW.to_string(),
+            item.key,
+            "rejected".to_string(),
+            None,
+        )
+        .unwrap();
+        assert!(r.success, "拒绝不要求理由");
+
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("digilegacy_cmd_strict_{}.db", std::process::id())),
+        );
+    }
+
+    /// 非严格场景不要求理由：政策场景 AI 报疑点后，人工可直接通过。
+    #[test]
+    fn standard_scene_allows_approval_without_reason() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        db::init_database_at(
+            std::env::temp_dir().join(format!("digilegacy_cmd_std_{}.db", std::process::id())),
+        )
+        .unwrap();
+
+        let items =
+            crate::review_profiles::items_for(crate::review_profiles::POLICY_REVIEW).unwrap();
+        let item = items.first().unwrap().clone();
+        db::append_review_record_db(&crate::review::ReviewRecord {
+            profile_id: crate::review_profiles::POLICY_REVIEW.to_string(),
+            item_key: item.key.clone(),
+            fingerprint: item.fingerprint.clone(),
+            ai_verdict: crate::review::AiVerdict::Flag,
+            ai_note: "来源为空".to_string(),
+            human_verdict: None,
+            human_note: String::new(),
+            decided_by: "ai".to_string(),
+            created_at: String::new(),
+        })
+        .unwrap();
+
+        let r = submit_human_review(
+            crate::review_profiles::POLICY_REVIEW.to_string(),
+            item.key,
+            "approved".to_string(),
+            None,
+        )
+        .unwrap();
+        assert!(r.success, "标准场景不要求理由: {}", r.message);
+
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("digilegacy_cmd_std_{}.db", std::process::id())),
         );
     }
 }

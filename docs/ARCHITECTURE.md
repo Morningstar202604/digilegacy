@@ -124,7 +124,18 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 
 ## Content review pipeline
 
-The review pipeline is deliberately **scene-agnostic**. A scene is a `ReviewProfile` (id, title key, criteria, whether AI participates); the pipeline itself contains no business nouns. Four scenes are registered: `platform-policy` (AI pre-review), `legal-template` (human-only — AI errors there would ship inside a document people sign), `family-note` (AI pre-review, the case language models are actually good at), and `asset-classification` (AI pre-review, cheap to be wrong). Registering a fifth is a function plus a line in `all_profiles()`; the pipeline itself never changes.
+The review pipeline is deliberately **scene-agnostic**. A scene is a `ReviewProfile` (id, title key, criteria, whether AI participates); the pipeline itself contains no business nouns. Four scenes are registered: `platform-policy`, `legal-template`, `family-note` and `asset-classification`, all with AI pre-review. Legal documents run under **strict mode** rather than being excluded — see below. Registering a fifth is a function plus a line in `all_profiles()`; the pipeline itself never changes.
+
+### Strict mode
+
+`ReviewProfile.strictness` turns "be careful" into something the code can check. In `Strict` mode:
+
+1. The prompt enumerates every `StrictCheck` and requires one line per item in the form `CHECK <id>: <FOUND|OK|NA> <reason>`.
+2. `validate_strict_answer` parses that answer. **If any item is missing, the whole verdict is downgraded to `Unknown`** — a skipped item usually means the model did not look, not that the field is fine.
+3. If items report `FOUND` while the headline says `PASS`, the verdict is promoted to `Flag`: the per-item findings win over the summary line.
+4. Clearing a flagged or undetermined item with `Approved` requires a non-empty human note, in both the UI and `submit_human_review`. Refusing does not require a reason — refusing is the conservative action.
+
+Legal documents use six checks: signer present, blanks filled, date format consistent, amounts consistent, witness block present, no contradictory disposal instructions. The prompt explicitly forbids judging legality or citing statutes — that stays with lawyers and notaries.
 
 Three invariants are enforced by types rather than comments:
 

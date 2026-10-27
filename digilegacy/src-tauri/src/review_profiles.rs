@@ -32,6 +32,8 @@ pub fn policy_profile() -> ReviewProfile {
 5) 是否引用了法条编号；若引用，只能提示「需核对原文」，不得判断法条是否正确。"
             .to_string(),
         use_ai: true,
+        strictness: crate::review::ReviewStrictness::Standard,
+        strict_checks: Vec::new(),
     }
 }
 
@@ -69,18 +71,57 @@ pub fn policy_items() -> Vec<ReviewItem> {
 /// 法律文书场景 id。
 pub const LEGAL_REVIEW: &str = "legal-template";
 
-/// 法律文书初审。
+/// 法律文书初审：**开启 AI，但用严格模式**。
 ///
-/// **刻意声明 `use_ai: false`**：文书会被当成正式文件使用，AI 的错误
-/// （漏掉必填项、把「必须」当成「可以」）代价远高于省下的时间。
-/// 但管线仍在此登记——它需要留痕、需要「内容变了要重审」、需要人工签字确认。
+/// 为什么这里的严格度是 `Strict` 而不是普通模式：
+/// 文书会被打印、签字、提交给平台或公证处，AI 漏看一项的代价由用户承担。
+/// 因此：
+/// 1. AI 必须对六项逐一给出 `FOUND / OK / NA`，缺任何一项整条初审作废（降级 Unknown）；
+/// 2. AI 报过的疑点，人工点「通过」时必须写明理由——不允许空备注放行。
+///
+/// AI 仍然不做法律判断：它只检查「文本内部的机械一致性」，
+/// 法条正确性、条款效力一律不在其职责内（提示词里明确禁止）。
 pub fn legal_profile() -> ReviewProfile {
     ReviewProfile {
         id: LEGAL_REVIEW.to_string(),
         title_key: "review.profile.legal".to_string(),
-        criteria: "人工核对：签署主体是否齐全、必填空白项是否都已填写、日期与金额格式是否一致、是否遗漏见证人、是否与平台政策要求的材料冲突。"
+        criteria: "逐项检查下列机械一致性问题并逐条指出：
+1) 签署主体（立遗嘱人/声明人/委托人/申请人）是否填写；
+2) 身份证号、住址、联系方式等必填空白（____）是否仍有未填；
+3) 日期格式是否统一（年月日 / YYYY-MM-DD 混用即为问题）；
+4) 金额、比例、份额是否前后一致（同一处出现两个不同数字即为问题）；
+5) 见证人/第三方签字栏是否存在且已填；
+6) 正文是否出现互相矛盾的处置安排（例如同一条资产既写继承又写删除）。
+你不判断条款是否合法、是否有效，也不引用任何法条——那属于律师与公证机关的职责。"
             .to_string(),
-        use_ai: false,
+        use_ai: true,
+        strictness: crate::review::ReviewStrictness::Strict,
+        strict_checks: vec![
+            crate::review::StrictCheck {
+                id: "signer".to_string(),
+                label: "签署主体已填写".to_string(),
+            },
+            crate::review::StrictCheck {
+                id: "blanks".to_string(),
+                label: "应填空白项已填完（无遗留 ____）".to_string(),
+            },
+            crate::review::StrictCheck {
+                id: "date".to_string(),
+                label: "日期格式统一".to_string(),
+            },
+            crate::review::StrictCheck {
+                id: "amounts".to_string(),
+                label: "金额/比例/份额前后一致".to_string(),
+            },
+            crate::review::StrictCheck {
+                id: "witness".to_string(),
+                label: "见证人或第三方签字栏齐备".to_string(),
+            },
+            crate::review::StrictCheck {
+                id: "conflict".to_string(),
+                label: "无互相矛盾的处置安排".to_string(),
+            },
+        ],
     }
 }
 
@@ -139,6 +180,8 @@ pub fn family_note_profile() -> ReviewProfile {
 5) 是否泄露任何凭据、账号或金额。"
             .to_string(),
         use_ai: true,
+        strictness: crate::review::ReviewStrictness::Standard,
+        strict_checks: Vec::new(),
     }
 }
 
@@ -204,6 +247,8 @@ pub fn asset_profile() -> ReviewProfile {
 4) 账号描述与平台类型是否明显不匹配（例如把社交账号登记成金融资产）。"
             .to_string(),
         use_ai: true,
+        strictness: crate::review::ReviewStrictness::Standard,
+        strict_checks: Vec::new(),
     }
 }
 
@@ -350,12 +395,27 @@ mod tests {
         }
     }
 
-    /// 法律文书必须声明为纯人工：AI 判断错误会被当成正式文件。
+    /// 法律文书：开启 AI，但必须使用严格模式 + 完整必检项。
+    ///
+    /// 这条断言替代了旧版「法律文书不得启用 AI」。用户明确要求开启，
+    /// 因此把「安全」从「不让 AI 碰」改为「让 AI 逐项作答、缺项作废、
+    /// 疑点必须人工写理由才能放行」。
     #[test]
-    fn legal_scene_is_human_only() {
+    fn legal_scene_is_strict_and_fully_checked() {
         let p = profile_by_id(LEGAL_REVIEW).unwrap();
-        assert!(!p.use_ai, "法律文书不得启用 AI 初审");
-        // 但仍然登记在管线里：它需要留痕与内容变更失效
+        assert!(p.use_ai, "用户要求开启 AI 初审");
+        assert_eq!(
+            p.strictness,
+            crate::review::ReviewStrictness::Strict,
+            "法律文书必须使用严格模式"
+        );
+        assert_eq!(p.strict_checks.len(), 6, "六项必检缺一不可");
+        // 每项必须有非空 id 与说明，否则校验函数无法定位
+        for c in &p.strict_checks {
+            assert!(!c.id.is_empty());
+            assert!(!c.label.is_empty());
+        }
+        // 仍然登记在管线里，且能取到条目
         assert!(!items_for(LEGAL_REVIEW).unwrap().is_empty());
     }
 

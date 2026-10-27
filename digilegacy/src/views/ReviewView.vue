@@ -20,6 +20,9 @@
       <p v-if="activeProfile" class="form-hint" style="margin-top: 10px;">
         {{ activeProfile.use_ai ? t('review.aiEnabled') : t('review.aiDisabled') }}
       </p>
+      <p v-if="isStrict" class="form-hint" style="margin-top: 4px; color: var(--warning-strong);">
+        {{ t('review.strictNotice') }}
+      </p>
       <p v-if="progress" class="form-hint" style="margin-top: 6px;" aria-live="polite">
         {{ t('review.progress', { approved: progress.approved, total: progress.total, awaiting: progress.awaiting_human, pending: progress.pending }) }}
       </p>
@@ -36,6 +39,13 @@
       <ul class="payload-list">
         <li v-for="f in payloadFields" :key="f">{{ f }}</li>
       </ul>
+      <div v-if="isStrict" style="margin-top: 12px;">
+        <div style="font-size: 13px; font-weight: 600;">{{ t('review.strictChecksTitle') }}</div>
+        <p class="form-hint">{{ t('review.strictChecksNote') }}</p>
+        <ul class="payload-list" style="margin-top: 6px;">
+          <li v-for="c in activeProfile?.strict_checks ?? []" :key="c.id">{{ c.label }}</li>
+        </ul>
+      </div>
       <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px;">
         <!-- 纯人工场景不给 AI 按钮：按钮存在本身就会让人以为「点了就审了」 -->
         <button v-if="activeProfile?.use_ai" class="btn btn-secondary btn-sm" :disabled="busy" @click="runAi">
@@ -97,7 +107,7 @@
             class="form-input"
             style="max-width: 320px;"
             v-model="notes[item.key]"
-            :placeholder="t('review.notePlaceholder')"
+            :placeholder="noteRequired(item) ? t('review.noteRequired') : t('review.notePlaceholder')"
             :aria-label="t('review.notePlaceholder')"
           />
           <button class="btn btn-primary btn-sm" :disabled="busy" @click="submit(item.key, 'approved')">{{ t('review.approve') }}</button>
@@ -177,6 +187,15 @@ const filters = [
 ];
 
 const activeProfile = computed(() => profiles.value.find(p => p.id === activeId.value) || null);
+
+/** 严格模式：逐项必检 + 疑点通过须写理由 */
+const isStrict = computed(() => activeProfile.value?.strictness === 'strict');
+
+/** AI 报过疑点的条目，人工「通过」时必须写理由（后端也会拦）。 */
+function noteRequired(item: ReviewItemState): boolean {
+  return isStrict.value
+    && (item.ai_verdict === 'flag' || item.ai_verdict === 'unknown');
+}
 const visibleItems = computed(() =>
   statusFilter.value === 'all'
     ? items.value
@@ -295,6 +314,12 @@ async function runAi() {
 
 async function submit(key: string, verdict: string) {
   if (!activeId.value) return;
+  // 前端先拦一次：不让用户点了「通过」再被后端拒绝
+  const target = items.value.find(i => i.key === key);
+  if (verdict === 'approved' && target && noteRequired(target) && !(notes[key] || '').trim()) {
+    error.value = t('review.noteRequiredError');
+    return;
+  }
   busy.value = true;
   error.value = '';
   try {

@@ -89,6 +89,25 @@ pub struct ReviewItem {
     pub fingerprint: String,
 }
 
+/// 审核严格度。
+///
+/// 「严格」不是提示词的语气，而是**机器可校验的判据**：
+/// - `Strict` 要求 AI 逐项给出结论，缺任何一项直接降级为 `Unknown`；
+/// - `Strict` 下 AI 报过的疑点，人工通过时必须写明理由（不能空备注放行）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewStrictness {
+    Standard,
+    Strict,
+}
+
+/// 严格模式下的必检项：`id` 用于校验 AI 是否逐项作答，`label` 用于提示词。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrictCheck {
+    pub id: String,
+    pub label: String,
+}
+
 /// 场景声明。加一个新场景 = 实现一个 profile，**不需要改管线**。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewProfile {
@@ -99,9 +118,19 @@ pub struct ReviewProfile {
     /// 审核标准：会作为 system prompt 的一部分发送。
     /// 必须写「发现什么问题要报什么」，而不是「请审查一下」。
     pub criteria: String,
-    /// 该场景是否需要 AI 初审。`false` 表示纯人工场景（例如涉法文书），
+    /// 该场景是否需要 AI 初审。`false` 表示纯人工场景，
     /// 管线会直接把条目置为 `Pending` 而不是伪造一个 `Skipped`。
     pub use_ai: bool,
+    /// 严格度。严格模式要求逐项作答，且疑点必须人工说明理由后才能放行。
+    #[serde(default = "default_strictness")]
+    pub strictness: ReviewStrictness,
+    /// 严格模式的必检项（为空则表示不需要逐项校验）。
+    #[serde(default)]
+    pub strict_checks: Vec<StrictCheck>,
+}
+
+fn default_strictness() -> ReviewStrictness {
+    ReviewStrictness::Standard
 }
 
 /// 一次审核动作的留痕记录。**不可变**：写进去就不再修改。
@@ -123,7 +152,26 @@ pub struct ReviewRecord {
 
 /// AI 初审提示词。刻意要求「只依据给定内容、必须给出可核对的位置」，
 /// 并明确禁止它做最终判断——否则模型会倾向输出「通过」。
+///
+/// 严格模式下额外追加「逐项作答」要求：模型必须对每个必检项单独给结论，
+/// 缺项由 `validate_strict_answer` 检出并作废本次初审。
 pub fn ai_review_prompt(profile: &ReviewProfile, item: &ReviewItem) -> String {
+    let strict_block = if profile.strictness == ReviewStrictness::Strict
+        && !profile.strict_checks.is_empty()
+    {
+        let mut lines =
+            String::from("\n\n严格模式：必须对下列每一项单独作答，缺任何一项本次初审作废。\n");
+        for c in &profile.strict_checks {
+            lines.push_str(&format!("- [{}] {}\n", c.id, c.label));
+        }
+        lines.push_str(
+            "作答格式：先给出总判定行 PASS/FLAG/UNKNOWN，再逐项一行 `CHECK <id>: <FOUND|OK|NA> <一句话依据>`。",
+        );
+        lines
+    } else {
+        String::new()
+    };
+
     format!(
         "你在为一个本地优先应用做内容初审。你**不是最终决策者**：你的结论只会用于提示人工复核。\n\
 \n\
@@ -137,11 +185,39 @@ pub fn ai_review_prompt(profile: &ReviewProfile, item: &ReviewItem) -> String {
 2) 第一行只输出 PASS 或 FLAG 或 UNKNOWN 之一；\n\
 3) 从第二行起，逐条说明依据，每条注明它对应原文的哪一句；\n\
 4) 若内容不足以判断，输出 UNKNOWN 并说明缺什么；\n\
-5) 不要给出法律意见，不要复述密码或任何凭据。",
+5) 不要给出法律意见，不要复述密码或任何凭据。{strict}",
         criteria = profile.criteria,
         title = item.title,
         payload = item.payload,
+        strict = strict_block,
     )
+}
+
+/// 严格模式校验：逐项作答是否齐全、哪些项被判为 FOUND。
+///
+/// 返回 `(缺失项, 被标记项)`。**只要缺项，整条判定就必须降级为 Unknown**：
+/// 模型跳过某一项往往正说明它没看，而不是「没问题」。
+pub fn validate_strict_answer(profile: &ReviewProfile, answer: &str) -> (Vec<String>, Vec<String>) {
+    if profile.strictness != ReviewStrictness::Strict || profile.strict_checks.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    let upper = answer.to_uppercase();
+    let mut missing = Vec::new();
+    let mut flagged = Vec::new();
+    for c in &profile.strict_checks {
+        let tag = format!("CHECK {}:", c.id.to_uppercase());
+        match upper.find(&tag) {
+            None => missing.push(c.id.clone()),
+            Some(pos) => {
+                let rest = &upper[pos + tag.len()..];
+                let line = rest.lines().next().unwrap_or("");
+                if line.trim_start().starts_with("FOUND") {
+                    flagged.push(c.id.clone());
+                }
+            }
+        }
+    }
+    (missing, flagged)
 }
 
 /// 解析 AI 输出。宽容处理前缀噪声，但**宁可 Unknown 也不猜 Pass**：
@@ -205,6 +281,8 @@ mod tests {
             title_key: "review.title".to_string(),
             criteria: "检查是否编造出处".to_string(),
             use_ai,
+            strictness: ReviewStrictness::Standard,
+            strict_checks: Vec::new(),
         }
     }
 
@@ -366,5 +444,121 @@ mod tests {
         assert!(json.contains("needs_edit"));
         let back: ReviewRecord = serde_json::from_str(&json).unwrap();
         assert_eq!(back.human_note, "补官方链接");
+    }
+}
+
+#[cfg(test)]
+mod strict_tests {
+    use super::*;
+
+    fn strict_profile() -> ReviewProfile {
+        ReviewProfile {
+            id: "legal".to_string(),
+            title_key: "review.profile.legal".to_string(),
+            criteria: "检查机械一致性".to_string(),
+            use_ai: true,
+            strictness: ReviewStrictness::Strict,
+            strict_checks: vec![
+                StrictCheck {
+                    id: "signer".into(),
+                    label: "签署主体".into(),
+                },
+                StrictCheck {
+                    id: "blanks".into(),
+                    label: "空白项".into(),
+                },
+                StrictCheck {
+                    id: "conflict".into(),
+                    label: "处置冲突".into(),
+                },
+            ],
+        }
+    }
+
+    /// 提示词必须列出每一项，并要求 `CHECK <id>:` 格式。
+    #[test]
+    fn strict_prompt_requires_per_item_answers() {
+        let p = ai_review_prompt(
+            &strict_profile(),
+            &ReviewItem {
+                key: "1".into(),
+                title: "遗嘱".into(),
+                payload: "正文".into(),
+                fingerprint: "f".into(),
+            },
+        );
+        assert!(p.contains("严格模式"));
+        assert!(p.contains("[signer] 签署主体"));
+        assert!(p.contains("[blanks] 空白项"));
+        assert!(p.contains("CHECK <id>"));
+        assert!(p.contains("缺任何一项本次初审作废"));
+    }
+
+    /// 非严格场景不得出现严格模式说明（避免无谓的提示词膨胀）。
+    #[test]
+    fn standard_prompt_has_no_strict_block() {
+        let mut prof = strict_profile();
+        prof.strictness = ReviewStrictness::Standard;
+        let p = ai_review_prompt(
+            &prof,
+            &ReviewItem {
+                key: "1".into(),
+                title: "t".into(),
+                payload: "x".into(),
+                fingerprint: "f".into(),
+            },
+        );
+        assert!(!p.contains("严格模式"));
+    }
+
+    /// 缺项必须被检出——这是严格模式的核心。
+    #[test]
+    fn missing_items_are_detected() {
+        let prof = strict_profile();
+        let answer = "PASS\nCHECK signer: OK 已填\nCHECK blanks: OK 无遗留";
+        let (missing, flagged) = validate_strict_answer(&prof, answer);
+        assert_eq!(missing, vec!["conflict"], "必须指出缺少 conflict");
+        assert!(flagged.is_empty());
+    }
+
+    /// 全部作答且无 FOUND → 无缺失、无标记。
+    #[test]
+    fn complete_clean_answer_passes_validation() {
+        let prof = strict_profile();
+        let answer = "PASS\nCHECK signer: OK\nCHECK blanks: OK\nCHECK conflict: OK";
+        let (missing, flagged) = validate_strict_answer(&prof, answer);
+        assert!(missing.is_empty());
+        assert!(flagged.is_empty());
+    }
+
+    /// 某一项 FOUND 时，即使总判定写 PASS 也必须被单独列出。
+    #[test]
+    fn found_items_are_reported() {
+        let prof = strict_profile();
+        let answer =
+            "PASS\nCHECK signer: OK\nCHECK blanks: FOUND 第 3 段仍有 ____\nCHECK conflict: OK";
+        let (missing, flagged) = validate_strict_answer(&prof, answer);
+        assert!(missing.is_empty());
+        assert_eq!(flagged, vec!["blanks"]);
+    }
+
+    /// 大小写与空白不应导致误判（模型输出格式并不稳定）。
+    #[test]
+    fn validation_tolerates_case_and_spacing() {
+        let prof = strict_profile();
+        let answer = "pass\n  check signer: ok\nCheck Blanks: Found 有空白\nCHECK CONFLICT: NA";
+        let (missing, flagged) = validate_strict_answer(&prof, answer);
+        assert!(missing.is_empty(), "不应误报缺失: {:?}", missing);
+        assert_eq!(flagged, vec!["blanks"]);
+    }
+
+    /// 标准场景不做逐项校验（空清单不应误报）。
+    #[test]
+    fn standard_profile_skips_validation() {
+        let mut prof = strict_profile();
+        prof.strictness = ReviewStrictness::Standard;
+        let (missing, flagged) = validate_strict_answer(&prof, "PASS\n随便写");
+        assert!(missing.is_empty());
+        assert!(flagged.is_empty());
     }
 }

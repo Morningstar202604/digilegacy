@@ -168,7 +168,7 @@ function seedReviewItems(
       case 'platform-policy':
         return `平台：${title} · 所需材料：死亡证明、继承公证书 · 办理流程：联系平台官方客服提交材料 · 官方链接：待核实`;
       case 'legal-template':
-        return `文书：${title} · 类型：法律模板 · 正文含签署主体、空白填写项与见证人栏`;
+        return `文书：${title} · 正文含签署主体、空白填写项、日期栏与见证人签字位`;
       case 'family-note':
         return `字段：${title} · 内容：家中书房保险柜第二层（示例）`;
       case 'asset-classification':
@@ -612,10 +612,22 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
     case 'list_review_profiles':
       // 与桌面版一致地暴露四个场景；法律文书声明为纯人工。
       return ok([
-        { id: 'platform-policy', title_key: 'review.profile.policy', criteria: '检查来源标注与材料一致性', use_ai: true },
-        { id: 'legal-template', title_key: 'review.profile.legal', criteria: '人工核对签署主体、空白项与日期格式', use_ai: false },
-        { id: 'family-note', title_key: 'review.profile.familyNote', criteria: '检查是否可执行、是否误导', use_ai: true },
-        { id: 'asset-classification', title_key: 'review.profile.asset', criteria: '检查类别与平台能力是否一致', use_ai: true },
+        { id: 'platform-policy', title_key: 'review.profile.policy', criteria: '检查来源标注与材料一致性', use_ai: true, strictness: 'standard', strict_checks: [] },
+        {
+          id: 'legal-template', title_key: 'review.profile.legal',
+          criteria: '逐项检查签署主体、空白项、日期格式、金额一致、见证人、处置冲突',
+          use_ai: true, strictness: 'strict',
+          strict_checks: [
+            { id: 'signer', label: '签署主体已填写' },
+            { id: 'blanks', label: '应填空白项已填完' },
+            { id: 'date', label: '日期格式统一' },
+            { id: 'amounts', label: '金额/比例一致' },
+            { id: 'witness', label: '见证人栏齐备' },
+            { id: 'conflict', label: '无处置冲突' },
+          ],
+        },
+        { id: 'family-note', title_key: 'review.profile.familyNote', criteria: '检查是否可执行、是否误导', use_ai: true, strictness: 'standard', strict_checks: [] },
+        { id: 'asset-classification', title_key: 'review.profile.asset', criteria: '检查类别与平台能力是否一致', use_ai: true, strictness: 'standard', strict_checks: [] },
       ]) as T;
 
     case 'review_progress': {
@@ -659,9 +671,6 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       const key = String(a['profileId'] ?? 'platform-policy');
       const list = state.reviews[key] || [];
       // 纯人工场景：后端根本不会跑 AI（Legal 场景 use_ai=false）
-      if (key === 'legal-template') {
-        return ok(list, '该场景声明为纯人工审核') as T;
-      }
       for (const item of list) {
         if (item.status !== 'pending') continue;
         item.ai_verdict = 'skipped';

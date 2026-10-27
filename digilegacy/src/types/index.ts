@@ -106,6 +106,10 @@ export interface ReviewProfile {
   title_key: string;
   criteria: string;
   use_ai: boolean;
+  /** standard | strict：严格模式要求逐项作答，疑点需人工说明理由才能放行 */
+  strictness: 'standard' | 'strict';
+  /** 严格模式的必检项（界面展示「AI 必须逐项回答哪些问题」） */
+  strict_checks: Array<{ id: string; label: string }>;
 }
 
 /** 条目当前审核状态。approved 只能由人工终审产生。 */

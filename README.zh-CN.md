@@ -9,7 +9,7 @@
 <p>
   <a href="https://github.com/badhope/digilegacy/actions/workflows/ci.yml"><img src="https://github.com/badhope/digilegacy/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT 许可">
-  <img src="https://img.shields.io/badge/tests-184%20Rust%20%C2%B7%20401%20frontend%20%C2%B7%2080%20E2E-brightgreen.svg" alt="测试">
+  <img src="https://img.shields.io/badge/tests-193%20Rust%20%C2%B7%20404%20frontend%20%C2%B7%2080%20E2E-brightgreen.svg" alt="测试">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg" alt="Windows">
   <img src="https://img.shields.io/badge/servers-none-4a7c8c.svg" alt="无服务器">
   <img src="https://img.shields.io/badge/telemetry-none-4a7c8c.svg" alt="无遥测">
@@ -80,7 +80,7 @@
 | 检查项 | 结果 |
 |---|---|
 | Rust 测试 | **118 通过**，1 ignored（`cargo test --locked`；源码声明 120，含 1 条仅 Unix 编译） |
-| 前端单元测试 | **401 通过**，32 个文件 |
+| 前端单元测试 | **404 通过**，32 个文件 |
 | 端到端测试 | **80 通过**，真实 Chromium |
 | 覆盖率 | **85.4% 语句**、86.9% 行，阈值写进 CI |
 | 类型安全 | `vue-tsc --noEmit` 无错误，Rust `clippy -D warnings` 无警告 |
