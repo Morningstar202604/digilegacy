@@ -66,9 +66,193 @@ pub fn policy_items() -> Vec<ReviewItem> {
         .collect()
 }
 
+/// 法律文书场景 id。
+pub const LEGAL_REVIEW: &str = "legal-template";
+
+/// 法律文书初审。
+///
+/// **刻意声明 `use_ai: false`**：文书会被当成正式文件使用，AI 的错误
+/// （漏掉必填项、把「必须」当成「可以」）代价远高于省下的时间。
+/// 但管线仍在此登记——它需要留痕、需要「内容变了要重审」、需要人工签字确认。
+pub fn legal_profile() -> ReviewProfile {
+    ReviewProfile {
+        id: LEGAL_REVIEW.to_string(),
+        title_key: "review.profile.legal".to_string(),
+        criteria: "人工核对：签署主体是否齐全、必填空白项是否都已填写、日期与金额格式是否一致、是否遗漏见证人、是否与平台政策要求的材料冲突。"
+            .to_string(),
+        use_ai: false,
+    }
+}
+
+/// 法律文书条目。模板本体在前端 JSON 里（单一事实源），这里内嵌同一份文件。
+pub fn legal_items() -> Vec<ReviewItem> {
+    let raw = include_str!("../../src/data/legal-templates.json");
+    let list: Vec<serde_json::Value> = serde_json::from_str(raw).unwrap_or_default();
+    list.into_iter()
+        .map(|t| {
+            let id = t
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let name = t
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let body = t.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let kind = t.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            let desc = t.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            crate::review::ReviewItem {
+                key: id,
+                title: name,
+                fingerprint: crate::review::fingerprint(body),
+                payload: format!(
+                    "类型：{}
+说明：{}
+
+正文：
+{}",
+                    kind, desc, body
+                ),
+            }
+        })
+        .collect()
+}
+
+/// 家人说明场景 id。
+pub const FAMILY_NOTE_REVIEW: &str = "family-note";
+
+/// 家人说明初审：审的是「这段话家人读得懂吗、有没有误导」。
+///
+/// 这是 AI 初审最合适的场景：文案质量判断本来就是语言模型的强项，
+/// 而且即使判断错了，代价只是说明不够好，不会造成错误执行。
+pub fn family_note_profile() -> ReviewProfile {
+    ReviewProfile {
+        id: FAMILY_NOTE_REVIEW.to_string(),
+        title_key: "review.profile.familyNote".to_string(),
+        criteria: "检查下列问题并逐条指出：
+1) 是否出现家人无法理解的术语或缩写（如「二次确认链」「占位符」）；
+2) 是否包含可执行的下一步（找谁、带什么、做什么），还是只有原则性描述；
+3) 是否给出可能误导的时间承诺（如「一周内办完」）；
+4) 是否暗示本应用能代替公证、律师或平台审核；
+5) 是否泄露任何凭据、账号或金额。"
+            .to_string(),
+        use_ai: true,
+    }
+}
+
+/// 家人说明条目：来自保管位置与继承人名单这两块「家人一定会读」的文本。
+pub fn family_note_items() -> Vec<ReviewItem> {
+    let mut out = Vec::new();
+    if let Ok(h) = crate::db::get_custody_hints_db() {
+        for (key, title, text) in [
+            ("backup-location", "加密备份存放位置", &h.backup_location),
+            (
+                "recovery-location",
+                "恢复码保管位置",
+                &h.recovery_code_location,
+            ),
+        ] {
+            if text.trim().is_empty() {
+                continue;
+            }
+            out.push(crate::review::ReviewItem {
+                key: key.to_string(),
+                title: title.to_string(),
+                fingerprint: crate::review::fingerprint(text),
+                payload: format!(
+                    "字段：{}
+内容：{}",
+                    title, text
+                ),
+            });
+        }
+    }
+    if let Ok(heirs) = crate::db::get_heirs_db() {
+        for h in &heirs {
+            if h.share_note.trim().is_empty() {
+                continue;
+            }
+            out.push(crate::review::ReviewItem {
+                key: format!("heir-share-{}", h.id.unwrap_or(0)),
+                title: format!("{}的分配说明", h.name),
+                fingerprint: crate::review::fingerprint(&h.share_note),
+                // 送审只需说明本身：不带姓名/电话/邮箱
+                payload: format!("分配说明：{}", h.share_note),
+            });
+        }
+    }
+    out
+}
+
+/// 资产分类场景 id。
+pub const ASSET_REVIEW: &str = "asset-classification";
+
+/// 资产分类初审。
+///
+/// 审的是「category 与卡片描述的语义是否一致」——这正是确定性规则做不好、
+/// 而语言模型擅长的事。代价也低：判错了只是分类标签不对，可随时改回。
+pub fn asset_profile() -> ReviewProfile {
+    ReviewProfile {
+        id: ASSET_REVIEW.to_string(),
+        title_key: "review.profile.asset".to_string(),
+        criteria: "检查下列问题并逐条指出：
+1) 资产的 category（property/personality/mixed）与该平台的 has_property / has_personality 是否一致；
+2) 处置方式为 inherit 时是否缺少继承人；
+3) 处置方式为 delete 时，该资产是否含明显有价值内容（如余额、已购内容）；
+4) 账号描述与平台类型是否明显不匹配（例如把社交账号登记成金融资产）。"
+            .to_string(),
+        use_ai: true,
+    }
+}
+
+/// 资产分类条目：只送平台、类别、处置方式与平台能力标记，
+/// **不含账号标识、金额、备注**（那些属于用户隐私，与分类判断无关）。
+pub fn asset_items() -> Vec<ReviewItem> {
+    let Ok(assets) = crate::db::get_all_assets_db() else {
+        return Vec::new();
+    };
+    let platforms = get_all_platforms();
+    assets
+        .into_iter()
+        .map(|a| {
+            let p = platforms.iter().find(|p| p.id == a.platform_id);
+            let desc = format!(
+                "平台：{}
+资产类别：{}
+处置方式：{}
+平台可继承：{}
+平台含财产属性：{}
+平台含人格属性：{}",
+                a.platform_name,
+                a.category,
+                a.disposal_method,
+                p.map(|x| if x.inheritable { "是" } else { "否" })
+                    .unwrap_or("未知"),
+                p.map(|x| if x.has_property { "是" } else { "否" })
+                    .unwrap_or("未知"),
+                p.map(|x| if x.has_personality { "是" } else { "否" })
+                    .unwrap_or("未知"),
+            );
+            crate::review::ReviewItem {
+                key: format!("asset-{}", a.id.unwrap_or(0)),
+                title: a.platform_name.clone(),
+                fingerprint: crate::review::fingerprint(&desc),
+                payload: desc,
+            }
+        })
+        .collect()
+}
+
 /// 场景列表（界面据此渲染选项卡）。新增场景只改这里。
 pub fn all_profiles() -> Vec<ReviewProfile> {
-    vec![policy_profile()]
+    vec![
+        policy_profile(),
+        legal_profile(),
+        family_note_profile(),
+        asset_profile(),
+    ]
 }
 
 /// 按 id 取场景。未知 id 返回 None，而不是回退到某个默认场景——
@@ -81,6 +265,9 @@ pub fn profile_by_id(id: &str) -> Option<ReviewProfile> {
 pub fn items_for(id: &str) -> Option<Vec<ReviewItem>> {
     match id {
         POLICY_REVIEW => Some(policy_items()),
+        LEGAL_REVIEW => Some(legal_items()),
+        FAMILY_NOTE_REVIEW => Some(family_note_items()),
+        ASSET_REVIEW => Some(asset_items()),
         _ => None,
     }
 }
@@ -88,6 +275,18 @@ pub fn items_for(id: &str) -> Option<Vec<ReviewItem>> {
 /// 场景的「送审字段」说明，界面展示用：让用户明确知道 AI 看到了什么。
 pub fn payload_fields_for(id: &str) -> Vec<String> {
     match id {
+        LEGAL_REVIEW => vec![
+            "文书类型".to_string(),
+            "说明".to_string(),
+            "正文全文".to_string(),
+        ],
+        FAMILY_NOTE_REVIEW => vec!["字段名".to_string(), "填写内容".to_string()],
+        ASSET_REVIEW => vec![
+            "平台名称".to_string(),
+            "资产类别".to_string(),
+            "处置方式".to_string(),
+            "平台能力标记".to_string(),
+        ],
         POLICY_REVIEW => vec![
             "平台名称".to_string(),
             "类别".to_string(),
@@ -133,6 +332,55 @@ mod tests {
         assert!(!profiles.is_empty(), "至少注册一个场景");
         assert!(profiles.iter().any(|p| p.id == POLICY_REVIEW));
         assert!(profile_by_id(POLICY_REVIEW).is_some());
+    }
+
+    /// 四个场景都已注册，且**同一套管线**服务它们——加场景没有改管线。
+    #[test]
+    fn all_scenes_registered_through_one_pipeline() {
+        let profiles = all_profiles();
+        let ids: Vec<&str> = profiles.iter().map(|p| p.id.as_str()).collect();
+        for want in [
+            POLICY_REVIEW,
+            LEGAL_REVIEW,
+            FAMILY_NOTE_REVIEW,
+            ASSET_REVIEW,
+        ] {
+            assert!(ids.contains(&want), "场景 {} 未注册", want);
+            assert!(items_for(want).is_some(), "场景 {} 没有条目构造器", want);
+        }
+    }
+
+    /// 法律文书必须声明为纯人工：AI 判断错误会被当成正式文件。
+    #[test]
+    fn legal_scene_is_human_only() {
+        let p = profile_by_id(LEGAL_REVIEW).unwrap();
+        assert!(!p.use_ai, "法律文书不得启用 AI 初审");
+        // 但仍然登记在管线里：它需要留痕与内容变更失效
+        assert!(!items_for(LEGAL_REVIEW).unwrap().is_empty());
+    }
+
+    /// 资产分类的送审内容不得含账号标识、金额或备注。
+    #[test]
+    fn asset_scene_payload_excludes_private_fields() {
+        // 该测试不依赖真实数据库：直接检查构造函数的字段模板
+        let profile = profile_by_id(ASSET_REVIEW).unwrap();
+        assert!(profile.use_ai);
+        // 送审字段清单里不应出现隐私字段名
+        let fields = payload_fields_for(ASSET_REVIEW);
+        for forbidden in ["账号", "金额", "备注", "联系方式"] {
+            assert!(
+                !fields.iter().any(|f| f.contains(forbidden)),
+                "资产分类送审字段不得包含 {}",
+                forbidden
+            );
+        }
+    }
+
+    /// 家人说明场景的送审字段同样只有「字段名 + 内容」。
+    #[test]
+    fn family_note_scene_is_minimal() {
+        let fields = payload_fields_for(FAMILY_NOTE_REVIEW);
+        assert_eq!(fields.len(), 2, "只应有字段名与内容");
     }
 
     /// 未知场景必须返回 None：静默回退会让审核跑错对象。

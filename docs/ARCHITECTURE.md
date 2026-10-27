@@ -124,13 +124,15 @@ Why not scrape the DOM (the old approach): the page shows placeholders while loc
 
 ## Content review pipeline
 
-The review pipeline is deliberately **scene-agnostic**. A scene is a `ReviewProfile` (id, title key, criteria, whether AI participates); the pipeline itself contains no business nouns. Today only `platform-policy` is registered — not because the pipeline is policy-specific, but because other candidate scenes (legal templates, family notes, asset classification) each need a product decision about *what* to send and *by which criteria* to judge. Registering one is a function plus a line in `all_profiles()`.
+The review pipeline is deliberately **scene-agnostic**. A scene is a `ReviewProfile` (id, title key, criteria, whether AI participates); the pipeline itself contains no business nouns. Four scenes are registered: `platform-policy` (AI pre-review), `legal-template` (human-only — AI errors there would ship inside a document people sign), `family-note` (AI pre-review, the case language models are actually good at), and `asset-classification` (AI pre-review, cheap to be wrong). Registering a fifth is a function plus a line in `all_profiles()`; the pipeline itself never changes.
 
 Three invariants are enforced by types rather than comments:
 
 1. **AI never approves.** `ReviewStatus::from_verdicts` takes `Option<&HumanVerdict>`; `AiVerdict::Pass` can only reach `AwaitingHuman`. There is no code path where an AI verdict yields `Approved`.
 2. **Graceful degradation.** With no endpoint configured, `run_ai_review` records `Skipped` and leaves items in the human queue — it does not error, and it does not fabricate a verdict.
 3. **Append-only trail.** Every AI run and every human decision appends a `review_records` row carrying the content fingerprint, both verdicts and the actor. Records are never updated, only added.
+
+Each item also carries a `preview` — a truncated, newline-flattened rendering of what is being reviewed. Without it the reviewer sees only a title and would have to guess what the entry actually says.
 
 Content changes invalidate prior decisions: `summarise_states_db` compares each item's current fingerprint against its latest record and reports the item as `stale` (back to pending) when they differ, so a review can never apply to text it did not see.
 

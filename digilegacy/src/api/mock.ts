@@ -25,8 +25,8 @@ interface MockState {
   nextAssetId: number;
   custody?: { backup_location: string; recovery_code_location: string };
   reviews?: Record<string, Array<{
-    key: string; title: string; status: string;
-    ai_verdict: string; ai_note: string; human_note: string;
+    key: string; title: string; preview?: string; status: string;
+    ai_verdict: string | null; ai_note: string; human_note: string;
     reviewed_at: string | null; stale: boolean;
   }>>;
   heirs?: Array<{
@@ -128,6 +128,66 @@ function loadState(): MockState {
 
 function saveState(state: MockState) {
   localStorage.setItem(LS_KEY, JSON.stringify(state));
+}
+
+/** 按场景生成演示审核条目（结构与桌面版一致）。 */
+function seedReviewItems(
+  profileId: string,
+  state: MockState,
+): Array<{
+  key: string; title: string; status: string;
+  ai_verdict: string | null; ai_note: string; human_note: string;
+  reviewed_at: string | null; stale: boolean;
+}> {
+  const rows: Array<[string, string]> =
+    profileId === 'platform-policy'
+      ? [
+          ['1', '支付宝'], ['2', '微信支付'], ['3', '云闪付'], ['22', 'Steam'], ['16', 'B站(bilibili)'],
+        ]
+      : profileId === 'legal-template'
+        ? [
+            ['will-digital', '数字资产遗嘱（标准版）'],
+            ['inheritance-declaration', '数字遗产继承声明书'],
+            ['power-of-attorney-digital', '数字资产授权委托书'],
+            ['affidavit-digital-asset', '数字资产继承宣誓书'],
+            ['platform-application', '平台继承申请函'],
+            ['inheritance-agreement', '继承人协议书'],
+          ]
+        : profileId === 'family-note'
+          ? [
+              ['backup-location', '加密备份存放位置'],
+              ['recovery-location', '恢复码保管位置'],
+            ]
+          : profileId === 'asset-classification'
+            ? state.assets.map((x, i) => [String(i + 1), String(x.platform_name)] as [string, string])
+            : [];
+  // 摘要必须与场景语义一致：家人说明场景下写「平台/所需材料」是错的，
+  // 会让审核员以为自己在看政策条目。
+  const previewFor = (title: string): string => {
+    switch (profileId) {
+      case 'platform-policy':
+        return `平台：${title} · 所需材料：死亡证明、继承公证书 · 办理流程：联系平台官方客服提交材料 · 官方链接：待核实`;
+      case 'legal-template':
+        return `文书：${title} · 类型：法律模板 · 正文含签署主体、空白填写项与见证人栏`;
+      case 'family-note':
+        return `字段：${title} · 内容：家中书房保险柜第二层（示例）`;
+      case 'asset-classification':
+        return `平台：${title} · 资产类别：property · 处置方式：inherit`;
+      default:
+        return title;
+    }
+  };
+  return rows.map(([key, title]) => ({
+    key,
+    title,
+    preview: previewFor(title),
+    status: 'pending',
+    ai_verdict: null,
+    ai_note: '',
+    human_note: '',
+    reviewed_at: null,
+    stale: false,
+  }));
 }
 
 function ok<T>(data: T, message = '操作成功'): ApiResponse<T> {
@@ -550,12 +610,13 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 
     // 审核场景：演示环境只暴露一个「平台政策」场景，结构与桌面版一致。
     case 'list_review_profiles':
-      return ok([{
-        id: 'platform-policy',
-        title_key: 'review.profile.policy',
-        criteria: '演示场景：检查来源标注与材料一致性',
-        use_ai: true,
-      }]) as T;
+      // 与桌面版一致地暴露四个场景；法律文书声明为纯人工。
+      return ok([
+        { id: 'platform-policy', title_key: 'review.profile.policy', criteria: '检查来源标注与材料一致性', use_ai: true },
+        { id: 'legal-template', title_key: 'review.profile.legal', criteria: '人工核对签署主体、空白项与日期格式', use_ai: false },
+        { id: 'family-note', title_key: 'review.profile.familyNote', criteria: '检查是否可执行、是否误导', use_ai: true },
+        { id: 'asset-classification', title_key: 'review.profile.asset', criteria: '检查类别与平台能力是否一致', use_ai: true },
+      ]) as T;
 
     case 'review_progress': {
       const key = String(a['profileId'] ?? 'platform-policy');
@@ -568,29 +629,48 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       }) as T;
     }
 
-    case 'review_payload_fields':
-      return ok(['平台名称', '类别', '所需材料', '办理流程', '官方链接', '来源标注']) as T;
+    case 'review_payload_fields': {
+      // 每个场景的送审字段不同：这是「AI 看到什么」的真实契约，
+      // 全部返回同一份会让法律文书场景错误地宣称会发政策字段。
+      const byProfile: Record<string, string[]> = {
+        'platform-policy': ['平台名称', '类别', '是否可继承', '所需材料', '办理流程', '难度', '预计时长', '官方链接', '来源标注', '备注'],
+        'legal-template': ['文书类型', '说明', '正文全文'],
+        'family-note': ['字段名', '填写内容'],
+        'asset-classification': ['平台名称', '资产类别', '处置方式', '平台能力标记'],
+      };
+      return ok(byProfile[String(a['profileId'] ?? '')] ?? []) as T;
+    }
 
     case 'list_review_items': {
       if (!state.reviews) state.reviews = {};
       const key = String(a['profileId'] ?? 'platform-policy');
-      const list = state.reviews[key] || [];
-      return ok(list) as T;
+      // 首次进入场景时按真实规模造演示条目，否则演示页永远是「共 0 条」，
+      // 看起来像功能坏了。
+      if (!state.reviews[key]) {
+        state.reviews[key] = seedReviewItems(key, state);
+        saveState(state);
+      }
+      return ok(state.reviews[key]) as T;
     }
 
     case 'run_ai_review': {
       // 演示环境没有 AI 端点 → 与桌面版一致地降级为纯人工，不伪造结论。
       if (!state.reviews) state.reviews = {};
       const key = String(a['profileId'] ?? 'platform-policy');
-      const existing = state.reviews[key] || [];
-      if (existing.length === 0) {
-        state.reviews[key] = [
-          { key: '1', title: '支付宝', status: 'pending', ai_verdict: 'skipped', ai_note: '未配置 AI 端点，已转为纯人工审核', human_note: '', reviewed_at: now(), stale: false },
-          { key: '2', title: '微信支付', status: 'pending', ai_verdict: 'skipped', ai_note: '未配置 AI 端点，已转为纯人工审核', human_note: '', reviewed_at: now(), stale: false },
-        ];
-        saveState(state);
+      const list = state.reviews[key] || [];
+      // 纯人工场景：后端根本不会跑 AI（Legal 场景 use_ai=false）
+      if (key === 'legal-template') {
+        return ok(list, '该场景声明为纯人工审核') as T;
       }
-      return ok(state.reviews[key], '未配置 AI 端点，已转为纯人工审核') as T;
+      for (const item of list) {
+        if (item.status !== 'pending') continue;
+        item.ai_verdict = 'skipped';
+        item.ai_note = '未配置 AI 端点，已转为纯人工审核';
+        // 没有真正审核过，就不该有「审核时间」——否则界面会误导
+        item.reviewed_at = null;
+      }
+      saveState(state);
+      return ok(list, '未配置 AI 端点，已转为纯人工审核') as T;
     }
 
     case 'submit_human_review': {
@@ -614,12 +694,31 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
       const itemKey = String(a['itemKey'] ?? '');
       const list = state.reviews?.[key] || [];
       const target = list.find(x => x.key === itemKey);
-      return ok(target ? [{
-        profile_id: key, item_key: itemKey, fingerprint: 'demo',
-        ai_verdict: target.ai_verdict, ai_note: target.ai_note,
-        human_verdict: target.status === 'approved' ? 'approved' : null,
-        human_note: target.human_note, decided_by: 'human', created_at: target.reviewed_at || now(),
-      }] : []) as T;
+      // 没有任何审核动作时返回空数组，不伪造一条「已审核」记录。
+      const hasAi = Boolean(target?.ai_verdict);
+      const hasHuman = Boolean(target?.reviewed_at);
+      if (!target || (!hasAi && !hasHuman)) return ok([]) as T;
+      const rows = [];
+      if (hasAi) {
+        rows.push({
+          profile_id: key, item_key: itemKey, fingerprint: 'demo',
+          ai_verdict: target.ai_verdict, ai_note: target.ai_note,
+          human_verdict: null, human_note: '', decided_by: 'ai',
+          created_at: now(),
+        });
+      }
+      if (hasHuman) {
+        rows.push({
+          profile_id: key, item_key: itemKey, fingerprint: 'demo',
+          ai_verdict: target.ai_verdict ?? 'skipped', ai_note: target.ai_note,
+          human_verdict: target.status === 'approved' ? 'approved'
+            : target.status === 'rejected' ? 'rejected'
+            : target.status === 'needs_edit' ? 'needs_edit' : null,
+          human_note: target.human_note, decided_by: 'human',
+          created_at: target.reviewed_at,
+        });
+      }
+      return ok(rows) as T;
     }
 
     case 'get_heirs': {

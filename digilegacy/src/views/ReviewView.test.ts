@@ -25,6 +25,7 @@ function state(over: Partial<Record<string, unknown>> = {}) {
   return {
     key: '1',
     title: '支付宝',
+    preview: '平台：支付宝 · 所需材料：死亡证明',
     status: 'pending',
     ai_verdict: null,
     ai_note: '',
@@ -54,6 +55,15 @@ async function mountReview(over: Record<string, unknown> = {}) {
   return w;
 }
 
+/** 条目默认折叠：先展开第一条才能看到备注、按钮与 AI 说明。 */
+async function expandFirst(w: Awaited<ReturnType<typeof mountReview>>) {
+  const head = w.find('.review-head-btn');
+  if (head.exists()) {
+    await head.trigger('click');
+    await flushPromises();
+  }
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   mockedInvoke.mockReset();
@@ -65,6 +75,44 @@ describe('审核场景与送审字段', () => {
     const tabs = w.findAll('[role="tab"]');
     expect(tabs.length).toBe(1);
     expect(tabs[0].text()).toContain('平台政策');
+  });
+
+  it('多场景时全部渲染，且切换场景会重新拉条目', async () => {
+    const w = await mountReview({
+      list_review_profiles: {
+        success: true, message: '',
+        data: [
+          { ...PROFILE },
+          { id: 'legal-template', title_key: 'review.profile.legal', criteria: '人工核对', use_ai: false },
+          { id: 'family-note', title_key: 'review.profile.familyNote', criteria: '检查可执行性', use_ai: true },
+          { id: 'asset-classification', title_key: 'review.profile.asset', criteria: '检查类别', use_ai: true },
+        ],
+      },
+    });
+    const tabs = w.findAll('[role="tab"]');
+    expect(tabs.length).toBe(4);
+    expect(tabs.map(t => t.text())).toEqual(['平台政策', '法律文书', '家人说明', '资产分类']);
+
+    await tabs[1].trigger('click');
+    await flushPromises();
+    const calls = mockedInvoke.mock.calls.filter(c => c[0] === 'list_review_items');
+    expect(calls.length, '每次切场景都要重新拉条目').toBeGreaterThanOrEqual(2);
+    expect((calls[calls.length - 1][1] as Record<string, unknown>).profileId).toBe('legal-template');
+  });
+
+  it('法律文书场景必须提示 AI 不参与', async () => {
+    const w = await mountReview({
+      list_review_profiles: {
+        success: true, message: '',
+        data: [
+          { ...PROFILE },
+          { id: 'legal-template', title_key: 'review.profile.legal', criteria: '人工核对', use_ai: false },
+        ],
+      },
+    });
+    await w.findAll('[role="tab"]')[1].trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('纯人工审核');
   });
 
   it('展示审核进度，避免用户一条条数', async () => {
@@ -101,6 +149,7 @@ describe('AI 初审与人工终审的分工', () => {
     });
     await w.findAll('button').find(b => b.text().includes('运行 AI 初审'))!.trigger('click');
     await flushPromises();
+    await expandFirst(w);
 
     expect(w.text()).toContain('未发现矛盾');
     // 状态标签必须仍是「待人工确认」：AI 不能把条目置为已通过。
@@ -127,6 +176,7 @@ describe('AI 初审与人工终审的分工', () => {
     const w = await mountReview({
       submit_human_review: { success: true, message: '审核结论已记录', data: null },
     });
+    await expandFirst(w);
     await w.find('input.form-input').setValue('已核对官方公告');
     await w.findAll('button').find(b => b.text() === '通过')!.trigger('click');
     await flushPromises();
@@ -142,6 +192,7 @@ describe('AI 初审与人工终审的分工', () => {
     const w = await mountReview({
       submit_human_review: { success: true, message: 'ok', data: null },
     });
+    await expandFirst(w);
     await w.findAll('button').find(b => b.text() === '拒绝')!.trigger('click');
     await flushPromises();
     await w.findAll('button').find(b => b.text() === '退回修改')!.trigger('click');
@@ -176,6 +227,7 @@ describe('留痕与失效', () => {
         }],
       },
     });
+    await expandFirst(w);
     await w.findAll('button').find(b => b.text().includes('审核历史'))!.trigger('click');
     await flushPromises();
     expect(w.text()).toContain('2026-10-26 10:00:00');
@@ -190,5 +242,67 @@ describe('留痕与失效', () => {
     await w.findAll('button').find(b => b.text().includes('运行 AI 初审'))!.trigger('click');
     await flushPromises();
     expect(w.text()).toContain('未知的审核场景');
+  });
+});
+
+describe('状态与结论标签的健壮性', () => {
+  it('ai_verdict 为空时显示占位符，不泄露 i18n 键名', async () => {
+    const w = await mountReview({
+      list_review_items: { success: true, message: '', data: [state({ ai_verdict: null })] },
+    });
+    expect(w.text()).not.toContain('review.ai.null');
+    expect(w.text()).not.toContain('review.ai.');
+  });
+
+  it('未知状态值同样不泄露键名', async () => {
+    const w = await mountReview({
+      list_review_items: { success: true, message: '', data: [state({ status: 'weird_status' })] },
+    });
+    expect(w.text()).not.toContain('review.status.weird');
+  });
+
+  it('纯人工场景不显示「运行 AI 初审」按钮', async () => {
+    const w = await mountReview({
+      list_review_profiles: {
+        success: true, message: '',
+        data: [{ ...PROFILE, use_ai: false }],
+      },
+    });
+    const btn = w.findAll('button').find(b => b.text().includes('运行 AI 初审'));
+    expect(btn, '纯人工场景不该有 AI 按钮').toBeFalsy();
+    expect(w.text()).toContain('审核范围');
+  });
+});
+
+describe('待审内容可见性', () => {
+  it('展开后显示内容摘要，审核员能看到审的是什么', async () => {
+    const w = await mountReview();
+    await expandFirst(w);
+    expect(w.text()).toContain('所需材料：死亡证明');
+  });
+});
+
+describe('条目折叠', () => {
+  it('默认收起：只显示摘要行，不显示操作按钮', async () => {
+    const w = await mountReview({
+      list_review_items: { success: true, message: '', data: [state({ title: '支付宝' }), state({ key: '2', title: '微信支付' })] },
+    });
+    // 两条摘要行都在
+    expect(w.findAll('.review-head-btn').length).toBe(2);
+    // 默认不展开 → 没有「通过」按钮
+    expect(w.findAll('button').some(b => b.text() === '通过')).toBe(false);
+  });
+
+  it('点击摘要行展开，再次点击收起', async () => {
+    const w = await mountReview();
+    const head = w.find('.review-head-btn');
+    await head.trigger('click');
+    await flushPromises();
+    expect(w.findAll('button').some(b => b.text() === '通过')).toBe(true);
+    expect(head.attributes('aria-expanded')).toBe('true');
+
+    await head.trigger('click');
+    await flushPromises();
+    expect(w.findAll('button').some(b => b.text() === '通过')).toBe(false);
   });
 });

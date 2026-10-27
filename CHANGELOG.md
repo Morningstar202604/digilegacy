@@ -21,7 +21,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - **Generic review pipeline with AI pre-review and human sign-off** (`review.rs`, `review_profiles.rs`, `db_review.rs`, `ReviewView`): scenes are data — a scene declares its id, criteria and whether AI participates, and the pipeline contains no business nouns. Only `platform-policy` is registered today; adding legal templates or family notes is a profile plus one registry line. AI can only advance an item to *awaiting human*: `Approved` is reachable only through a human verdict, enforced by the state machine's type signature. Every run and decision appends an immutable audit row; content changes invalidate the prior decision by fingerprint. With no endpoint configured the pipeline degrades to human-only review instead of failing.
 
+- **Four review scenes** on the one pipeline: platform policies (AI), legal documents (human-only by design), family notes (AI), asset classification (AI). Legal templates moved to `src/data/legal-templates.json` so the UI and the reviewer read the same bytes instead of two drifting copies.
+- **Reviewer sees what is being reviewed**: each item carries a truncated content preview, and rows collapse to a summary line by default (152 policies fully expanded ran to several thousand pixels).
+
 ### Fixed
+
+- **Review UI leaked raw i18n keys**: an item with no AI verdict rendered `review.ai.null` and unknown statuses rendered `review.status.<value>`. Both now fall back to an em dash, with the allowed value sets declared explicitly.
+- **Review UI fabricated an audit record**: the browser mock returned a synthetic "human approved" row for items nobody had reviewed, and stamped a review time on AI-skipped items. History now returns empty until something actually happened, and only a human verdict produces a `reviewed_at`.
+- **Human-only scenes still offered "Run AI pre-review"**, which implies the button does something. It is now hidden and the section is retitled "review scope" with an explicit "nothing leaves this machine".
+- **Per-scene payload fields were all identical**, so the legal scene claimed it would send platform-policy fields. Each scene now declares its own list.
 
 - **Exporting a report dropped the guidance** the preview showed: platform policy, required documents, difficulty, duration and the official link were in the preview but absent from the file. The heir received a shortened document.
 - **The report was always Chinese** (`<html lang="zh-CN">` hardcoded), so English users exported a Chinese document.

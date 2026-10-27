@@ -116,6 +116,8 @@ export type HumanVerdict = 'approved' | 'rejected' | 'needs_edit';
 export interface ReviewItemState {
   key: string;
   title: string;
+  /** 待审内容摘要（审核员据此判断要不要细看） */
+  preview: string;
   status: ReviewStatus;
   ai_verdict: AiVerdict | null;
   ai_note: string;

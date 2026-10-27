@@ -27,13 +27,18 @@
     </div>
 
     <div v-if="activeId" class="card mb-24">
-      <div class="card-title mb-12">{{ t('review.payloadTitle') }}</div>
-      <p class="form-hint">{{ t('review.payloadNote') }}</p>
+      <div class="card-title mb-12">
+        {{ activeProfile?.use_ai ? t('review.payloadTitle') : t('review.scopeTitle') }}
+      </div>
+      <p class="form-hint">
+        {{ activeProfile?.use_ai ? t('review.payloadNote') : t('review.scopeNote') }}
+      </p>
       <ul class="payload-list">
         <li v-for="f in payloadFields" :key="f">{{ f }}</li>
       </ul>
       <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px;">
-        <button class="btn btn-secondary btn-sm" :disabled="busy" @click="runAi">
+        <!-- 纯人工场景不给 AI 按钮：按钮存在本身就会让人以为「点了就审了」 -->
+        <button v-if="activeProfile?.use_ai" class="btn btn-secondary btn-sm" :disabled="busy" @click="runAi">
           {{ busy ? t('review.running') : t('review.runAi') }}
         </button>
         <button class="btn btn-secondary btn-sm" :disabled="busy" @click="loadItems">{{ t('review.reload') }}</button>
@@ -62,17 +67,30 @@
       </div>
 
       <div v-for="item in visibleItems" :key="item.key" class="review-row">
-        <div class="review-head">
+        <!-- 摘要行可点击展开：152 条政策全展开会有几千像素，
+             默认折叠才能一眼扫完「哪些还没人看」。 -->
+        <button
+          class="review-head review-head-btn"
+          :aria-expanded="expanded.has(item.key)"
+          @click="toggleExpanded(item.key)"
+        >
+          <span class="expand-caret" aria-hidden="true">{{ expanded.has(item.key) ? '▾' : '▸' }}</span>
           <strong>{{ item.title }}</strong>
           <span class="tag" :class="statusClass(item.status)">{{ statusLabel(item.status) }}</span>
           <span v-if="item.ai_verdict" class="tag tag-secondary" style="font-size: 11px;">
             {{ t('review.aiLabel') }}: {{ aiLabel(item.ai_verdict) }}
           </span>
           <span v-if="item.stale" class="tag tag-warning" style="font-size: 11px;">{{ t('review.stale') }}</span>
-        </div>
+          <span v-if="item.reviewed_at" class="review-meta" style="margin-left: auto;">
+            {{ t('review.reviewedAt', { time: item.reviewed_at }) }}
+          </span>
+        </button>
+
+        <template v-if="expanded.has(item.key)">
+        <!-- 待审内容摘要：审核员必须能看见「审的是什么」 -->
+        <p class="review-preview">{{ item.preview }}</p>
         <p v-if="item.ai_note" class="review-note">{{ item.ai_note }}</p>
         <p v-if="item.human_note" class="review-note">{{ t('review.humanNoteLabel') }}{{ item.human_note }}</p>
-        <p v-if="item.reviewed_at" class="review-meta">{{ t('review.reviewedAt', { time: item.reviewed_at }) }}</p>
 
         <div class="review-actions">
           <input
@@ -87,6 +105,8 @@
           <button class="btn btn-secondary btn-sm" :disabled="busy" @click="submit(item.key, 'needs_edit')">{{ t('review.needsEdit') }}</button>
           <button class="btn btn-secondary btn-sm" :disabled="busy" @click="showHistory(item.key)">{{ t('review.history') }}</button>
         </div>
+
+        </template>
 
         <div v-if="historyFor === item.key" class="review-history">
           <p v-if="history.length === 0" class="text-muted">{{ t('review.noHistory') }}</p>
@@ -137,6 +157,14 @@ const aiNotice = ref('');
 const progress = ref<{ total: number; approved: number; awaiting_human: number; pending: number } | null>(null);
 const statusFilter = ref('all');
 const historyFor = ref('');
+const expanded = ref<Set<string>>(new Set());
+
+function toggleExpanded(key: string) {
+  const next = new Set(expanded.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expanded.value = next;
+}
 const history = ref<ReviewRecord[]>([]);
 const notes = reactive<Record<string, string>>({});
 
@@ -155,7 +183,10 @@ const visibleItems = computed(() =>
     : items.value.filter(i => i.status === statusFilter.value),
 );
 
+const STATUS_KEYS = new Set(['pending', 'awaiting_human', 'approved', 'rejected', 'needs_edit']);
+
 function statusLabel(s: string): string {
+  if (!STATUS_KEYS.has(s)) return '—';
   return t(`review.status.${s}`);
 }
 function statusClass(s: string): string {
@@ -164,10 +195,16 @@ function statusClass(s: string): string {
   if (s === 'awaiting_human') return 'tag-warning';
   return 'tag-secondary';
 }
-function aiLabel(v: string): string {
+/** 未知值一律显示「—」，绝不把 i18n 键名（review.ai.null）露给用户。 */
+const AI_KEYS = new Set(['pass', 'flag', 'unknown', 'skipped']);
+const HUMAN_KEYS = new Set(['approved', 'rejected', 'needs_edit']);
+
+function aiLabel(v: string | null | undefined): string {
+  if (!v || !AI_KEYS.has(v)) return '—';
   return t(`review.ai.${v}`);
 }
-function humanLabel(v: string): string {
+function humanLabel(v: string | null | undefined): string {
+  if (!v || !HUMAN_KEYS.has(v)) return '—';
   return t(`review.human.${v}`);
 }
 
@@ -314,6 +351,32 @@ onMounted(loadProfiles);
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.review-head-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.review-head-btn:hover { background: var(--gray-50); }
+.expand-caret { color: var(--gray-400); font-size: 11px; width: 10px; }
+.review-preview {
+  font-size: 12px;
+  color: var(--gray-600);
+  background: var(--gray-50);
+  border-left: 2px solid var(--gray-300, #d6cfc4);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
 }
 .review-note {
   font-size: 13px;

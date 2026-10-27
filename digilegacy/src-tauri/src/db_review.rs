@@ -18,15 +18,36 @@ use crate::review::{AiVerdict, HumanVerdict, ReviewItem, ReviewRecord, ReviewSta
 pub struct ItemState {
     pub key: String,
     pub title: String,
+    /// 待审内容摘要：审核员必须能看见「审的是什么」，
+    /// 否则界面只剩一个标题，实际要靠脑补。
+    pub preview: String,
     pub status: ReviewStatus,
     /// 最新记录的 AI 结论与说明（没有记录时为 None）
     pub ai_verdict: Option<AiVerdict>,
     pub ai_note: String,
     pub human_note: String,
-    /// 审核时间（最新记录）
+    /// 最近一次**人工**审核时间。
+    /// 为空表示还没有人看过——AI 跑过但没有人工结论时这里必须为空，
+    /// 否则界面会把「机器扫过」显示成「已审核」。
     pub reviewed_at: Option<String>,
     /// 记录是否因内容变化而失效
     pub stale: bool,
+}
+
+/// 内容摘要：截断到 300 字，保留换行为「 · 」便于单行显示。
+fn preview_of(payload: &str) -> String {
+    let flat: String = payload
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ");
+    if flat.chars().count() <= 300 {
+        flat
+    } else {
+        let cut: String = flat.chars().take(300).collect();
+        format!("{}…", cut)
+    }
 }
 
 fn map_ai(s: &str) -> AiVerdict {
@@ -154,19 +175,21 @@ pub fn summarise_states_db(
                 Some(r.ai_verdict.clone()),
                 r.ai_note.clone(),
                 r.human_note.clone(),
-                Some(r.created_at.clone()),
+                // 只有人工结论才算「审核过」；AI 跑过不算
+                r.human_verdict.as_ref().map(|_| r.created_at.clone()),
             ),
             Some(r) => (
                 ReviewStatus::from_verdicts(&r.ai_verdict, r.human_verdict.as_ref()),
                 Some(r.ai_verdict.clone()),
                 r.ai_note.clone(),
                 r.human_note.clone(),
-                Some(r.created_at.clone()),
+                r.human_verdict.as_ref().map(|_| r.created_at.clone()),
             ),
         };
         out.push(ItemState {
             key: item.key.clone(),
             title: item.title.clone(),
+            preview: preview_of(&item.payload),
             status,
             ai_verdict,
             ai_note,
@@ -197,4 +220,152 @@ pub fn review_counts_db(
         .filter(|s| s.status == ReviewStatus::Pending)
         .count();
     Ok((approved, awaiting, pending))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::review::{fingerprint, AiVerdict, HumanVerdict};
+
+    fn fresh(tag: &str) {
+        crate::db::init_database_at(std::env::temp_dir().join(format!(
+            "digilegacy_review_{}_{}.db",
+            tag,
+            std::process::id()
+        )))
+        .unwrap();
+    }
+
+    fn item(payload: &str) -> ReviewItem {
+        ReviewItem {
+            key: "k".to_string(),
+            title: "条目".to_string(),
+            payload: payload.to_string(),
+            fingerprint: fingerprint(payload),
+        }
+    }
+
+    fn record(ai: AiVerdict, human: Option<HumanVerdict>, fp: &str) -> ReviewRecord {
+        ReviewRecord {
+            profile_id: "p".to_string(),
+            item_key: "k".to_string(),
+            fingerprint: fp.to_string(),
+            ai_verdict: ai,
+            ai_note: String::new(),
+            human_verdict: human,
+            human_note: String::new(),
+            decided_by: "test".to_string(),
+            created_at: String::new(),
+        }
+    }
+
+    /// AI 跑过但没有人工结论 → 状态「待人工」，且**不显示审核时间**。
+    #[test]
+    fn ai_only_record_is_not_reviewed_yet() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        fresh("ai_only");
+        let it = item("内容");
+        append_review_record_db(&record(AiVerdict::Pass, None, &it.fingerprint)).unwrap();
+        let states = summarise_states_db("p", &[it]).unwrap();
+        assert_eq!(states[0].status, ReviewStatus::AwaitingHuman);
+        assert!(
+            states[0].reviewed_at.is_none(),
+            "AI 跑过不等于审核过，不能显示审核时间"
+        );
+    }
+
+    /// 人工结论写入后状态与时间才成立。
+    #[test]
+    fn human_decision_sets_status_and_time() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        fresh("human");
+        let it = item("内容");
+        append_review_record_db(&record(
+            AiVerdict::Pass,
+            Some(HumanVerdict::Approved),
+            &it.fingerprint,
+        ))
+        .unwrap();
+        let states = summarise_states_db("p", &[it]).unwrap();
+        assert_eq!(states[0].status, ReviewStatus::Approved);
+        assert!(states[0].reviewed_at.is_some());
+    }
+
+    /// 内容变化 → 状态回到待审，并标 stale。
+    #[test]
+    fn content_change_invalidates_decision() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        fresh("stale");
+        let old = item("旧内容");
+        append_review_record_db(&record(
+            AiVerdict::Pass,
+            Some(HumanVerdict::Approved),
+            &old.fingerprint,
+        ))
+        .unwrap();
+        let new = item("新内容");
+        let states = summarise_states_db("p", &[new]).unwrap();
+        assert_eq!(states[0].status, ReviewStatus::Pending);
+        assert!(states[0].stale, "内容变化必须标记为需重审");
+    }
+
+    /// 留痕只增不改：同一 key 多次审核必须全部保留。
+    #[test]
+    fn audit_trail_is_append_only() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        fresh("append");
+        let it = item("内容");
+        append_review_record_db(&record(AiVerdict::Flag, None, &it.fingerprint)).unwrap();
+        append_review_record_db(&record(
+            AiVerdict::Flag,
+            Some(HumanVerdict::Approved),
+            &it.fingerprint,
+        ))
+        .unwrap();
+        let all = list_review_records_db("p", "k").unwrap();
+        assert_eq!(all.len(), 2, "两条记录都必须保留");
+        // 新的在前
+        assert_eq!(all[0].human_verdict, Some(HumanVerdict::Approved));
+    }
+
+    /// 进度统计要把「已通过 / 待人工 / 待审」分开，不能合成一个数字。
+    #[test]
+    fn counts_split_by_status() {
+        let _g = crate::vault::test_lock();
+        crate::vault::clear_key();
+        fresh("counts");
+        // 注意：条目 key 必须与记录里的 item_key 一致，
+        // 否则查询按 key 定位不到记录（第一版测试就是这么写错的）。
+        let mk = |key: &str| ReviewItem {
+            key: key.to_string(),
+            title: key.to_string(),
+            payload: key.to_string(),
+            fingerprint: fingerprint(key),
+        };
+        let a = mk("a");
+        let b = mk("b");
+        let c = mk("c");
+        append_review_record_db(&ReviewRecord {
+            profile_id: "p".to_string(),
+            item_key: "a".to_string(),
+            ..record(
+                AiVerdict::Pass,
+                Some(HumanVerdict::Approved),
+                &a.fingerprint,
+            )
+        })
+        .unwrap();
+        append_review_record_db(&ReviewRecord {
+            profile_id: "p".to_string(),
+            item_key: "b".to_string(),
+            ..record(AiVerdict::Pass, None, &b.fingerprint)
+        })
+        .unwrap();
+        let (approved, awaiting, pending) = review_counts_db("p", &[a, b, c]).unwrap();
+        assert_eq!((approved, awaiting, pending), (1, 1, 1));
+    }
 }
