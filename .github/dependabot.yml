@@ -48,6 +48,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "sha2"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "rusqlite"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
