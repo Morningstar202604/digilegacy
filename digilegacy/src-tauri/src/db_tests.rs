@@ -1916,3 +1916,55 @@ fn unverified_policy_issue_is_asset_scoped() {
         stats.issues.iter().map(|i| &i.key).collect::<Vec<_>>()
     );
 }
+
+/// 审核留痕必须随备份往返：换机后审核记录不能凭空消失。
+/// 这是「留痕是证据」这条设计的前提，否则证据只存在于一台电脑上。
+#[test]
+fn review_records_survive_backup_roundtrip() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = fresh_db_path("review_backup");
+    init_database_at(path.clone()).unwrap();
+
+    // 写一条审核记录
+    append_review_record_db(&crate::review::ReviewRecord {
+        profile_id: "platform-policy".to_string(),
+        item_key: "1".to_string(),
+        fingerprint: "abc123".to_string(),
+        ai_verdict: crate::review::AiVerdict::Flag,
+        ai_note: "来源为空".to_string(),
+        human_verdict: Some(crate::review::HumanVerdict::Approved),
+        human_note: "已补官方链接".to_string(),
+        decided_by: "human".to_string(),
+        created_at: "2026-10-27 10:00:00".to_string(),
+    })
+    .unwrap();
+
+    let json = export_backup_json_db().unwrap();
+    let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let records = v["tables"]["review_records"]
+        .as_array()
+        .expect("备份必须含审核记录");
+    assert_eq!(records.len(), 1, "导出条数不符");
+    assert_eq!(records[0]["human_note"], "已补官方链接");
+
+    // 清空后导入，记录必须回来
+    {
+        let guard = get_conn().unwrap();
+        guard
+            .as_ref()
+            .unwrap()
+            .execute("DELETE FROM review_records", [])
+            .unwrap();
+    }
+    import_backup_json_db(&json).unwrap();
+    let back = list_review_records_db("platform-policy", "1").unwrap();
+    assert_eq!(back.len(), 1, "导入后记录必须恢复");
+    assert_eq!(back[0].human_note, "已补官方链接");
+    assert_eq!(back[0].fingerprint, "abc123");
+
+    // 再导一次同一份（merge 语义）：不得重复堆积
+    import_backup_json_db(&json).unwrap();
+    let again = list_review_records_db("platform-policy", "1").unwrap();
+    assert_eq!(again.len(), 1, "重复导入不得产生重复留痕");
+}

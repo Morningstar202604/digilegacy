@@ -1613,6 +1613,8 @@ pub fn export_backup_json_db() -> Result<String, String> {
     // v4：新增继承人名单、SMTP、保管位置、助手配置。
     // 都是「换机后必须带走」的配置，否则用户在新机器上要重新配一遍。
     let heirs = export_heirs_json(conn)?;
+    // 审核留痕也是「换机后必须带走」的证据：只留本机就等于换台电脑审核作废。
+    let review_records = export_review_records_json(conn)?;
     let smtp = export_smtp_json(conn)?;
     let custody = export_custody_json(conn)?;
     let assistant = export_assistant_json(conn)?;
@@ -1625,6 +1627,7 @@ pub fn export_backup_json_db() -> Result<String, String> {
             "digital_assets": assets,
             "user_profile": profiles,
             "heirs": heirs,
+            "review_records": review_records,
             "check_in_log": check_ins,
             "dms_config": dms,
             "security_config": security,
@@ -1665,6 +1668,38 @@ fn export_heirs_json(conn: &Connection) -> Result<serde_json::Value, String> {
         .map_err(|e| format!("读取继承人失败: {}", e))?;
     for r in rows {
         out.push(r.map_err(|e| format!("继承人解析失败: {}", e))?);
+    }
+    Ok(serde_json::Value::Array(out))
+}
+
+/// 导出审核留痕（含 AI 结论与人工结论）。备份是证据链的一部分，不能只留本机。
+fn export_review_records_json(conn: &Connection) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let mut out = Vec::new();
+    let mut stmt = conn
+        .prepare(
+            "SELECT profile_id, item_key, fingerprint, ai_verdict, ai_note,
+                    human_verdict, human_note, decided_by, created_at
+             FROM review_records ORDER BY id",
+        )
+        .map_err(|e| format!("查询审核记录失败: {}", e))?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok(json!({
+                "profile_id": r.get::<_, String>(0)?,
+                "item_key": r.get::<_, String>(1)?,
+                "fingerprint": r.get::<_, String>(2)?,
+                "ai_verdict": r.get::<_, String>(3)?,
+                "ai_note": r.get::<_, String>(4)?,
+                "human_verdict": r.get::<_, Option<String>>(5)?,
+                "human_note": r.get::<_, String>(6)?,
+                "decided_by": r.get::<_, String>(7)?,
+                "created_at": r.get::<_, String>(8)?,
+            }))
+        })
+        .map_err(|e| format!("读取审核记录失败: {}", e))?;
+    for r in rows {
+        out.push(r.map_err(|e| format!("审核记录解析失败: {}", e))?);
     }
     Ok(serde_json::Value::Array(out))
 }
@@ -2059,6 +2094,64 @@ pub fn import_backup_json_db_with_mode(content: &str, mode: ImportMode) -> Resul
                         ],
                     )
                     .map_err(|e| format!("写入继承人失败: {}", e))?;
+                }
+            }
+        }
+
+        // v4：审核留痕。Merge 模式跳过已存在的同指纹记录，避免重复堆积。
+        if let Some(records) = tables.get("review_records") {
+            if !records.is_array() && !records.is_null() {
+                return Err("备份字段 review_records 必须是数组".to_string());
+            }
+            if let Some(list) = records.as_array() {
+                if mode == ImportMode::Replace {
+                    conn.execute("DELETE FROM review_records", [])
+                        .map_err(|e| format!("清空审核记录失败: {}", e))?;
+                }
+                for r in list {
+                    let profile_id = sval(r, "profile_id");
+                    let item_key = sval(r, "item_key");
+                    let fingerprint = sval(r, "fingerprint");
+                    if profile_id.is_empty() || item_key.is_empty() {
+                        continue;
+                    }
+                    if mode == ImportMode::Merge {
+                        // 同一条目同一指纹的记录视为已经存在（留痕只增，不重复）
+                        let exists: i64 = conn
+                            .query_row(
+                                "SELECT COUNT(*) FROM review_records
+                                 WHERE profile_id=?1 AND item_key=?2 AND fingerprint=?3
+                                   AND ai_verdict=?4 AND COALESCE(human_verdict,'')=?5",
+                                params![
+                                    profile_id,
+                                    item_key,
+                                    fingerprint,
+                                    sval(r, "ai_verdict"),
+                                    sval(r, "human_verdict"),
+                                ],
+                                |x| x.get(0),
+                            )
+                            .unwrap_or(0);
+                        if exists > 0 {
+                            continue;
+                        }
+                    }
+                    conn.execute(
+                        "INSERT INTO review_records (profile_id, item_key, fingerprint, ai_verdict, ai_note, human_verdict, human_note, decided_by, created_at)
+                         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+                        params![
+                            profile_id,
+                            item_key,
+                            fingerprint,
+                            sval(r, "ai_verdict"),
+                            sval(r, "ai_note"),
+                            { let h = sval(r, "human_verdict"); if h.is_empty() { None } else { Some(h) } },
+                            sval(r, "human_note"),
+                            sval(r, "decided_by"),
+                            sval(r, "created_at"),
+                        ],
+                    )
+                    .map_err(|e| format!("写入审核记录失败: {}", e))?;
                 }
             }
         }
