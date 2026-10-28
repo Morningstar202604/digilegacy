@@ -39,6 +39,15 @@ updates:
       tauri:
         patterns:
           - "tauri*"
+    ignore:
+      # rand 0.10 / thiserror 2 are semver-major bumps that break the build
+      # (see closed PR #44). Majors need a manual migration, not an auto-PR.
+      - dependency-name: "rand"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "thiserror"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sha2"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

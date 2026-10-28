@@ -2,6 +2,50 @@
 
 本文件记录最终验证证据，避免"看起来绿"与"真的绿"混淆。
 
+## 2026-10-28 发版核对轮（v0.2.2）
+
+用户要求严格核对五个远端的上传/CI/官网/Release/分支五项事实。核对结论与修复如下。
+
+### 核对时发现的真实问题（均已修复）
+
+| 问题 | 证据 | 修复 |
+|---|---|---|
+| Gitee 落后 51 个提交 | `git ls-remote` gitee main = `49a78a9`，本地 `331c650` | 推送至 `b0d2cfd` |
+| 三个 GitHub 镜像落后 51 个提交 | API `repos/*/digilegacy` `pushed_at` 停在 2026-10-26 | 全部推送至 `b0d2cfd` |
+| 官网线上内容是 2026-10-24 的旧版 | 线上 `docs/index.html` sha256 == `49a78a9:docs/index.html`，仍写「86 Rust / 265 frontend」「AI 接口已预留」 | 更新中英双站并随本次提交部署 |
+| 在线演示缺审核页等 4 轮功能 | `docs/demo` 停在 `a27f70f`（10-26 19:32），`grep ReviewView` 零命中 | `npm run build:demo` 重建并覆盖 |
+| x33834 与 Morningstar 的 Pages 部署失败 | x33834 `deploy` job 报 `in progress deployment` 冲突；Pages 状态曾为 `errored` | 本次推送触发重部署，两个站均已 `built` 并返回 200 |
+| Gitee / GitCode 只有 v0.1.0 Release | API `releases` 长度 1 | 见「未能修复」 |
+| README 中英测试数与覆盖率过期 | 写 118 passing / 85.4%，实测 202 passed / 85.23% | 改为 202 / 85.2% |
+| README 写「Signed build pipeline」但无签名配置 | `grep signtool\|certificate` 全空 | 改为「发布 MSI+NSIS + SHA-256 校验，未做代码签名」 |
+| 分支不只有 main | GitHub 镜像有 `backup-before-v0.2.0` + 6 个 dependabot 分支，Gitee 有 1 个 | 备份分支先打 `archive-backup-before-v0.2.0` tag 再删；dependabot 分支随 PR 关闭清理 |
+
+### 本轮真实执行
+
+| 命令 | 结果 |
+|---|---|
+| `bash scripts/verify.sh --with-e2e` | **ALL GREEN**（12 项 PASS） |
+| `npm run test:coverage` | 424 passed / 32 files；statements 85.23 / branches 79.34 / functions 77.73 / lines 86.73 |
+| `npx playwright test` | **80 passed** |
+| `cargo test --locked` | **202 passed / 1 ignored**（源码声明 204） |
+| `node scripts/check-doc-facts.mjs` | exit 0（Rust 204 / 前端 424 / E2E 80 / IPC 69 / 表 13 / 平台 152） |
+| 站点内部链接 | 中英各 59 条，缺失 0 |
+
+### 发布产物（v0.2.2，badhope/digilegacy）
+
+| 检查 | 结果 |
+|---|---|
+| Release workflow | build + verify-release 两个 job 全 success |
+| 资产 | `DigiLegacy_0.2.2_x64-setup.exe` (3,915,816 B)、`DigiLegacy_0.2.2_x64_zh-CN.msi` (5,525,504 B)、`digest-sha256.txt` |
+| 下载 + 校验 | 三个文件全部 200 下载成功，`sha256sum -c` **两个 OK** |
+| CI on `b0d2cfd` | 5 个 job 全 success |
+
+### 明确未能修复 / 未验证
+
+- **Gitee 与 GitCode 的 Release 仍只有 v0.1.0 及其两个 EXE**：`v0.2.0/0.2.1/0.2.2` 的构建产物由 GitHub Actions 产出，Gitee/GitCode 无等价 CI；把 5.5MB MSI 与 3.9MB EXE 上传到这两个平台需要手工建 Release 并传附件（接口已确认可用，但本轮以「官网下载指向 GitHub」为准）。官网所有下载按钮指向 `github.com/badhope/digilegacy/releases`，因此用户下载路径不受影响。
+- **代码签名**：无证书，安装包未签名，Windows SmartScreen 会提示未知发布者。README 已改为如实表述。
+- **GitHub HTTPS 主 IP 不可达**：`github.com:443`（20.205.243.166）超时，`api.github.com` 间歇超时；git 推送改用 `http.curloptResolve` 指向 `140.82.121.4` 或 SSH（`ssh.github.com:443`）。这是本机网络环境，不是仓库问题。
+
 ## 2026-10-26 扩展升级轮（历史快照 · 数字为当时状态，最终数字见第三轮门禁）
 
 | 命令 | 结果 |

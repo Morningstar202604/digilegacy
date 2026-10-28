@@ -82,7 +82,7 @@ jobs:
         run: npm audit --audit-level=high --registry=https://registry.npmjs.org
 
   e2e:
-    name: E2E · Playwright（7 个视图交互链路）
+    name: E2E · Playwright（路由矩阵 + 场景矩阵 + 交互链路）
     if: github.repository == 'badhope/digilegacy'
     runs-on: ubuntu-24.04
     defaults:
