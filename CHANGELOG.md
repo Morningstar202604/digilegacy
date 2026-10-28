@@ -110,6 +110,12 @@ Also fixed: external-link validation accepted `https://trusted.example.com@evil.
 - Frontend unit tests grew from 296 to **424** across 32 files; Rust tests 86 → **204 declared / 202 passing on Windows**; E2E 37 → **80**. Coverage 85.2% statements / 86.7% lines. README badges and website pills synced by `scripts/check-doc-facts.mjs`.
 - Release pipeline publishes the MSI and NSIS installer with a SHA-256 digest file and re-downloads them after publishing to verify the checksum. Builds are not code-signed (no certificate is configured).
 
+## [0.2.1] - 2026-10-26
+
+### Changed
+
+- `base64` 0.22 → 0.23, syncing dependabot #39. This was the last tagged build before the family-toolkit work in 0.2.2; it shipped no user-visible change of its own.
+
 ## [0.2.0] - 2026-10-24
 
 ### Added
