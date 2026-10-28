@@ -375,10 +375,22 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
           has_source: false,
         };
       });
+      // 与桌面版同契约：报告带权威来源，预览与导出读同一份
+      const authority = (id: string, kind: string, zh: string, en: string, note: string, noteEn: string, matched: boolean, portalZh = '', portalEn = '') => ({
+        id, kind, title_zh: zh, title_en: en, publisher: '演示', url: 'https://flk.npc.gov.cn/',
+        note_zh: note, note_en: noteEn, applies_to: ['property'],
+        reachable: true, content_matched: matched, last_checked: '2026-10-27',
+        http_status: 200, observed_title: '国家法律法规数据库',
+        portal_note_zh: portalZh, portal_note_en: portalEn,
+      });
       return ok({
         user: state.profile || { full_name: '未设置' },
         assets,
         policies,
+        authorities: [
+          authority('civil-code-1122', 'portal', '《中华人民共和国民法典》第一千一百二十二条', 'Civil Code, Article 1122', '遗产是自然人死亡时遗留的个人合法财产。', 'An estate is the lawful personal property left at death.', true, '检索入口：按法规名称检索后查看原文。', 'Search portal: look up the statute by name.'),
+          authority('pbc', 'institution', '中国人民银行', "People's Bank of China", '存款继承相关规定的发布机构。', 'Issuer of rules on deposit inheritance.', false),
+        ],
         total_estimated_value: total,
         property_assets_count: assets.filter(x => x.category === 'property').length,
         personality_assets_count: assets.filter(x => x.category === 'personality').length,
@@ -418,6 +430,38 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
         last_check_in: state.dms.lastCheckIn,
         dms_enabled: state.dms.enabled,
         completion_percentage: completion,
+        // 与桌面版同口径：把「还差什么」算成可点击的待办
+        issues: (() => {
+          const list: Array<{ key: string; severity: 'blocker' | 'warn' | 'info'; count: number; target: string }> = [];
+          const noDisposal = assets.filter(x => x.disposal_method === 'no_action').length;
+          if (noDisposal > 0) list.push({ key: 'missing_disposal', severity: 'warn', count: noDisposal, target: '/assets' });
+          const noHeir = assets.filter(x => x.disposal_method === 'inherit' && !(x.heir_name || '').trim()).length;
+          if (noHeir > 0) list.push({ key: 'missing_heir', severity: 'blocker', count: noHeir, target: '/assets' });
+          const noIdent = assets.filter(x => !(x.account_identifier || '').trim()).length;
+          if (noIdent > 0) list.push({ key: 'missing_identifier', severity: 'warn', count: noIdent, target: '/assets' });
+          const noCred = assets.filter(x => !x.has_credential && ['inherit', 'liquidate', 'authorize_view'].includes(x.disposal_method)).length;
+          if (noCred > 0) list.push({ key: 'no_credential', severity: 'info', count: noCred, target: '/assets' });
+          if (!state.custody?.backup_location || !state.custody?.recovery_code_location) {
+            list.push({ key: 'custody_missing', severity: 'blocker', count: 0, target: '/profile' });
+          }
+          // 演示数据里所有平台政策都未核实，按资产去重后统计
+          const verifiedPlatforms = new Set<number>();
+          if (verifiedPlatforms.size < new Set(assets.map(x => x.platform_id)).size) {
+            list.push({
+              key: 'policy_unverified',
+              severity: 'info',
+              count: new Set(assets.map(x => x.platform_id)).size,
+              target: '/review',
+            });
+          }
+          if (!triggerReady) {
+            list.push({
+              key: state.dms.enabled ? 'trigger_no_channel' : 'trigger_disabled',
+              severity: 'blocker', count: 0, target: '/profile',
+            });
+          }
+          return list;
+        })(),
       };
       return ok(stats) as T;
     }

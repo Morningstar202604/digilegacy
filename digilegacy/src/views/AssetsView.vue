@@ -33,6 +33,14 @@
         <button class="btn btn-sm" :class="filter === 'property' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'property'" @click="filter = 'property'">{{ t('cat.property') }} ({{ assets.propertyCount }})</button>
         <button class="btn btn-sm" :class="filter === 'personality' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'personality'" @click="filter = 'personality'">{{ t('cat.personality') }} ({{ assets.personalityCount }})</button>
         <button class="btn btn-sm" :class="filter === 'mixed' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'mixed'" @click="filter = 'mixed'">{{ t('cat.mixed') }} ({{ assets.mixedCount }})</button>
+        <!-- 待完善：把所有「家人拿到也办不了」的资产集中起来，一次改完 -->
+        <button
+          class="btn btn-sm"
+          :class="filter === 'incomplete' ? 'btn-primary' : 'btn-secondary'"
+          :aria-pressed="filter === 'incomplete'"
+          :disabled="incompleteCount === 0"
+          @click="filter = filter === 'incomplete' ? 'all' : 'incomplete'"
+        >{{ t('assets.filterIncomplete') }} ({{ incompleteCount }})</button>
         <span class="text-muted" style="font-size: 12px; margin-left: auto;" aria-live="polite">
           {{ t('assets.showing', { shown: filteredAssets.length, total: assets.assets.length }) }}
         </span>
@@ -53,6 +61,8 @@
               <span class="tag" :class="'tag-' + asset.category">{{ categoryLabel(asset.category) }}</span>
               <span class="tag" :class="asset.disposal_method !== 'no_action' ? 'tag-success' : 'tag-warning'">{{ disposalLabel(asset.disposal_method) }}</span>
               <span class="tag tag-success" v-if="asset.has_credential"><LockClosedOutline /> {{ t('assets.hasCredential') }}</span>
+              <!-- 缺什么要写在行上：用户点进详情才知道哪里缺，等于白筛 -->
+              <span v-for="gap in gapsOf(asset)" :key="gap" class="tag tag-warning">{{ t('assets.gap.' + gap) }}</span>
             </div>
           </div>
         </div>
@@ -101,6 +111,7 @@ import { useI18n } from '../i18n';
 import SearchOutline from '@vicons/ionicons5/es/SearchOutline';
 import LockClosedOutline from '@vicons/ionicons5/es/LockClosedOutline';
 import { useAssetsStore } from '../stores/assets';
+import type { DigitalAsset } from '../types';
 import { formatMoney, categoryLabel, disposalLabel } from '../utils/format';
 import PlatformIcon from '../components/PlatformIcon.vue';
 import EmptyState from '../components/EmptyState.vue';
@@ -111,11 +122,39 @@ const filter = ref<string>('all');
 const keyword = ref('');
 const sortBy = ref<'recent' | 'value' | 'platform' | 'disposal'>('recent');
 
+/**
+ * 「待完善」的判定与仪表板待办同源：
+ * 选了继承却没继承人、账号标识为空、需要交接但没有凭据。
+ * 三条都直接影响家人能否执行，不是风格问题。
+ */
+function isIncomplete(a: DigitalAsset): boolean {
+  const noHeir = a.disposal_method === 'inherit' && !(a.heir_name || '').trim();
+  const noIdent = !(a.account_identifier || '').trim();
+  const needsCred = ['inherit', 'liquidate', 'authorize_view'].includes(a.disposal_method);
+  const noCred = needsCred && !a.has_credential;
+  return noHeir || noIdent || noCred;
+}
+
+const incompleteCount = computed(() => assets.assets.filter(isIncomplete).length);
+
+/** 逐条列出该资产缺什么，用于行内提示。 */
+function gapsOf(a: DigitalAsset): string[] {
+  const gaps: string[] = [];
+  if (a.disposal_method === 'inherit' && !(a.heir_name || '').trim()) gaps.push('heir');
+  if (!(a.account_identifier || '').trim()) gaps.push('identifier');
+  if (['inherit', 'liquidate', 'authorize_view'].includes(a.disposal_method) && !a.has_credential) {
+    gaps.push('credential');
+  }
+  return gaps;
+}
+
 /** 搜索匹配平台名 / 账号标识 / 备注；大小写不敏感，多关键词用空格分隔（AND）。 */
 const filteredAssets = computed(() => {
   const byCat = filter.value === 'all'
     ? assets.assets
-    : assets.assets.filter(a => a.category === filter.value);
+    : filter.value === 'incomplete'
+      ? assets.assets.filter(isIncomplete)
+      : assets.assets.filter(a => a.category === filter.value);
 
   const terms = keyword.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const matched = terms.length === 0

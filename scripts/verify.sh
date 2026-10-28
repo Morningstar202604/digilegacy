@@ -25,6 +25,23 @@ run() {
   fi
 }
 
+# 可选检查：失败只告警，不计入 FAILED。
+# 理由：权威来源核验依赖外部政务站点，网络抖动或对端限流不应把本地门禁判红——
+# 否则「可选」二字就是假的，用户会习惯性忽略整条门禁。
+run_optional() {
+  local label="$1"; shift
+  printf '
+==> %s
+' "$label"
+  if "$@"; then
+    printf '  PASS: %s
+' "$label"
+  else
+    printf '  WARN: %s（可选检查失败，不计入门禁）
+' "$label"
+  fi
+}
+
 have() { command -v "$1" >/dev/null 2>&1; }
 
 if [ "$MODE" != "--rust-only" ]; then
@@ -40,7 +57,7 @@ if [ "$MODE" != "--rust-only" ]; then
   run "心跳服务器行为测试" bash -c "cd '$WEB' && node server/heartbeat-server.test.mjs"
   run "文档数字一致性" bash -c "cd '$WEB' && node scripts/check-doc-facts.mjs"
   run "政策库溯源" bash -c "cd '$WEB' && node scripts/check-policy-provenance.mjs"
-  run "权威来源核验（可选，需联网）" bash -c "cd '$WEB' && node scripts/verify-authorities.mjs"
+  run_optional "权威来源核验（可选，需联网）" bash -c "cd '$WEB' && node scripts/verify-authorities.mjs"
   # E2E 默认跳过（需先 npx playwright install chromium）；--with-e2e 显式开启
   if [ "$MODE" = "--with-e2e" ]; then
     run "E2E（Playwright）" bash -c "cd '$WEB' && npx playwright test"

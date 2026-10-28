@@ -139,6 +139,22 @@ async function boot(page) {
 }
 
 /** 页面健康检查：主体文本、横向溢出、可见的原始 i18n 键名。 */
+/** 等主体文本稳定：连续两次采样长度相同且非空，避免读到「元素已挂载、内容未渲染」的中间态。 */
+async function waitForStableText(page, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = -1;
+  while (Date.now() < deadline) {
+    const len = await page.evaluate(() => {
+      const main = document.querySelector('.main-content') || document.body;
+      return (main.textContent || '').replace(/\s+/g, ' ').trim().length;
+    });
+    if (len > 0 && len === last) return len;
+    last = len;
+    await page.waitForTimeout(250);
+  }
+  return last;
+}
+
 async function inspect(page) {
   return page.evaluate(() => {
     const main = document.querySelector('.main-content') || document.body;
@@ -178,7 +194,8 @@ async function main() {
     } catch {
       findings.push({ name: shot.name, issue: `未找到 ${shot.wait}` });
     }
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(400);
+    await waitForStableText(page);
     const info = await inspect(page);
     const file = path.join(OUT, `${shot.name}.png`);
     await page.screenshot({ path: file });
@@ -198,6 +215,7 @@ async function main() {
     } catch (e) {
       findings.push({ name: item.name, issue: `交互失败: ${String(e).slice(0, 120)}` });
     }
+    await waitForStableText(page);
     const info = await inspect(page);
     const file = path.join(OUT, `${item.name}.png`);
     await page.screenshot({ path: file });

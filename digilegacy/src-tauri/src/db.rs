@@ -2527,6 +2527,147 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
     // 只有「家人真的能收到」才算这一项达标。
     // 仅心跳可用时，家人收不到邮件——这不算触发链可用，否则完成度会虚高到 100%
     // 同时界面提示「家人收不到邮件」，自相矛盾。
+    // ── 待办检查项：把「还差什么」算出来，而不是只给一个百分比 ──
+    // 每条都必须可执行（带跳转目标），否则用户看完仍不知道下一步。
+    let missing_disposal: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets WHERE disposal_method = 'no_action'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let missing_heir: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets
+             WHERE disposal_method = 'inherit' AND (heir_name IS NULL OR TRIM(heir_name) = '')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let missing_identifier: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets
+             WHERE account_identifier IS NULL
+                OR TRIM(account_identifier) = ''
+                OR account_identifier LIKE '%需解锁%'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let no_credential: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM digital_assets
+             WHERE (credential_enc IS NULL OR credential_enc = '')
+               AND disposal_method IN ('inherit', 'liquidate', 'authorize_view')",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    // 保管位置：家人能否找到备份与恢复码
+    // 用 EXISTS 判断「是否已填写」，而不是 COUNT。
+    // 空库时 custody_config 没有行，COUNT(*) 返回 0，会被误判成「已填写」，
+    // 于是这条最关键的 blocker 永远不出现（实测就是这么被抓出来的）。
+    let custody_filled: bool = conn
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM custody_config
+                WHERE id=1
+                  AND COALESCE(backup_location_enc,'') != ''
+                  AND COALESCE(recovery_code_location_enc,'') != ''
+             )",
+            [],
+            |r| r.get::<_, i64>(0),
+        )
+        .map(|v| v != 0)
+        .unwrap_or(false);
+    let custody_missing = if custody_filled { 0 } else { 1 };
+
+    let mut issues: Vec<crate::models::CheckIssue> = Vec::new();
+    if total > 0 && missing_disposal > 0 {
+        issues.push(crate::models::CheckIssue {
+            key: "missing_disposal".into(),
+            severity: "warn".into(),
+            count: missing_disposal,
+            target: "/assets".into(),
+        });
+    }
+    if missing_heir > 0 {
+        issues.push(crate::models::CheckIssue {
+            key: "missing_heir".into(),
+            severity: "blocker".into(),
+            count: missing_heir,
+            target: "/assets".into(),
+        });
+    }
+    if missing_identifier > 0 {
+        issues.push(crate::models::CheckIssue {
+            key: "missing_identifier".into(),
+            severity: "warn".into(),
+            count: missing_identifier,
+            target: "/assets".into(),
+        });
+    }
+    if no_credential > 0 {
+        issues.push(crate::models::CheckIssue {
+            key: "no_credential".into(),
+            severity: "info".into(),
+            count: no_credential,
+            target: "/assets".into(),
+        });
+    }
+    if custody_missing > 0 {
+        issues.push(crate::models::CheckIssue {
+            key: "custody_missing".into(),
+            severity: "blocker".into(),
+            count: 0,
+            target: "/profile".into(),
+        });
+    }
+    // 政策未核实：按「用户实际持有的资产」统计，而不是按政策库总量。
+    // 政策库 152 条里有 147 条未核实，如果直接报 147，用户会觉得与自己无关；
+    // 报「你持有的 N 项资产对应的政策尚未核实」才是他能感知的风险。
+    let unverified_platforms: std::collections::HashSet<i64> =
+        crate::platform_data::get_all_platforms()
+            .into_iter()
+            .filter(|p| p.data_source.contains("未核实"))
+            .map(|p| p.id)
+            .collect();
+    let asset_platforms: Vec<i64> = {
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT platform_id FROM digital_assets")
+            .map_err(|e| format!("查询资产平台失败: {}", e))?;
+        let rows = stmt
+            .query_map([], |r| r.get::<_, i64>(0))
+            .map_err(|e| format!("读取资产平台失败: {}", e))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("收集资产平台失败: {}", e))?
+    };
+    let unverified_hit = asset_platforms
+        .iter()
+        .filter(|id| unverified_platforms.contains(id))
+        .count() as i64;
+    if unverified_hit > 0 {
+        issues.push(crate::models::CheckIssue {
+            key: "policy_unverified".into(),
+            severity: "info".into(),
+            count: unverified_hit,
+            target: "/review".into(),
+        });
+    }
+
+    if !trigger_ready {
+        issues.push(crate::models::CheckIssue {
+            key: if dms_enabled {
+                "trigger_no_channel".into()
+            } else {
+                "trigger_disabled".into()
+            },
+            severity: "blocker".into(),
+            count: 0,
+            target: "/profile".into(),
+        });
+    }
+
     let trigger_score = if trigger_ready { 100 } else { 0 };
     let completion = if total > 0 {
         (ratio(disposal_planned) + ratio(heir_assigned) + ratio(identifier_ready) + trigger_score)
@@ -2549,6 +2690,7 @@ pub fn get_dashboard_stats_db() -> Result<DashboardStats, String> {
         last_check_in,
         dms_enabled,
         completion_percentage: completion,
+        issues,
     })
 }
 

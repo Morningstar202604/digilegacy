@@ -112,6 +112,14 @@ async function main() {
 
   const okCount = results.filter(r => r.ok).length;
   const matchedCount = results.filter(r => r.matched).length;
+  // 全部不可达通常意味着本机没网，而不是所有来源同时下线。
+  // 这时必须说清楚，否则用户会去逐个怀疑来源。
+  const allDown = okCount === 0;
+  if (allDown) {
+    console.log('权威来源核验：全部无法连接 —— 本机网络不可用或所有站点同时不可达。');
+    console.log('  这不是「来源失效」的结论，请联网后重跑；本次结果不写入 JSON。');
+    process.exit(2);
+  }
   console.log(`权威来源核验：可达 ${okCount}/${results.length} · 内容匹配 ${matchedCount}/${results.length}`);
   for (const r of results) {
     const reach = r.ok ? 'OK  ' : 'FAIL';

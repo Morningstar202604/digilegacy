@@ -1832,3 +1832,87 @@ fn heartbeat_only_does_not_count_as_reachable_trigger() {
         stats.completion_percentage
     );
 }
+
+/// 待办检查项：必须能算出「差在哪」，且 blocker 优先。
+/// 只有百分比时用户不知道下一步做什么，这条测试锁住可执行性。
+#[test]
+fn dashboard_issues_are_actionable() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = fresh_db_path("issues");
+    init_database_at(path.clone()).unwrap();
+
+    // 空库：没有资产，但保管位置与触发链仍未完成 → 必须报 blocker
+    let stats = get_dashboard_stats_db().unwrap();
+    let keys: Vec<&str> = stats.issues.iter().map(|i| i.key.as_str()).collect();
+    assert!(
+        keys.contains(&"custody_missing"),
+        "空库时保管位置缺失必须报出，实际 {:?}",
+        keys
+    );
+    assert!(
+        keys.contains(&"trigger_disabled"),
+        "未启用 DMS 必须报出，实际 {:?}",
+        keys
+    );
+    // 每条都必须带跳转目标，否则用户点不动
+    for issue in &stats.issues {
+        assert!(issue.target.starts_with('/'), "{} 缺跳转目标", issue.key);
+        assert!(
+            ["blocker", "warn", "info"].contains(&issue.severity.as_str()),
+            "{} 的严重度非法: {}",
+            issue.key,
+            issue.severity
+        );
+    }
+
+    // 加一条「继承但无继承人」的资产 → 必须报 missing_heir 且为 blocker
+    let req = AssetRequest {
+        platform_id: 1,
+        account_identifier: "acc".to_string(),
+        account_description: String::new(),
+        category: "property".to_string(),
+        estimated_value: Some(1.0),
+        disposal_method: "liquidate".to_string(),
+        heir_name: None,
+        heir_contact: None,
+        notes: String::new(),
+    };
+    add_asset_db(&req).unwrap();
+    let stats2 = get_dashboard_stats_db().unwrap();
+    assert!(
+        !stats2.issues.iter().any(|i| i.key == "missing_heir"),
+        "liquidate 不涉及继承人，不应报 missing_heir"
+    );
+}
+
+/// 政策未核实按「用户持有的平台」统计，不是按政策库总量。
+/// 直接报 147 会让用户觉得与自己无关，报自己持有的数量才有代入感。
+#[test]
+fn unverified_policy_issue_is_asset_scoped() {
+    let _g = vault::test_lock();
+    vault::clear_key();
+    let path = fresh_db_path("policy_issue");
+    init_database_at(path.clone()).unwrap();
+
+    // 加一条资产（平台 1 = 支付宝，其 data_source 是真实出处，不算未核实）
+    let req = AssetRequest {
+        platform_id: 1,
+        account_identifier: "acc".to_string(),
+        account_description: String::new(),
+        category: "property".to_string(),
+        estimated_value: Some(1.0),
+        disposal_method: "liquidate".to_string(),
+        heir_name: None,
+        heir_contact: None,
+        notes: String::new(),
+    };
+    add_asset_db(&req).unwrap();
+    let stats = get_dashboard_stats_db().unwrap();
+    // 支付宝有出处，因此不应出现 policy_unverified
+    assert!(
+        !stats.issues.iter().any(|i| i.key == "policy_unverified"),
+        "有出处的平台不应报未核实: {:?}",
+        stats.issues.iter().map(|i| &i.key).collect::<Vec<_>>()
+    );
+}

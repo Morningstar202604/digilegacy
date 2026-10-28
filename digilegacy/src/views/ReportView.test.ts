@@ -418,3 +418,61 @@ describe('AI 助手（默认关闭，不内置服务）', () => {
     expect((call![1] as Record<string, unknown>).locale).toBeTruthy();
   });
 });
+
+describe('权威来源（预览必须与导出同源）', () => {
+  it('报告带权威来源时，预览里也渲染出来', async () => {
+    const w = await mountReport({
+      get_inheritance_report: {
+        success: true, message: '',
+        data: {
+          ...reportData(),
+          authorities: [
+            {
+              id: 'civil-code-1122', kind: 'portal',
+              title_zh: '《中华人民共和国民法典》第一千一百二十二条', title_en: 'Civil Code, Article 1122',
+              publisher: '全国人大', url: 'https://flk.npc.gov.cn/',
+              note_zh: '遗产是自然人死亡时遗留的个人合法财产。', note_en: 'Estate definition.',
+              applies_to: ['property'], reachable: true, content_matched: true,
+              last_checked: '2026-10-27', http_status: 200, observed_title: '国家法律法规数据库',
+              portal_note_zh: '检索入口：按法规名称检索后查看原文。', portal_note_en: 'Search portal.',
+            },
+          ],
+        },
+      },
+    });
+    expect(w.text(), '预览必须显示权威来源章节').toContain('权威来源');
+    expect(w.text()).toContain('民法典');
+    expect(w.text()).toContain('入口可达');
+    expect(w.text()).toContain('内容已核对');
+    expect(w.text(), '检索入口要标明不是条文页').toContain('非条文页');
+  });
+
+  it('未匹配的来源必须显示为未核对，不能与已核对混同', async () => {
+    const w = await mountReport({
+      get_inheritance_report: {
+        success: true, message: '',
+        data: {
+          ...reportData(),
+          authorities: [
+            {
+              id: 'pbc', kind: 'institution',
+              title_zh: '中国人民银行', title_en: 'PBC',
+              publisher: '人民银行', url: 'https://www.pbc.gov.cn/',
+              note_zh: '存款继承规定发布机构。', note_en: 'Issuer.',
+              applies_to: ['property'], reachable: true, content_matched: false,
+              last_checked: '2026-10-27', http_status: 200, observed_title: '中国人民银行',
+              portal_note_zh: '', portal_note_en: '',
+            },
+          ],
+        },
+      },
+    });
+    expect(w.text()).toContain('内容未核对');
+    expect(w.text()).not.toContain('内容已核对');
+  });
+
+  it('没有来源时不渲染空章节', async () => {
+    const w = await mountReport();
+    expect(w.text()).not.toContain('权威来源');
+  });
+});

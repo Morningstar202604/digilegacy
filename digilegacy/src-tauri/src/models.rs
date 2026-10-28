@@ -320,6 +320,25 @@ pub struct DashboardStats {
     pub dms_enabled: bool,
     /// 四项检查各 25% 的加权结果。
     pub completion_percentage: i64,
+    /// 待办检查项：每条都是一句可直接执行的动作，不是泛泛的「建议完善」。
+    /// 由数据推导，不写死文案——同一个界面语言下，中英文各自渲染。
+    pub issues: Vec<CheckIssue>,
+}
+
+/// 一条待办检查项。
+///
+/// 设计理由：完成度百分比只告诉用户「还差多少」，不告诉「差在哪」。
+/// 用户看到 75% 无从下手；看到「3 条资产没有继承人」才知道下一步做什么。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckIssue {
+    /// 稳定键，前端据此映射文案与跳转目标。
+    pub key: String,
+    /// 严重度：blocker 表示会导致家人无法执行；warn 表示质量缺陷；info 表示优化建议。
+    pub severity: String,
+    /// 受影响条数（无条数概念时为 0）。
+    pub count: i64,
+    /// 建议跳转的页面路径（前端可直接 router.push）。
+    pub target: String,
 }
 
 // ──────────────────────────────────────────────

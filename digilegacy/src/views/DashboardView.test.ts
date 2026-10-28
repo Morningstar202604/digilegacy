@@ -86,7 +86,7 @@ describe('DashboardView', () => {
     const w = await mountDash({
       stats: {
         total_assets: 4, total_estimated_value: 16000,
-        disposal_planned_count: 4, completion_percentage: 100,
+        disposal_planned_count: 4, completion_percentage: 100, issues: [],
       },
     });
     const values = w.findAll('.stat-value').map(v => v.text());
@@ -122,7 +122,7 @@ describe('完成度四维分解（旧口径会虚高）', () => {
         trigger_channel: 'none',
         dms_enabled: false,
         completion_percentage: 25,
-        total_estimated_value: 0,
+        total_estimated_value: 0, issues: [],
       },
     });
     // 四个检查项必须都渲染出来，用户能看到「卡在哪一步」
@@ -144,7 +144,7 @@ describe('完成度四维分解（旧口径会虚高）', () => {
         trigger_channel: 'none',
         dms_enabled: true,
         completion_percentage: 75,
-        total_estimated_value: 0,
+        total_estimated_value: 0, issues: [],
       },
     });
     expect(w.text(), '必须明确说明没有通道，而不是显示已开启就算完成')
@@ -162,7 +162,7 @@ describe('完成度四维分解（旧口径会虚高）', () => {
         trigger_channel: 'smtp',
         dms_enabled: true,
         completion_percentage: 100,
-        total_estimated_value: 0,
+        total_estimated_value: 0, issues: [],
       },
     });
     expect(w.text()).toContain('邮件通道可用');
@@ -181,7 +181,7 @@ describe('触发链达标口径（仅心跳不算家人可达）', () => {
         trigger_channel: 'heartbeat',
         dms_enabled: true,
         completion_percentage: 75,
-        total_estimated_value: 0,
+        total_estimated_value: 0, issues: [],
       },
     });
     const items = w.findAll('.check-item');
@@ -209,5 +209,109 @@ describe('触发链达标口径（仅心跳不算家人可达）', () => {
     const trigger = items[items.length - 1];
     expect(trigger.classes()).toContain('done');
     expect(trigger.text()).toContain('邮件通道可用');
+  });
+});
+
+describe('待办卡片（差在哪比差多少更有用）', () => {
+  const withIssues = (issues: Array<Record<string, unknown>>) => ({
+    stats: {
+      total_assets: 4,
+      disposal_planned_count: 4,
+      heir_assigned_count: 4,
+      identifier_ready_count: 4,
+      trigger_ready: true,
+      trigger_channel: 'smtp',
+      dms_enabled: true,
+      completion_percentage: 100,
+      total_estimated_value: 0,
+      issues,
+    },
+  });
+
+  it('没有待办时不渲染卡片', async () => {
+    const w = await mountDash(withIssues([]));
+    expect(w.text()).not.toContain('还差这几步');
+  });
+
+  it('有待办时逐条渲染，并显示条数', async () => {
+    const w = await mountDash(withIssues([
+      { key: 'missing_heir', severity: 'blocker', count: 3, target: '/assets' },
+      { key: 'custody_missing', severity: 'blocker', count: 0, target: '/profile' },
+    ]));
+    expect(w.text()).toContain('还差这几步');
+    expect(w.text()).toContain('3 项资产选了「继承」却没写继承人');
+    expect(w.text()).toContain('还没填写备份与恢复码的保管位置');
+    expect(w.findAll('.issue-card').length).toBe(2);
+  });
+
+  it('严重度对应不同样式类，拦路项用 blocker', async () => {
+    const w = await mountDash(withIssues([
+      { key: 'missing_heir', severity: 'blocker', count: 1, target: '/assets' },
+      { key: 'no_credential', severity: 'info', count: 2, target: '/assets' },
+    ]));
+    const cards = w.findAll('.issue-card');
+    expect(cards[0].classes()).toContain('issue-blocker');
+    expect(cards[1].classes()).toContain('issue-info');
+  });
+
+  it('点击卡片跳到修复位置', async () => {
+    const push = vi.fn();
+    const w = await mountDash(withIssues([
+      { key: 'custody_missing', severity: 'blocker', count: 0, target: '/profile' },
+    ]));
+    // 用 router 桩记录跳转
+    const vm = w.vm as unknown as { $router: { push: (p: string) => void } };
+    vm.$router.push = push;
+    await w.find('.issue-card').trigger('click');
+    expect(push).toHaveBeenCalledWith('/profile');
+  });
+
+  it('未知 key 不崩溃，原样显示键名以便发现漏配', async () => {
+    const w = await mountDash(withIssues([
+      { key: 'brand_new_issue', severity: 'warn', count: 1, target: '/assets' },
+    ]));
+    expect(w.text()).toContain('dashboard.issue.brand_new_issue');
+  });
+});
+
+describe('空库状态（0 资产时不该显示 0%）', () => {
+  it('0 资产显示「尚未开始」而不是 0%', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 0,
+        disposal_planned_count: 0,
+        heir_assigned_count: 0,
+        identifier_ready_count: 0,
+        trigger_ready: false,
+        trigger_channel: 'none',
+        dms_enabled: false,
+        completion_percentage: 0,
+        total_estimated_value: 0,
+        issues: [],
+      },
+    });
+    expect(w.text()).toContain('尚未开始');
+    // 百分比标签不应出现在空库状态
+    const tags = w.findAll('.tag').map(t => t.text());
+    expect(tags).not.toContain('待完善');
+  });
+
+  it('有资产时才显示百分比与口径说明', async () => {
+    const w = await mountDash({
+      stats: {
+        total_assets: 2,
+        disposal_planned_count: 1,
+        heir_assigned_count: 2,
+        identifier_ready_count: 2,
+        trigger_ready: false,
+        trigger_channel: 'none',
+        dms_enabled: false,
+        completion_percentage: 50,
+        total_estimated_value: 100,
+        issues: [],
+      },
+    });
+    expect(w.text()).toContain('四项检查各占 25%');
+    expect(w.text()).not.toContain('尚未开始');
   });
 });

@@ -127,6 +127,28 @@
         </div>
       </div>
 
+      <!-- 权威来源：导出里有的，预览也必须有，否则又是一次「导出与预览不一致」 -->
+      <div class="report-section" v-if="report.authorities && report.authorities.length > 0">
+        <div class="report-section-title">{{ t('report.sectionAuthorities') }}</div>
+        <div v-for="a in report.authorities" :key="a.id" style="margin-bottom: 12px; padding: 12px; background: var(--gray-50); border-radius: 8px;">
+          <div style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px;">
+            <strong style="font-size: 13px;">{{ isEnLocale ? a.title_en : a.title_zh }}</strong>
+            <span class="tag tag-secondary" style="font-size: 11px;">{{ t('report.authorityReachable') }}</span>
+            <span class="tag" :class="a.content_matched ? 'tag-success' : 'tag-warning'" style="font-size: 11px;">
+              {{ a.content_matched ? t('report.authorityMatched') : t('report.authorityUnmatched') }}
+            </span>
+            <span v-if="a.kind === 'portal'" class="tag tag-warning" style="font-size: 11px;">{{ t('report.authorityPortal') }}</span>
+          </div>
+          <p style="font-size: 12px; color: var(--gray-600); margin: 4px 0;">{{ isEnLocale ? a.note_en : a.note_zh }}</p>
+          <p v-if="a.kind === 'portal'" style="font-size: 11px; color: var(--warning-strong); margin: 4px 0;">
+            {{ isEnLocale ? a.portal_note_en : a.portal_note_zh }}
+          </p>
+          <p style="font-size: 11px; color: var(--gray-500); margin: 4px 0; word-break: break-all;">
+            <span v-if="a.last_checked">{{ t('report.authorityChecked', { date: a.last_checked }) }} · </span>{{ a.url }}
+          </p>
+        </div>
+      </div>
+
       <div class="report-section">
         <div class="report-section-title">{{ t('report.section6') }}</div>
         <div style="font-size: 13px; color: var(--gray-600); line-height: 1.8;">
@@ -241,7 +263,8 @@ import PrintOutline from '@vicons/ionicons5/es/PrintOutline';
 import ListOutline from '@vicons/ionicons5/es/ListOutline';
 import { toast } from '../composables/feedback';
 import type {
-  ApiResponse, AssistantConfig, DigitalAsset, DrillReport, OutboundPreview, PlatformPolicyBrief,
+  ApiResponse, AssistantConfig, Authority, DigitalAsset, DrillReport, OutboundPreview,
+  PlatformPolicyBrief,
 } from '../types';
 
 interface InheritanceReportData {
@@ -253,6 +276,8 @@ interface InheritanceReportData {
   assets: DigitalAsset[];
   /** 平台办理指引：与导出 HTML 来自同一份后端数据 */
   policies: PlatformPolicyBrief[];
+  /** 权威来源：与导出的「权威来源」章节同源 */
+  authorities?: Authority[];
   total_estimated_value: number;
   property_assets_count: number;
   personality_assets_count: number;
@@ -261,6 +286,8 @@ interface InheritanceReportData {
 }
 
 const { t, locale } = useI18n();
+/** 报告正文里的来源标题/说明要跟随界面语言，与导出报告同一套数据。 */
+const isEnLocale = computed(() => locale.value === 'en-US');
 const report = ref<InheritanceReportData | null>(null);
 const exportPath = ref('');
 const exportError = ref('');

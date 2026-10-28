@@ -220,3 +220,91 @@ describe('AssetsView 渲染', () => {
     expect(rows[0].text()).toContain('高价');
   });
 });
+
+describe('待完善筛选（把「家人拿到也办不了」的资产集中起来）', () => {
+  async function mountWith(rows: Record<string, unknown>[]) {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = rows.map((r, i) => makeAsset({ id: i + 1, ...r })) as never;
+    await w.vm.$nextTick();
+    return w;
+  }
+
+  it('三条缺陷都算待完善：无继承人 / 无标识 / 需交接但无凭据', async () => {
+    const w = await mountWith([
+      { heir_name: '王五', account_identifier: 'acc', has_credential: true }, // 完整
+      { heir_name: null },                                                     // 无继承人
+      { account_identifier: '' },                                              // 无标识
+      { has_credential: false },                                               // 无凭据
+    ]);
+    const btn = w.findAll('button').find(b => b.text().includes('待完善'))!;
+    expect(btn, '待完善筛选按钮必须存在').toBeTruthy();
+    expect(btn.text(), '应识别出 3 条').toContain('(3)');
+  });
+
+  it('点选后只显示待完善资产，再点一次恢复全部', async () => {
+    const w = await mountWith([
+      { heir_name: '王五', account_identifier: 'acc', has_credential: true },
+      { heir_name: null },
+    ]);
+    const btn = () => w.findAll('button').find(b => b.text().includes('待完善'))!;
+    await btn().trigger('click');
+    await flushPromises();
+    expect(w.findAll('.asset-row').length).toBe(1);
+    await btn().trigger('click');
+    await flushPromises();
+    expect(w.findAll('.asset-row').length).toBe(2);
+  });
+
+  it('全部完整时按钮禁用，避免点了没反应', async () => {
+    const w = await mountWith([
+      { heir_name: '王五', account_identifier: 'acc', has_credential: true },
+    ]);
+    const btn = w.findAll('button').find(b => b.text().includes('待完善'))!;
+    expect(btn.attributes('disabled')).toBeDefined();
+  });
+
+  it('「变现分配」不要求继承人，不应算作待完善', async () => {
+    const w = await mountWith([
+      { disposal_method: 'liquidate', heir_name: null, has_credential: true },
+    ]);
+    const btn = w.findAll('button').find(b => b.text().includes('待完善'))!;
+    expect(btn.text()).toContain('(0)');
+  });
+});
+
+describe('行内缺口标签（不点进详情也要看得出缺什么）', () => {
+  it('无继承人的资产行显示「缺继承人」', async () => {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [makeAsset({ id: 1, heir_name: null })] as never;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('缺继承人');
+  });
+
+  it('无账号标识显示「缺账号标识」', async () => {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [makeAsset({ id: 1, account_identifier: '' })] as never;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('缺账号标识');
+  });
+
+  it('需交接但无凭据显示「缺凭据」', async () => {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [makeAsset({ id: 1, has_credential: false })] as never;
+    await w.vm.$nextTick();
+    expect(w.text()).toContain('缺凭据');
+  });
+
+  it('完整资产不显示任何缺口标签', async () => {
+    const w = await mountView();
+    const store = useAssetsStore();
+    store.assets = [makeAsset({ id: 1, heir_name: '王五', account_identifier: 'a', has_credential: true })] as never;
+    await w.vm.$nextTick();
+    expect(w.text()).not.toContain('缺继承人');
+    expect(w.text()).not.toContain('缺账号标识');
+    expect(w.text()).not.toContain('缺凭据');
+  });
+});

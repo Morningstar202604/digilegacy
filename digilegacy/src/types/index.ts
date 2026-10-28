@@ -100,6 +100,26 @@ export interface PlatformPolicyBrief {
   has_source: boolean;
 }
 
+/** 权威来源（与 src/data/authorities.json 对应，由脚本实测）。 */
+export interface Authority {
+  id: string;
+  kind: string;
+  title_zh: string;
+  title_en: string;
+  publisher: string;
+  url: string;
+  note_zh: string;
+  note_en: string;
+  applies_to: string[];
+  reachable: boolean;
+  content_matched: boolean;
+  last_checked: string;
+  http_status: number;
+  observed_title: string;
+  portal_note_zh: string;
+  portal_note_en: string;
+}
+
 /** 通用审核场景声明（后端注册表下发，界面不写死业务名）。 */
 export interface ReviewProfile {
   id: string;
@@ -213,6 +233,16 @@ export interface DashboardStats {
   dms_enabled: boolean;
   /** 四项检查各 25% 的加权结果 */
   completion_percentage: number;
+  /** 待办检查项：每条都带跳转目标，点一下就去做 */
+  issues: CheckIssue[];
+}
+
+/** 一条待办检查项。severity: blocker 会导致家人无法执行；warn 质量缺陷；info 优化建议。 */
+export interface CheckIssue {
+  key: string;
+  severity: 'blocker' | 'warn' | 'info';
+  count: number;
+  target: string;
 }
 
 export interface ApiResponse<T> {

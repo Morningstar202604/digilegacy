@@ -59,9 +59,18 @@
           <div class="card-title">{{ t('dashboard.progressTitle') }}</div>
           <div class="card-subtitle">{{ t('dashboard.progressSubtitle') }}</div>
         </div>
-        <span class="tag" :class="(stats?.completion_percentage ?? 0) >= 80 ? 'tag-success' : 'tag-warning'">
-          {{ (stats?.completion_percentage ?? 0) >= 80 ? t('dashboard.good') : t('dashboard.todo') }}
-        </span>
+        <div style="text-align: right;">
+          <!-- 0 资产时百分比没有意义：显示 0% 会让用户以为「我做得不好」，
+               而实际是「还没开始」。这里直接给出起点引导。 -->
+          <span v-if="(stats?.total_assets ?? 0) === 0" class="tag tag-secondary">{{ t('dashboard.notStarted') }}</span>
+          <template v-else>
+            <span class="tag" :class="(stats?.completion_percentage ?? 0) >= 80 ? 'tag-success' : 'tag-warning'">
+              {{ (stats?.completion_percentage ?? 0) >= 80 ? t('dashboard.good') : t('dashboard.todo') }}
+            </span>
+            <!-- 说明百分比是怎么算出来的：四项各 25%，用户可自行核对 -->
+            <div class="text-muted" style="font-size: 11px; margin-top: 4px;">{{ t('dashboard.scoreHint') }}</div>
+          </template>
+        </div>
       </div>
       <div class="progress-bar" style="height: 12px;">
         <div class="progress-fill blue" :style="{ width: (stats?.completion_percentage ?? 0) + '%' }"></div>
@@ -87,6 +96,33 @@
       <p class="text-muted mt-16" style="font-size: 13px;">
         {{ t('dashboard.progressDetail', { planned: stats?.disposal_planned_count ?? 0, total: stats?.total_assets ?? 0 }) }}
       </p>
+    </div>
+
+    <!-- 待办卡片：百分比只说明「还差多少」，这里说明「差在哪、点哪里」 -->
+    <div class="card mb-32" v-if="(stats?.issues?.length ?? 0) > 0">
+      <div class="card-header">
+        <div>
+          <div class="card-title">{{ t('dashboard.issuesTitle') }}</div>
+          <div class="card-subtitle">{{ t('dashboard.issuesSubtitle') }}</div>
+        </div>
+        <span class="tag tag-warning">{{ stats?.issues?.length ?? 0 }}{{ t('dashboard.issueSuffix') }}</span>
+      </div>
+      <div class="issue-grid">
+        <button
+          v-for="issue in stats?.issues ?? []"
+          :key="issue.key"
+          type="button"
+          class="issue-card"
+          :class="'issue-' + issue.severity"
+          @click="$router.push(issue.target)"
+        >
+          <span class="issue-icon" aria-hidden="true">{{ issueIcon(issue.severity) }}</span>
+          <span class="issue-body">
+            <span class="issue-text">{{ issueText(issue) }}</span>
+            <span class="issue-go">{{ t('dashboard.issueGo') }} →</span>
+          </span>
+        </button>
+      </div>
     </div>
 
     <!-- 资产构成：图表比三段文字更快回答「我到底有多少、偏哪一类」 -->
@@ -178,6 +214,18 @@ function isDone(count: number | undefined): boolean {
   return total > 0 && (count ?? 0) >= total;
 }
 
+/** 待办严重度图标：拦路（家人无法执行）、质量缺陷、优化建议。 */
+function issueIcon(severity: string): string {
+  if (severity === 'blocker') return '✕';
+  if (severity === 'warn') return '!';
+  return '?';
+}
+
+/** 待办文案：按 key 映射，带条数。未知 key 原样显示，便于发现漏配。 */
+function issueText(issue: { key: string; count: number }): string {
+  return t(`dashboard.issue.${issue.key}`, { count: issue.count });
+}
+
 /** 触发链文案必须说出「靠什么通道」，不能只说「已开启」。 */
 const triggerText = computed(() => {
   const ch = stats.value?.trigger_channel ?? 'none';
@@ -231,4 +279,47 @@ onMounted(async () => {
   color: var(--gray-800, #3a352d);
 }
 .check-mark { font-weight: 700; min-width: 12px; }
+
+.issue-grid {
+  display: grid;
+  /* 固定两列：auto-fit 在 4 项时会排成 3+1，视觉上像少了一块 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+@media (max-width: 900px) {
+  .issue-grid { grid-template-columns: 1fr; }
+}
+.issue-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--gray-200, #e8e4de);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+.issue-card:hover, .issue-card:focus-visible {
+  border-color: var(--primary);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+.issue-icon {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-size: 13px; font-weight: 700;
+  line-height: 1;
+}
+.issue-blocker .issue-icon { background: var(--danger-light, #fdecea); color: var(--danger-strong); }
+.issue-warn .issue-icon { background: var(--warning-light); color: var(--warning-strong); }
+.issue-info .issue-icon { background: var(--primary-light); color: var(--primary); }
+.issue-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.issue-text { font-size: 13px; line-height: 1.5; }
+.issue-go { font-size: 11px; color: var(--gray-500); }
 </style>
