@@ -46,7 +46,8 @@
       <div class="stat-card">
         <div class="stat-icon stat-yellow"><StatsChartOutline /></div>
         <div class="stat-info">
-          <div class="stat-value">{{ stats?.completion_percentage ?? 0 }}%</div>
+          <!-- 0 资产时 0% 没有意义：显示占位符，与下方「尚未开始」保持一致 -->
+          <div class="stat-value">{{ (stats?.total_assets ?? 0) === 0 ? '—' : (stats?.completion_percentage ?? 0) + '%' }}</div>
           <div class="stat-label">{{ t('dashboard.completion') }}</div>
         </div>
       </div>

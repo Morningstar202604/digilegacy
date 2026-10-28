@@ -1539,6 +1539,7 @@ pub fn export_backup_json_db() -> Result<String, String> {
                     "check_in_interval_days": row.get::<_, i64>(2)?,
                     "stage1_wait_days": row.get::<_, i64>(3)?,
                     "stage2_wait_days": row.get::<_, i64>(4)?,
+                    // 保留字段仅为兼容旧备份格式；应用内已不使用（见 notify.rs 注释）
                     "stage3_wait_days": row.get::<_, i64>(5)?,
                     "last_check_in": row.get::<_, Option<String>>(6)?,
                 }))
@@ -1983,6 +1984,7 @@ pub fn import_backup_json_db_with_mode(content: &str, mode: ImportMode) -> Resul
                     ival(d, "check_in_interval_days"),
                     ival(d, "stage1_wait_days"),
                     ival(d, "stage2_wait_days"),
+                    // 接收旧备份里的该值但不再使用，保证导入不因缺字段失败
                     ival(d, "stage3_wait_days"),
                     oval(d, "last_check_in"),
                 ],

@@ -73,13 +73,14 @@ describe('DashboardView', () => {
     expect(w.text()).toContain('朋友');
   });
 
-  it('无统计数据时全部显示 0，不崩溃', async () => {
+  it('无统计数据时前三项显示 0，完成度显示占位符而不是 0%', async () => {
     const w = await mountDash({ stats: null });
     const values = w.findAll('.stat-value').map(v => v.text());
     expect(values[0]).toBe('0');
     expect(values[1]).toContain('0');
     expect(values[2]).toBe('0');
-    expect(values[3]).toBe('0%');
+    // 0 资产时 0% 会被误读成「做得很差」，实际是「还没开始」
+    expect(values[3], '空库完成度用占位符').toBe('—');
   });
 
   it('有统计数据时按格式化规则展示', async () => {

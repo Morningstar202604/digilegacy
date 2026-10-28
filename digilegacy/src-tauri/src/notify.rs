@@ -126,8 +126,8 @@ fn append_history_from(path: &Path, limit: usize, out: &mut Vec<DmsNotification>
 
 /// DMS 配置快照。
 ///
-/// 注意：`stage3_wait_days` 只作为「三级窗口长度」记录，不参与分级判定——
-/// 三级之后没有下一级，超过 stage1+stage2 即进入并保持 stage 3。
+/// 分级只看两级窗口（stage1 / stage2）；三级没有「下一级」，
+/// 超过 stage1+stage2 即进入 stage3 并保持，因此不需要第三段窗口长度。
 /// 该字段保留是为了兼容既有数据库与将来的「三级后重发」策略；
 /// 界面不暴露它，避免用户以为调它能让提醒更早/更晚触发。
 #[derive(Debug, Clone)]
@@ -137,7 +137,6 @@ struct DmsConfig {
     stage1_wait_days: i64,
     stage2_wait_days: i64,
     #[allow(dead_code)]
-    stage3_wait_days: i64,
     last_check_in: Option<String>,
 }
 
@@ -170,13 +169,6 @@ fn read_config() -> Result<DmsConfig, String> {
             |r| r.get(0),
         )
         .unwrap_or(7);
-    let s3: i64 = conn
-        .query_row(
-            "SELECT stage3_wait_days FROM dms_config WHERE id=1",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(14);
     let last: Option<String> = conn
         .query_row("SELECT last_check_in FROM dms_config WHERE id=1", [], |r| {
             r.get(0)
@@ -187,7 +179,6 @@ fn read_config() -> Result<DmsConfig, String> {
         interval_days: interval,
         stage1_wait_days: s1,
         stage2_wait_days: s2,
-        stage3_wait_days: s3,
         last_check_in: last,
     })
 }
@@ -206,8 +197,6 @@ fn compute_stage(overdue_days: i64, cfg: &DmsConfig) -> i64 {
     } else if overdue_days <= cfg.stage1_wait_days + cfg.stage2_wait_days {
         2
     } else {
-        // stage3_wait_days 目前不参与分级：三级窗口本身没有「下一级」，
-        // 超过 stage1+stage2 即进入 stage 3 并保持（去重保证同阶段同收件人每天至多一次）。
         3
     }
 }
@@ -748,13 +737,14 @@ pub fn evaluate_dms(app_handle: AppHandle) -> Result<DmsEvaluation, String> {
 mod tests {
     use super::*;
 
-    fn test_config(s1: i64, s2: i64, s3: i64) -> DmsConfig {
+    /// `_s3` 保留在签名里：既有测试按三级窗口传参，
+    /// 但分级只用前两级（三级之后不再有下一级）。
+    fn test_config(s1: i64, s2: i64, _s3: i64) -> DmsConfig {
         DmsConfig {
             enabled: true,
             interval_days: 30,
             stage1_wait_days: s1,
             stage2_wait_days: s2,
-            stage3_wait_days: s3,
             last_check_in: None,
         }
     }
@@ -1023,7 +1013,6 @@ mod tests {
             interval_days: 30,
             stage1_wait_days: 3,
             stage2_wait_days: 7,
-            stage3_wait_days: 14,
             last_check_in: Some(
                 (Local::now() - chrono::Duration::days(60))
                     .format("%Y-%m-%d %H:%M:%S")
@@ -1079,5 +1068,36 @@ mod tests {
         assert_eq!(out[0].stage, 3, "最新的文件先读");
 
         let _ = fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod stage_boundary_tests {
+    use super::*;
+
+    fn cfg() -> DmsConfig {
+        DmsConfig {
+            enabled: true,
+            interval_days: 30,
+            stage1_wait_days: 3,
+            stage2_wait_days: 7,
+            last_check_in: None,
+        }
+    }
+
+    /// 分级只看前两级窗口：stage3 没有「下一级」，超过 s1+s2 即保持三级。
+    /// 这条测试锁住「stage3_wait_days 不是必需配置」这一事实，防止有人再加回死字段。
+    #[test]
+    fn stage_boundaries_use_only_first_two_windows() {
+        let c = cfg();
+        assert_eq!(compute_stage(0, &c), 0, "未逾期必须是 0");
+        assert_eq!(compute_stage(-5, &c), 0, "提前不算逾期");
+        assert_eq!(compute_stage(1, &c), 1);
+        assert_eq!(compute_stage(3, &c), 1, "第 3 天仍是第 1 级");
+        assert_eq!(compute_stage(4, &c), 2, "超过 s1 进入第 2 级");
+        assert_eq!(compute_stage(10, &c), 2, "第 2 级上界 = s1+s2 = 10");
+        assert_eq!(compute_stage(11, &c), 3);
+        // 关键：再久也停在 3，不会出现第 4 级
+        assert_eq!(compute_stage(9999, &c), 3, "三级是终态");
     }
 }
