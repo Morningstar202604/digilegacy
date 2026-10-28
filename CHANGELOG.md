@@ -56,9 +56,6 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Per-user file permissions** for backups, reports and the temporary SMTP netrc (`0600` on Unix) via a shared `fsutil::write_private`.
 - **Bilingual UI is now real**: the header language switch drives the whole desktop UI, the dictionary key sets are asserted equal in tests, and `<html lang>` follows the selected locale.
 - **Frontend visual pass**: Naive UI theme bridge and every emoji icon replaced by Ionicon / FontAwesome vectors through the new `PlatformIcon.vue` (24+ platforms, 16 categories); `main.css` gained the warm-ambient / glass-header / pill-nav / layered-card / dark-mode layers.
-
-### Fixed
-
 - **Opening the dashboard could send real email.** The frontend called `evaluate_dms`, which dispatches SMTP mail and writes the outbox; merely viewing a page performed a notification round. UI now reads the read-only status.
 - **Plaintext backups could bypass encryption.** Importing a backup without `security_config` into an encrypted vault wrote plaintext into columns that must hold `enc:v1:` ciphertext; the import is now rejected while locked and encrypts field-by-field while unlocked.
 - **Remaining days were truncated.** `num_days()` made "20 hours left" render as 0 days and the UI treated it as overdue; the value now rounds up.
