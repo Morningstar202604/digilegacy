@@ -57,7 +57,9 @@ FRONT_FILES = FACTS["frontendFiles"]
 IPC = FACTS["ipc"]
 TABLES = FACTS["tables"]
 PLATFORMS = FACTS["platforms"]
-E2E = FACTS.get("e2e") or 80
+E2E = FACTS.get("e2e")
+if not E2E:
+    raise SystemExit("doc-facts 未给出 E2E 用例数（playwright --list 不可用），拒绝用猜的数字生成材料")
 
 
 # ── 文本清洗 ────────────────────────────────────────────────────────────
