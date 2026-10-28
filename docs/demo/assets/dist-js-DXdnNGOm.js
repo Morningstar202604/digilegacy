@@ -1,0 +1,1 @@
+import{n as e}from"./core-O6t1NyB1.js";async function t(){return await e(`plugin:autostart|is_enabled`)}export{t as isEnabled};

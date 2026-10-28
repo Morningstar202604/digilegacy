@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-28
+
 ### Added
 
 - **Family action guide** (`action_guide.rs`, `toolkit.rs`): a self-contained, printable HTML checklist grouped by platform — documents required, procedure, difficulty, expected duration, official link, and who handles each asset. It answers "what do I do first" rather than repeating the report. Includes an offline FAQ of 12 questions (no LLM, no network).
@@ -108,7 +110,8 @@ Also fixed: external-link validation accepted `https://trusted.example.com@evil.
 
 ### Changed
 
-- Frontend unit tests grew from 296 to **349**, branch coverage 76.82% → **78.74%**; Rust tests 86 → **118**; E2E 37 → **76**. README badges synced.
+- Frontend unit tests grew from 296 to **424** across 32 files; Rust tests 86 → **204 declared / 202 passing on Windows**; E2E 37 → **80**. Coverage 85.2% statements / 86.7% lines. README badges and website pills synced by `scripts/check-doc-facts.mjs`.
+- Release pipeline publishes the MSI and NSIS installer with a SHA-256 digest file and re-downloads them after publishing to verify the checksum. Builds are not code-signed (no certificate is configured).
 
 ## [0.2.0] - 2026-10-24
 

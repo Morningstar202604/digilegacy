@@ -40,7 +40,7 @@
   "applicationCategory": "SecurityApplication",
   "applicationSubCategory": "数字遗产规划与继承",
   "operatingSystem": "Windows 10, Windows 11",
-  "softwareVersion": "0.2.0",
+  "softwareVersion": "0.2.2",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
   "downloadUrl": "https://github.com/badhope/digilegacy",
@@ -123,9 +123,9 @@
 
 <div class="new-band">
   <div class="wrap">
-    <div class="item"><strong>0.2.0 新增</strong>全文搜索、四种排序与 ECharts 资产构成图。</div>
-    <div class="item"><strong>0.2.0 新增</strong>整站可交互的浏览器演示，无需安装。</div>
-    <div class="item"><strong>已加固</strong>备份 v2 覆盖心跳与政策补丁；数据库加入 schema 版本号。</div>
+    <div class="item"><strong>0.2.2 新增</strong>家人执行清单、多继承人与执行人、界面内 SMTP 配置、可选自配密钥助手。</div>
+    <div class="item"><strong>0.2.2 新增</strong>AI 初审 + 人工终审的审核管线；四个场景，法律文书走严格模式。</div>
+    <div class="item"><strong>已加固</strong>备份 v4、导入前快照与默认合并、政策溯源门禁、四维完成度指标。</div>
     <div class="item"><strong>已验证</strong>204 项 Rust + 424 项前端 + 80 项 E2E 测试，已知漏洞 0。</div>
   </div>
 </div>
@@ -337,7 +337,7 @@ npm run dev            # http://localhost:1420
 
 # 测试
 cd src-tauri &amp;&amp; cargo test</code></pre>
-        <p class="note">技术栈：<strong>Tauri 2（Rust）</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>。204 项 Rust 测试、424 项前端测试、80 项端到端测试，全部通过。</p>
+        <p class="note">技术栈：<strong>Tauri 2（Rust）</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>。Rust 测试源码声明 204 项（Windows 本机 202 通过、1 项 ignored、1 项仅 Unix 编译），前端 424 项，端到端 80 项。</p>
       </div>
     </div>
   </div>
@@ -347,9 +347,9 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
   <div class="wrap">
     <h2>路线图</h2>
     <div class="grid g3">
-      <div class="card"><h3>已完成</h3><p>资产发现、加密保险库、处置规划、报告与工具包导出、托盘常驻的安心传承、恢复密钥、新手引导、帮助中心、零内容心跳客户端与参考服务器、<strong>离线政策补丁通道</strong>、资产搜索与排序、构成图、<strong>可交互浏览器演示</strong>、覆盖心跳与政策补丁的备份 v2、schema 版本号。</p></div>
+      <div class="card"><h3>已完成</h3><p>资产发现、加密保险库、处置规划、报告与工具包导出、托盘常驻的安心传承、恢复密钥、新手引导、帮助中心、零内容心跳客户端与参考服务器、<strong>离线政策补丁通道</strong>、资产搜索与排序、构成图、<strong>可交互浏览器演示</strong>、备份 v4、家人执行清单与离线 FAQ、多继承人与执行人、界面内 SMTP 配置、保管位置、<strong>AI 初审 + 人工终审的审核管线</strong>（四个场景，法律文书走严格模式），以及默认关闭、无内置端点的可选自配密钥助手。</p></div>
       <div class="card"><h3>下一步</h3><p>更多界面语言（简体中文与英文已内置）、加密云备份（需要你自建或信任的服务器）、手机端安全确认（独立代码库）、通知动作按钮（原生通知操作）、macOS / Linux 安装包。<strong>这些均未开始。</strong></p></div>
-      <div class="card"><h3>更远</h3><p>AI 辅助撰写——只在持有者规划时运行一次，生成的指引经人工审校后冻结进工具包，家人侧保持离线。尚未开始，代码中没有任何接口；约束条件见<a href="https://github.com/badhope/digilegacy/blob/main/docs/ROADMAP.md">路线图</a>。另有机构对接、专利申请、社区共建政策库。</p></div>
+      <div class="card"><h3>更远</h3><p>逐条核实政策库——152 条中有 147 条明确标注「未核实」，只能人工核对；50 个高频平台的深度可执行指引；作者期 AI 生成个性化家人 FAQ，由持有者审校后冻结进工具包。约束与验收标准见<a href="https://github.com/badhope/digilegacy/blob/main/docs/ROADMAP.md">路线图</a>。另有机构对接、专利申请、社区共建政策库。</p></div>
     </div>
   </div>
 </section>

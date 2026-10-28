@@ -42,7 +42,7 @@
   "applicationCategory": "SecurityApplication",
   "applicationSubCategory": "Digital legacy planning and inheritance",
   "operatingSystem": "Windows 10, Windows 11",
-  "softwareVersion": "0.2.0",
+  "softwareVersion": "0.2.2",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
   "downloadUrl": "https://github.com/badhope/digilegacy",
@@ -127,9 +127,9 @@
 
 <div class="new-band">
   <div class="wrap">
-    <div class="item"><strong>New in 0.2.0</strong>Search, four sort orders and an ECharts composition chart.</div>
-    <div class="item"><strong>New in 0.2.0</strong>An interactive browser demo of the full UI — no install.</div>
-    <div class="item"><strong>Hardened</strong>Backup v2 covers heartbeat and policy patches; schema versioning added.</div>
+    <div class="item"><strong>New in 0.2.2</strong>Family action guide, multiple heirs with an executor, in-app SMTP setup and an optional bring-your-own-key assistant.</div>
+    <div class="item"><strong>New in 0.2.2</strong>Review pipeline with AI pre-review and human sign-off — four scenes, strict mode for legal documents.</div>
+    <div class="item"><strong>Hardened</strong>Backup v4, pre-import snapshot, merge-by-default import, policy provenance gate, four-dimension completion metric.</div>
     <div class="item"><strong>Verified</strong>204 Rust + 424 frontend + 80 E2E tests, 0 known vulnerabilities.</div>
   </div>
 </div>
@@ -342,7 +342,7 @@ npm run dev            # http://localhost:1420
 
 # Tests
 cd src-tauri &amp;&amp; cargo test</code></pre>
-        <p class="note">Stack: <strong>Tauri 2 (Rust)</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>. 204 Rust tests, 424 frontend tests and 80 end-to-end tests, all passing.</p>
+        <p class="note">Stack: <strong>Tauri 2 (Rust)</strong> + <strong>Vue 3 + TypeScript</strong> + <strong>SQLite</strong>. 204 declared Rust tests (202 passing on Windows, 1 ignored, 1 Unix-only), 424 frontend tests and 80 end-to-end tests.</p>
       </div>
     </div>
   </div>
@@ -352,9 +352,9 @@ cd src-tauri &amp;&amp; cargo test</code></pre>
   <div class="wrap">
     <h2>Roadmap</h2>
     <div class="grid g3">
-      <div class="card"><h3>Shipped</h3><p>Asset discovery, encrypted vault, disposal planning, report &amp; toolkit export, dead man's switch with tray residency, recovery key, onboarding tour, help centre, zero-content heartbeat client &amp; reference server, <strong>offline policy-patch channel</strong>, asset search &amp; sort, composition chart, <strong>interactive browser demo</strong>, backup v2 covering heartbeat and policy patches, schema versioning.</p></div>
+      <div class="card"><h3>Shipped</h3><p>Asset discovery, encrypted vault, disposal planning, report &amp; toolkit export, dead man's switch with tray residency, recovery key, onboarding tour, help centre, zero-content heartbeat client &amp; reference server, <strong>offline policy-patch channel</strong>, asset search &amp; sort, composition chart, <strong>interactive browser demo</strong>, backup v4, family action guide with an offline FAQ, multiple heirs with an executor, in-app SMTP setup, custody locations, <strong>review pipeline with AI pre-review and human sign-off</strong> (four scenes, law documents in strict mode), and an optional bring-your-own-key assistant that is off by default with no built-in endpoint.</p></div>
       <div class="card"><h3>Next</h3><p>More interface languages (Simplified Chinese and English already ship), encrypted cloud backup (requires a server you host or trust), mobile companion for check-ins (separate codebase), notification action buttons (native notification actions), macOS/Linux installers. <strong>None of these are started.</strong></p></div>
-      <div class="card"><h3>Later</h3><p>AI-assisted authoring — it would run once while the holder plans, and the generated guide would be reviewed and frozen into the toolkit so the family side stays offline. Not started, and no interface exists yet; the constraints it must satisfy are in <a href="https://github.com/badhope/digilegacy/blob/main/docs/ROADMAP.md">the roadmap</a>. Also: institution integrations, patent filings, community-contributed policy database.</p></div>
+      <div class="card"><h3>Later</h3><p>Fully verified policy data — 147 of 152 entries are explicitly marked unverified and can only be confirmed by hand; deep-dive guides for the 50 most common platforms; author-side AI that writes a personalized family FAQ which the holder reviews and freezes into the toolkit. Constraints and acceptance criteria are in <a href="https://github.com/badhope/digilegacy/blob/main/docs/ROADMAP.md">the roadmap</a>. Also: institution integrations, patent filings, community-contributed policy database.</p></div>
     </div>
   </div>
 </section>

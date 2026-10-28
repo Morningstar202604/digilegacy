@@ -79,10 +79,10 @@
 
 | 检查项 | 结果 |
 |---|---|
-| Rust 测试 | **118 通过**，1 ignored（`cargo test --locked`；源码声明 120，含 1 条仅 Unix 编译） |
+| Rust 测试 | **202 通过**，1 ignored（`cargo test --locked`；源码声明 204，含 1 条仅 Unix 编译） |
 | 前端单元测试 | **424 通过**，32 个文件 |
 | 端到端测试 | **80 通过**，真实 Chromium |
-| 覆盖率 | **85.4% 语句**、86.9% 行，阈值写进 CI |
+| 覆盖率 | **85.2% 语句**、86.7% 行，阈值写进 CI |
 | 类型安全 | `vue-tsc --noEmit` 无错误，Rust `clippy -D warnings` 无警告 |
 | 供应链 | `cargo audit` 与 `npm audit`：0 漏洞 |
 | CI | 5 个 job——前端、E2E、Rust、心跳服务器、Windows 安装包构建 |

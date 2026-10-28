@@ -79,14 +79,14 @@ Most tools solve one slice: Google and Apple only cover their own accounts, pass
 
 | Check | Result |
 |---|---|
-| Rust tests | **118 passing**, 1 ignored (`cargo test --locked`; 204 declared incl. 1 Unix-only) |
+| Rust tests | **202 passing**, 1 ignored (`cargo test --locked`; 204 declared incl. 1 Unix-only) |
 | Frontend unit tests | **424 passing** across 32 files |
 | End-to-end tests | **80 passing** in real Chromium |
-| Coverage | **85.4% statements**, 86.9% lines — thresholds enforced in CI |
+| Coverage | **85.2% statements**, 86.7% lines — thresholds enforced in CI |
 | Type safety | `vue-tsc --noEmit` clean, Rust `clippy -D warnings` clean |
 | Supply chain | `cargo audit` and `npm audit`: 0 vulnerabilities |
 | CI | 5 jobs — frontend, E2E, Rust, heartbeat server, Windows installer build |
-| Release | Signed build pipeline with SHA-256 checksums, verified after publish |
+| Release | Build pipeline publishes MSI + NSIS with SHA-256 checksums, re-downloaded and verified after publish |
 
 **Production hygiene:** the demo backend is compiled out of the installer (CI asserts no `mock-*` chunk), the schema is versioned with `PRAGMA user_version`, command inputs are capped and validated at the IPC boundary, backups carry heartbeat settings, policy patches, the recovery seal, heirs, SMTP, custody locations and assistant config (v4), backup, report, toolkit and SMTP-credential files are written owner-only, and importing a backup writes a pre-import snapshot and merges by default.
 
