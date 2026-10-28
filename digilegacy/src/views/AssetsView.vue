@@ -34,9 +34,10 @@
         <button class="btn btn-sm" :class="filter === 'personality' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'personality'" @click="filter = 'personality'">{{ t('cat.personality') }} ({{ assets.personalityCount }})</button>
         <button class="btn btn-sm" :class="filter === 'mixed' ? 'btn-primary' : 'btn-secondary'" :aria-pressed="filter === 'mixed'" @click="filter = 'mixed'">{{ t('cat.mixed') }} ({{ assets.mixedCount }})</button>
         <!-- 待完善：把所有「家人拿到也办不了」的资产集中起来，一次改完 -->
+        <!-- 有缺口时用警示色：这是用户最该点的一格，灰色按钮会被直接跳过 -->
         <button
           class="btn btn-sm"
-          :class="filter === 'incomplete' ? 'btn-primary' : 'btn-secondary'"
+          :class="filter === 'incomplete' ? 'btn-primary' : (incompleteCount > 0 ? 'btn-warning-outline' : 'btn-secondary')"
           :aria-pressed="filter === 'incomplete'"
           :disabled="incompleteCount === 0"
           @click="filter = filter === 'incomplete' ? 'all' : 'incomplete'"
